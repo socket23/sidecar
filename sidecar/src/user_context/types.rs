@@ -42,6 +42,13 @@ pub struct VariableInformation {
 }
 
 impl VariableInformation {
+    /// Unique identifier is made up for `fs_file_path:start_position:end_position`
+    pub fn unique_identifier(&self) -> String {
+        format!(
+            "{}-{:?}-{:?}",
+            self.fs_file_path, self.start_position, self.end_position
+        )
+    }
     /// Helps create a new custom selection with name provided by the system
     pub fn create_selection(
         range: Range,
@@ -404,6 +411,37 @@ impl UserContext {
         self.variables
             .iter()
             .any(|variable| variable.variable_type == VariableType::Selection)
+    }
+
+    // we want to carry over the variable information from previous steps, we can
+    // literally start with raw updating it based on a refresh from the fs
+    // or keeping it as part of the
+    pub async fn update_variable_information(
+        mut self,
+        variables: Vec<VariableInformation>,
+    ) -> Self {
+        // to keep the variable information updated we have to do the following:
+        // make sure that the previous version is kept always
+        // we will allow toggles to update the user context
+        let additional_variables = variables
+            .into_iter()
+            .filter_map(|additional_variable| {
+                if self
+                    .variables
+                    .iter()
+                    .map(|variable| variable.unique_identifier())
+                    .any(|variable_identifier| {
+                        variable_identifier == additional_variable.unique_identifier()
+                    })
+                {
+                    None
+                } else {
+                    Some(additional_variable)
+                }
+            })
+            .collect::<Vec<_>>();
+        self.variables.extend(additional_variables);
+        self
     }
 }
 

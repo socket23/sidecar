@@ -93,8 +93,6 @@ async fn main() {
         "Come up with a stepped plan to create a new Tool, similar to ReasoningClient, called StepGeneratorClient."
             .to_string();
 
-    let initial_context = String::from("");
-
     let context_files = vec![
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/input.rs",
         "/Users/zi/codestory/sidecar/sidecar/src/agentic/tool/output.rs",
@@ -148,15 +146,14 @@ async fn main() {
     let _plan = Plan::new(
         plan_id.to_owned(),
         plan_id.to_owned(),
-        initial_context,
+        user_context,
         user_query.clone(),
         plan_steps,
         plan_storage_path
             .to_str()
             .map(|plan_str| plan_str.to_owned())
             .expect("PathBuf to string conversion to work"),
-    )
-    .with_user_context(user_context);
+    );
 
     let _update_query = String::from("I'd actually want the tool name to be 'Repomap'");
 

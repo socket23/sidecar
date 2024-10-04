@@ -117,7 +117,7 @@ async fn main() {
         sender,
     );
 
-    let initial_context = r##"use super::{
+    let _initial_context = r##"use super::{
     code_edit::{
         filter_edit::FilterEditOperationRequest, find::FindCodeSelectionInput,
         search_and_replace::SearchAndReplaceEditingRequest,
@@ -2241,7 +2241,7 @@ mod tests {
     let plan = Plan::new(
         plan_id.to_owned(),
         plan_id.to_owned(),
-        initial_context,
+        UserContext::new(vec![], vec![], None, vec![]),
         user_query,
         steps,
         plan_storage_path

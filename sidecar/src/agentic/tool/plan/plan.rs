@@ -11,8 +11,7 @@ pub struct Plan {
     id: String,
     name: String, // for UI label
     steps: Vec<PlanStep>,
-    initial_context: String, // this is here for testing, until we have better idea of what input context looks like
-    user_context: Option<UserContext>, // originally provided user_context - may or may not be provided
+    user_context: UserContext,
     user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
     checkpoint: Option<usize>,
     storage_path: String,
@@ -22,7 +21,7 @@ impl Plan {
     pub fn new(
         id: String,
         name: String,
-        initial_context: String, // todo(zi): consider whether this should be user_context or other.
+        user_context: UserContext,
         user_query: String,
         steps: Vec<PlanStep>,
         storage_path: String,
@@ -30,9 +29,8 @@ impl Plan {
         Self {
             id,
             name,
-            user_context: None,
+            user_context,
             steps,
-            initial_context,
             user_query,
             checkpoint: None,
             storage_path,
@@ -59,12 +57,12 @@ impl Plan {
     }
 
     pub fn with_user_context(mut self, user_context: UserContext) -> Self {
-        self.user_context = Some(user_context);
+        self.user_context = user_context;
         self
     }
 
-    pub fn user_context(&self) -> Option<&UserContext> {
-        self.user_context.as_ref()
+    pub fn user_context(&self) -> &UserContext {
+        &self.user_context
     }
 
     pub fn initial_user_query(&self) -> &str {
@@ -99,10 +97,6 @@ impl Plan {
 
     pub fn step_count(&self) -> usize {
         self.steps.len()
-    }
-
-    pub fn initial_context(&self) -> &str {
-        &self.initial_context
     }
 
     pub fn user_query(&self) -> &str {

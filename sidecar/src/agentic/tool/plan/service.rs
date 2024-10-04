@@ -191,11 +191,18 @@ impl PlanService {
         &self,
         plan_id: String,
         query: String,
-        user_context: UserContext,
+        mut user_context: UserContext,
         is_deep_reasoning: bool,
         plan_storage_path: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Plan, PlanServiceError> {
+        if is_deep_reasoning {
+            println!("gathering::deep_context");
+            user_context = self
+                .tool_box
+                .generate_deep_user_context(user_context, message_properties.clone())
+                .await;
+        }
         let plan_steps = self
             .tool_box
             .generate_plan(&query, &user_context, is_deep_reasoning, message_properties)

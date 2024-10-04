@@ -4,14 +4,69 @@
 use crate::chunking::text_document::Range;
 
 #[derive(Debug, Clone)]
+pub struct LSPDiagnostiErrorMetadata {
+    associated_files: Option<Vec<String>>,
+    quick_fix_labels: Option<Vec<String>>,
+    parameter_hints: Option<Vec<String>>,
+}
+
+impl LSPDiagnostiErrorMetadata {
+    fn new(
+        associated_files: Option<Vec<String>>,
+        quick_fix_labels: Option<Vec<String>>,
+        parameter_hints: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            associated_files,
+            quick_fix_labels,
+            parameter_hints,
+        }
+    }
+
+    fn _set_associated_files(mut self, associated_files: Vec<String>) -> Self {
+        self.associated_files = Some(
+            self.associated_files
+                .map(|mut self_associated_files| {
+                    self_associated_files.extend(associated_files.clone());
+                    self_associated_files
+                })
+                .unwrap_or(associated_files),
+        );
+        self
+    }
+
+    fn _set_quick_fix_labels(mut self, quick_fix_labels: Vec<String>) -> Self {
+        self.quick_fix_labels = Some(
+            self.quick_fix_labels
+                .map(|mut self_quick_fix_labels| {
+                    self_quick_fix_labels.extend(quick_fix_labels.clone());
+                    self_quick_fix_labels
+                })
+                .unwrap_or(quick_fix_labels),
+        );
+        self
+    }
+
+    fn _set_parameter_hints(mut self, parameter_hints: Vec<String>) -> Self {
+        self.parameter_hints = Some(
+            self.parameter_hints
+                .map(|mut self_parameter_hints| {
+                    self_parameter_hints.extend(parameter_hints.clone());
+                    self_parameter_hints
+                })
+                .unwrap_or(parameter_hints),
+        );
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct LSPDiagnosticError {
     range: Range,
     snippet: String,
     fs_file_path: String,
     diagnostic: String,
-    associated_files: Option<Vec<String>>,
-    quick_fix_labels: Option<Vec<String>>,
-    parameter_hints: Option<Vec<String>>,
+    metadata: LSPDiagnostiErrorMetadata,
 }
 
 impl LSPDiagnosticError {
@@ -28,9 +83,7 @@ impl LSPDiagnosticError {
             snippet,
             fs_file_path,
             diagnostic,
-            associated_files: None,
-            quick_fix_labels,
-            parameter_hints,
+            metadata: LSPDiagnostiErrorMetadata::new(None, quick_fix_labels, parameter_hints),
         }
     }
 
@@ -51,19 +104,15 @@ impl LSPDiagnosticError {
     }
 
     pub fn associated_files(&self) -> Option<&Vec<String>> {
-        self.associated_files.as_ref()
+        self.metadata.associated_files.as_ref()
     }
 
-    pub fn set_associated_files(&mut self, files: Vec<String>) {
-        self.associated_files = Some(files);
+    pub fn quick_fix_labels(&self) -> Option<&Vec<String>> {
+        self.metadata.quick_fix_labels.as_ref()
     }
 
-    pub fn quick_fix_labels(&self) -> &Option<Vec<String>> {
-        &self.quick_fix_labels
-    }
-
-    pub fn parameter_hints(&self) -> &Option<Vec<String>> {
-        &self.parameter_hints
+    pub fn parameter_hints(&self) -> Option<&Vec<String>> {
+        self.metadata.parameter_hints.as_ref()
     }
 }
 

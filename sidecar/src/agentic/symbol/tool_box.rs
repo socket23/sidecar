@@ -6099,7 +6099,7 @@ FILEPATH: {fs_file_path}
                 diagnostic.fs_file_path().to_owned(),
                 diagnostic.message().to_owned(),
                 diagnostic.quick_fix_labels().to_owned(),
-                diagnostic.parameter_hints().to_owned()
+                diagnostic.parameter_hints().to_owned(),
             )
         })
         .collect::<Vec<_>>();
@@ -9571,9 +9571,13 @@ FILEPATH: {fs_file_path}
         Ok(user_context)
     }
 
-    pub async fn find_associated_files(&self, primary_file: &str, message_properties: SymbolEventMessageProperties) -> Result<Vec<String>, SymbolError> {
+    pub async fn find_associated_files(
+        &self,
+        primary_file: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<String>, SymbolError> {
         let mut associated_files: HashSet<String> = HashSet::new();
-    
+
         // // 1. Add files from the local code graph:
         // let import_nodes = self.find_import_nodes(primary_file, message_properties.clone()).await?;
         // for (import_name, range) in import_nodes {
@@ -9587,16 +9591,25 @@ FILEPATH: {fs_file_path}
         //         associated_files.insert(implementation.fs_file_path().to_owned());
         //     }
         // }
-    
+
         // 2. (Optional) Add files based on references to top-level symbols in primary_file:
-        let top_level_symbols = self.get_outline_nodes_from_editor(primary_file, message_properties.clone()).await.unwrap_or_default();
+        let top_level_symbols = self
+            .get_outline_nodes_from_editor(primary_file, message_properties.clone())
+            .await
+            .unwrap_or_default();
         for symbol in top_level_symbols {
-             let references = self.go_to_references(primary_file.to_owned(), symbol.identifier_range().start_position(), message_properties.clone()).await?;
-             for reference in references.locations() {
-                 associated_files.insert(reference.fs_file_path().to_owned());
-             }
+            let references = self
+                .go_to_references(
+                    primary_file.to_owned(),
+                    symbol.identifier_range().start_position(),
+                    message_properties.clone(),
+                )
+                .await?;
+            for reference in references.locations() {
+                associated_files.insert(reference.fs_file_path().to_owned());
+            }
         }
-    
+
         Ok(associated_files.into_iter().collect())
     }
     /// This looks at the LSP diagnostics and figures out the type definition to go to
@@ -9634,9 +9647,20 @@ FILEPATH: {fs_file_path}
             .filter_map(|(click_word, click_range)| {
                 lsp_diagnositcs
                     .iter()
-                    .find(|diagnostic| click_range.contains_check_line_column(diagnostic.range()))
-                    .map(|diagnostic| diagnostic.range().clone())
-                    .map(|diagnostic_range| (click_word, click_range, diagnostic_range))
+                    .enumerate()
+                    .filter_map(|(idx, diagnostic)| {
+                        if click_range.contains_check_line_column(diagnostic.range()) {
+                            Some((
+                                idx,
+                                diagnostic,
+                            ))
+                        } else {
+                            None
+                        }
+                    })
+                    .next()
+                    .map(|(idx, diagnostic)| (idx, diagnostic.range().clone()))
+                    .map(|(idx, diagnostic_range)| (idx, click_word, click_range, diagnostic_range))
             })
             .collect::<Vec<_>>();
 
@@ -9662,7 +9686,7 @@ FILEPATH: {fs_file_path}
                     .flatten(),
                 Err(_) => None,
             }
-            .map(|output| (function_call_range.0, output))
+            .map(|output| (function_call_range.0, function_call_range.0, output))
         })
         .buffer_unordered(4)
         .collect::<Vec<_>>()
@@ -9671,10 +9695,12 @@ FILEPATH: {fs_file_path}
         .filter_map(|s| s)
         .collect::<Vec<_>>();
 
-        let mut already_seen_outline_nodes: HashSet<String> = Default::default();
-        let mut additional_user_variables = vec![];
-        for (click_word, click_range) in previous_word_click_ranges.into_iter() {
-            // here we want to invoke to go to definition
+        let mut additional_outline_node_ids = vec![];
+        let mut outline_nodes: HashMap<String, OutlineNode> = Default::default();
+        for (_lsp_diagnostic_index, click_word, click_range) in
+            previous_word_click_ranges.into_iter()
+        {
+            // here we want to invoke to go to type definition
             // and then we want to invoke go to implementations over here
             // get the outline nodes which we are interested in and then merge them
             // together to deduplicate them
@@ -9691,14 +9717,21 @@ FILEPATH: {fs_file_path}
             if go_to_type_definition.is_empty() {
                 continue;
             }
-            let first_definition = go_to_type_definition.definitions().into_iter().find(|type_definition| {
-                // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
-                !vec!["rustlib/src"]
-                .into_iter()
-                .any(|path_fragment| type_definition.file_path().contains(&path_fragment))
-            });
+            let first_definition =
+                go_to_type_definition
+                    .definitions()
+                    .into_iter()
+                    .find(|type_definition| {
+                        // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
+                        !vec!["rustlib/src"].into_iter().any(|path_fragment| {
+                            type_definition.file_path().contains(&path_fragment)
+                        })
+                    });
             if first_definition.is_none() {
-                println!("tool_box::grab_type_definitions_worthy_using_diagnostics::is_none::word({})", &click_word);
+                println!(
+                    "tool_box::grab_type_definitions_worthy_using_diagnostics::is_none::word({})",
+                    &click_word
+                );
                 continue;
             }
             let first_definition = first_definition.expect("is_none to hold");
@@ -9714,7 +9747,6 @@ FILEPATH: {fs_file_path}
                 continue;
             }
             // now we want to get the outline node which contains this definition
-            let mut variables_for_clickable_nodes = vec![];
             let outline_node_containing_range = self
                 .get_outline_node_for_range(
                     first_definition.range(),
@@ -9722,23 +9754,19 @@ FILEPATH: {fs_file_path}
                     message_properties.clone(),
                 )
                 .await?;
-            if already_seen_outline_nodes
+            if additional_outline_node_ids
                 .contains(&outline_node_containing_range.unique_identifier())
             {
                 continue;
             }
-            already_seen_outline_nodes
-                .insert(outline_node_containing_range.unique_identifier());
-            variables_for_clickable_nodes.push(VariableInformation::create_selection(
-                outline_node_containing_range.range().clone(),
-                outline_node_containing_range.fs_file_path().to_owned(),
-                format!("Definition for {}", click_word),
-                outline_node_containing_range.get_outline_short(),
-                outline_node_containing_range
-                    .content()
-                    .language()
-                    .to_owned(),
-            ));
+
+            // update state variables like outline_nodes hashmap and addition_outline_node_ids which we want
+            // to track
+            additional_outline_node_ids.push(outline_node_containing_range.unique_identifier());
+            outline_nodes.insert(
+                outline_node_containing_range.unique_identifier(),
+                outline_node_containing_range.clone(),
+            );
             // now we want to get the implementations for the outline node
             let go_to_implementations_response = self
                 .go_to_implementations_exact(
@@ -9754,7 +9782,6 @@ FILEPATH: {fs_file_path}
                 go_to_implementations_response.remove_implementations_vec();
 
             // keep track of already seen outline nodes
-            let mut implementation_short_outline_nodes = vec![];
             for implementation_location in implementation_locations.into_iter() {
                 // find the outline node which contains these implementations
                 let implementation_fs_file_path = implementation_location.fs_file_path();
@@ -9766,33 +9793,31 @@ FILEPATH: {fs_file_path}
                         message_properties.clone(),
                     )
                     .await?;
-                if already_seen_outline_nodes
-                    .contains(&outline_node_containing_range.unique_identifier())
-                {
-                    continue;
-                }
-                already_seen_outline_nodes
-                    .insert(outline_node_containing_range.unique_identifier());
-                implementation_short_outline_nodes.push(outline_node_containing_range);
+                outline_nodes.insert(
+                    outline_node_containing_range.unique_identifier(),
+                    outline_node_containing_range,
+                );
             }
-
-            // now we have all the outline nodes for the clickable range we are interested in
-            variables_for_clickable_nodes.extend(
-                implementation_short_outline_nodes
-                    .into_iter()
-                    .map(|implementation_outline_node| {
-                        VariableInformation::create_selection(
-                            implementation_outline_node.range().clone(),
-                            implementation_outline_node.fs_file_path().to_owned(),
-                            format!("Implementation for {}", click_word),
-                            implementation_outline_node.get_outline_short(),
-                            implementation_outline_node.content().language().to_owned(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            );
-            additional_user_variables.extend(variables_for_clickable_nodes);
         }
+        let additional_user_variables = additional_outline_node_ids
+            .into_iter()
+            .filter_map(|outline_node_id| {
+                let outline_node = outline_nodes.remove(&outline_node_id);
+                outline_node.map(|outline_node| {
+                    VariableInformation::create_selection(
+                        outline_node.range().clone(),
+                        outline_node.fs_file_path().to_owned(),
+                        if outline_node.is_class() || outline_node.is_class_definition() {
+                            format!("Definition for {}", outline_node.name())
+                        } else {
+                            format!("Implementation for {}", outline_node.name())
+                        },
+                        outline_node.content().content().to_owned(),
+                        outline_node.content().language().to_owned(),
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
         Ok(additional_user_variables)
     }
 }

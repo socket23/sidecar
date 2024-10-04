@@ -9390,7 +9390,7 @@ FILEPATH: {fs_file_path}
 
         // now that we have clickable nodes and then we need to filter it to the variables
         // which we can click on
-        let _filetered_file_paths_to_clickable_nodes = file_paths_to_clickable_nodes
+        let filtered_file_paths_to_clickable_nodes = file_paths_to_clickable_nodes
             .into_iter()
             .map(|(fs_file_path, mut clickable_nodes)| {
                 clickable_nodes = clickable_nodes
@@ -9412,6 +9412,15 @@ FILEPATH: {fs_file_path}
 
         // Now we try to get the definition of these nodes we have to click and then
         // go to the implementations of this
+        for (_file_path, clickable_nodes) in filtered_file_paths_to_clickable_nodes.into_iter() {
+            for (_click_word, _click_range) in clickable_nodes.into_iter() {
+                // here we want to invoke to go to definition
+                // and then we want to invoke go to implementations over here
+                // get the outline nodes which we are interested in and then merge them
+                // together to deduplicate them
+                // and then we want to get the compressed outline nodes over here
+            }
+        }
         user_context
     }
 }

@@ -6019,10 +6019,12 @@ FILEPATH: {fs_file_path}
         &self,
         fs_file_path: &str,
         message_properties: SymbolEventMessageProperties,
+        with_enrichment: bool,
     ) -> Result<FileDiagnosticsOutput, SymbolError> {
         let input = ToolInput::FileDiagnostics(FileDiagnosticsInput::new(
             fs_file_path.to_owned(),
             message_properties.editor_url().to_owned(),
+            with_enrichment,
         ));
         self.tools
             .invoke(input)
@@ -6037,6 +6039,7 @@ FILEPATH: {fs_file_path}
         &self,
         file_paths: Vec<String>,
         message_properties: SymbolEventMessageProperties,
+        with_enrichment: bool,
     ) -> Result<Vec<LSPDiagnosticError>, SymbolError> {
         let file_signals = stream::iter(
             file_paths
@@ -6045,7 +6048,7 @@ FILEPATH: {fs_file_path}
         )
         .map(|(fs_file_path, message_properties)| async move {
             let diagnostics = self
-                .get_file_diagnostics(&fs_file_path, message_properties.clone())
+                .get_file_diagnostics(&fs_file_path, message_properties.clone(), with_enrichment)
                 .await;
             let file_contents = self
                 .file_open(fs_file_path.to_owned(), message_properties)

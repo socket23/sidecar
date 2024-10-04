@@ -387,6 +387,7 @@ pub struct FollowupChatRequest {
     pub system_instruction: Option<String>,
     pub editor_url: Option<String>,
     pub is_deep_reasoning: bool,
+    pub with_lsp_enrichment: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -470,6 +471,7 @@ pub async fn followup_chat(
         system_instruction,
         editor_url,
         is_deep_reasoning,
+        with_lsp_enrichment,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -508,6 +510,10 @@ pub async fn followup_chat(
             )
             .await;
         } else if user_context.is_plan_append() {
+            println!(
+                "webserver::followup_chat::with_lsp_enrichment: {}",
+                with_lsp_enrichment
+            );
             return handle_append_plan(
                 query,
                 user_context,
@@ -516,6 +522,7 @@ pub async fn followup_chat(
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 plan_service,
                 is_deep_reasoning,
+                with_lsp_enrichment,
             )
             .await;
         } else {

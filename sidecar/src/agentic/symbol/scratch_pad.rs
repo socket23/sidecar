@@ -1318,7 +1318,7 @@ Please help me out by making the necessary code edits"#
         }
         let diagnostics = self
             .tool_box
-            .get_lsp_diagnostics_for_files(files_focussed, message_properties.clone())
+            .get_lsp_diagnostics_for_files(files_focussed, message_properties.clone(), false) // with enrichment
             .await
             .unwrap_or_default();
         let _ = self

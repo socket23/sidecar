@@ -70,6 +70,8 @@ pub struct DiagnosticWithSnippet {
     range: Range,
     snippet: String,
     fs_file_path: String,
+    quick_fix_labels: Option<Vec<String>>,
+    parameter_hints: Option<Vec<String>>,
 }
 
 impl DiagnosticWithSnippet {
@@ -79,6 +81,8 @@ impl DiagnosticWithSnippet {
             range,
             snippet,
             fs_file_path,
+            quick_fix_labels: None,
+            parameter_hints: None,
         }
     }
 
@@ -90,8 +94,8 @@ impl DiagnosticWithSnippet {
         let Diagnostic {
             range,
             message,
-            quick_fix_labels: _,
-            parameter_hints: _,
+            quick_fix_labels,
+            parameter_hints,
         } = diagnostic;
 
         let start_line = range.start_line();
@@ -111,6 +115,8 @@ impl DiagnosticWithSnippet {
             range,
             snippet,
             fs_file_path,
+            quick_fix_labels,
+            parameter_hints,
         })
     }
 

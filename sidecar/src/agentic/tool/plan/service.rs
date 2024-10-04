@@ -62,10 +62,15 @@ impl PlanService {
         &self,
         files_until_checkpoint: Vec<String>,
         message_properties: SymbolEventMessageProperties,
+        with_enrichment: bool,
     ) -> Vec<LSPDiagnosticError> {
         let file_lsp_diagnostics = self
             .tool_box()
-            .get_lsp_diagnostics_for_files(files_until_checkpoint, message_properties.clone())
+            .get_lsp_diagnostics_for_files(
+                files_until_checkpoint,
+                message_properties.clone(),
+                with_enrichment,
+            )
             .await
             .unwrap_or_default();
 
@@ -104,6 +109,7 @@ impl PlanService {
         user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
         is_deep_reasoning: bool,
+        with_lsp_enrichment: bool,
     ) -> Result<Plan, PlanServiceError> {
         let plan_checkpoint = plan.checkpoint();
         if let Some(checkpoint) = plan_checkpoint {
@@ -124,7 +130,11 @@ impl PlanService {
 
             // get all diagnostics present on these files
             let file_lsp_diagnostics = self
-                .process_diagnostics(files_until_checkpoint, message_properties.clone())
+                .process_diagnostics(
+                    files_until_checkpoint,
+                    message_properties.clone(),
+                    with_lsp_enrichment,
+                ) // this is the main diagnostics caller.
                 .await;
 
             let diagnostics_grouped_by_file: DiagnosticMap =

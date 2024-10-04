@@ -83,6 +83,7 @@ use crate::agentic::tool::lsp::file_diagnostics::{
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
 };
+use crate::agentic::tool::lsp::go_to_previous_word::GoToPreviousWordRequest;
 use crate::agentic::tool::lsp::gotodefintion::{
     DefinitionPathAndRange, GoToDefinitionRequest, GoToDefinitionResponse,
 };
@@ -6534,6 +6535,26 @@ FILEPATH: {fs_file_path}
             .ok_or(SymbolError::WrongToolOutput)
     }
 
+    /// Allows us to go to type definition for any given symbol
+    pub async fn go_to_type_definition(
+        &self,
+        fs_file_path: &str,
+        position: Position,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<GoToDefinitionResponse, SymbolError> {
+        let request = ToolInput::GoToDefinition(GoToDefinitionRequest::new(
+            fs_file_path.to_owned(),
+            message_properties.editor_url().to_owned(),
+            position,
+        ));
+        self.tools
+            .invoke(request)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .go_to_type_definition_response()
+            .ok_or(SymbolError::WrongToolOutput)        
+    }
+
     pub async fn go_to_definition(
         &self,
         fs_file_path: &str,
@@ -9406,7 +9427,11 @@ FILEPATH: {fs_file_path}
                             .filter(|variable| &variable.fs_file_path == &fs_file_path)
                             .any(|variable| {
                                 // check if the variable range contains the clickable node we are interested in
-                                Range::new(variable.start_position.clone(), variable.end_position.clone()).contains_check_line(clickable_range)
+                                Range::new(
+                                    variable.start_position.clone(),
+                                    variable.end_position.clone(),
+                                )
+                                .contains_check_line(clickable_range)
                             });
                         variable_contains
                     })
@@ -9439,11 +9464,20 @@ FILEPATH: {fs_file_path}
                     continue;
                 }
                 let first_definition = go_to_definition.definitions().remove(0);
-                println!("tool_box::generate_outline_for_click_word::word({})::definition_path({})", &click_word, first_definition.file_path());
+                println!(
+                    "tool_box::generate_outline_for_click_word::word({})::definition_path({})",
+                    &click_word,
+                    first_definition.file_path()
+                );
                 // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
-                let is_blocklisted_definition = vec!["rustlib/src"].into_iter().any(|path_fragment| first_definition.file_path().contains(&path_fragment));
+                let is_blocklisted_definition = vec!["rustlib/src"]
+                    .into_iter()
+                    .any(|path_fragment| first_definition.file_path().contains(&path_fragment));
                 if is_blocklisted_definition {
-                    println!("tool_box::generate_outline_for_click_word::word({})::is_blocklisted", &click_word);
+                    println!(
+                        "tool_box::generate_outline_for_click_word::word({})::is_blocklisted",
+                        &click_word
+                    );
                     continue;
                 }
                 // now we want to get the outline node which contains this definition
@@ -9455,10 +9489,13 @@ FILEPATH: {fs_file_path}
                         message_properties.clone(),
                     )
                     .await?;
-                if already_seen_outline_nodes.contains(&outline_node_containing_range.unique_identifier()) {
+                if already_seen_outline_nodes
+                    .contains(&outline_node_containing_range.unique_identifier())
+                {
                     continue;
                 }
-                already_seen_outline_nodes.insert(outline_node_containing_range.unique_identifier());
+                already_seen_outline_nodes
+                    .insert(outline_node_containing_range.unique_identifier());
                 variables_for_clickable_nodes.push(VariableInformation::create_selection(
                     outline_node_containing_range.range().clone(),
                     outline_node_containing_range.fs_file_path().to_owned(),
@@ -9525,7 +9562,10 @@ FILEPATH: {fs_file_path}
             }
         }
 
-        println!("tool_box::generate_deeper_user_context::additional_user_varibles::len({})", additional_user_variables.len());
+        println!(
+            "tool_box::generate_deeper_user_context::additional_user_varibles::len({})",
+            additional_user_variables.len()
+        );
         let user_context = user_context.add_variables(additional_user_variables);
         // update the user context with additional variables which we found
         Ok(user_context)
@@ -9558,5 +9598,204 @@ FILEPATH: {fs_file_path}
         }
     
         Ok(associated_files.into_iter().collect())
+    }
+    /// This looks at the LSP diagnostics and figures out the type definition to go to
+    ///
+    /// This is a common mistake on the LLM where it hallucinates a function on a class
+    /// so we can just detect the class or the parent caller until where its correct and
+    /// dive deeper from there
+    /// This function just gives back the range where we can click for the type-definitions
+    pub async fn grab_type_definition_worthy_positions_using_diagnostics(
+        &self,
+        fs_file_path: &str,
+        lsp_diagnositcs: Vec<LSPDiagnosticError>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Vec<VariableInformation>, SymbolError> {
+        let language_properties = self.editor_parsing.for_file_path(fs_file_path);
+        if language_properties.is_none() {
+            return Ok(vec![]);
+        }
+        let language_properties = language_properties.expect("is_none to hold");
+        let file_content = self
+            .file_open(fs_file_path.to_owned(), message_properties.clone())
+            .await;
+        if file_content.is_err() {
+            return Ok(vec![]);
+        }
+        let file_content = file_content.expect("is_err to hold");
+        let function_call_ranges = language_properties
+            .generate_function_call_paths(file_content.contents_ref().as_bytes());
+        if function_call_ranges.is_none() {
+            return Ok(vec![]);
+        }
+        let mut function_call_ranges = function_call_ranges.expect("is_none to hold");
+        function_call_ranges = function_call_ranges
+            .into_iter()
+            .filter(|(_click_word, click_range)| {
+                lsp_diagnositcs
+                    .iter()
+                    .any(|diagnostic| click_range.contains_check_line_column(diagnostic.range()))
+            })
+            .collect::<Vec<_>>();
+
+        // now that we have filtered the function call ranges, we want to take a step back on the position we are in
+        // since the function call diagnostics going wrong is a sign that the LLM does not see the outline node type
+        // for the
+        let previous_word_click_ranges = stream::iter(
+            function_call_ranges
+                .into_iter()
+                .map(|function_call_range| (function_call_range, message_properties.clone())),
+        )
+        .map(|(function_call_range, message_properties)| async move {
+            let go_to_previous_word = ToolInput::GoToPreviousWord(GoToPreviousWordRequest::new(
+                fs_file_path.to_owned(),
+                function_call_range.1.start_position(),
+                message_properties.editor_url(),
+            ));
+            let tool_output = self.tools.invoke(go_to_previous_word).await;
+            match tool_output {
+                Ok(output) => output
+                    .go_to_previous_word_response()
+                    .map(|output| output.range())
+                    .flatten(),
+                Err(_) => None,
+            }
+            .map(|output| (function_call_range.0, output))
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s)
+        .collect::<Vec<_>>();
+
+        let mut already_seen_outline_nodes: HashSet<String> = Default::default();
+        let mut additional_user_variables = vec![];
+        for (click_word, click_range) in previous_word_click_ranges.into_iter() {
+            // here we want to invoke to go to definition
+            // and then we want to invoke go to implementations over here
+            // get the outline nodes which we are interested in and then merge them
+            // together to deduplicate them
+            // and then we want to get the compressed outline nodes over here
+            let go_to_type_definition = self
+                .go_to_type_definition(
+                    &fs_file_path,
+                    click_range.start_position(),
+                    message_properties.clone(),
+                )
+                .await?;
+
+            // we want to filter out the definitions which might lead to common modules like Vec, Arc etc
+            if go_to_type_definition.is_empty() {
+                continue;
+            }
+            let first_definition = go_to_type_definition.definitions().into_iter().find(|type_definition| {
+                // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
+                !vec!["rustlib/src"]
+                .into_iter()
+                .any(|path_fragment| type_definition.file_path().contains(&path_fragment))
+            });
+            if first_definition.is_none() {
+                println!("tool_box::grab_type_definitions_worthy_using_diagnostics::is_none::word({})", &click_word);
+                continue;
+            }
+            let first_definition = first_definition.expect("is_none to hold");
+            println!(
+                "tool_box::grab_type_definitions_worthy_using_diagnostics::word({})::definition_path({})",
+                &click_word,
+                first_definition.file_path()
+            );
+            // try to filter out things here which are very common: Vec, Arc, Box etc, these are present in rustlib
+            let is_blocklisted_definition = vec!["rustlib/src"]
+                .into_iter()
+                .any(|path_fragment| first_definition.file_path().contains(&path_fragment));
+            if is_blocklisted_definition {
+                println!(
+                    "tool_box::generate_outline_for_click_word::word({})::is_blocklisted",
+                    &click_word
+                );
+                continue;
+            }
+            // now we want to get the outline node which contains this definition
+            let mut variables_for_clickable_nodes = vec![];
+            let outline_node_containing_range = self
+                .get_outline_node_for_range(
+                    first_definition.range(),
+                    first_definition.file_path(),
+                    message_properties.clone(),
+                )
+                .await?;
+            if already_seen_outline_nodes
+                .contains(&outline_node_containing_range.unique_identifier())
+            {
+                continue;
+            }
+            already_seen_outline_nodes
+                .insert(outline_node_containing_range.unique_identifier());
+            variables_for_clickable_nodes.push(VariableInformation::create_selection(
+                outline_node_containing_range.range().clone(),
+                outline_node_containing_range.fs_file_path().to_owned(),
+                format!("Definition for {}", click_word),
+                outline_node_containing_range.get_outline_short(),
+                outline_node_containing_range
+                    .content()
+                    .language()
+                    .to_owned(),
+            ));
+            // now we want to get the implementations for the outline node
+            let go_to_implementations_response = self
+                .go_to_implementations_exact(
+                    outline_node_containing_range.fs_file_path(),
+                    &outline_node_containing_range
+                        .identifier_range()
+                        .start_position(),
+                    message_properties.clone(),
+                )
+                .await?;
+            // now that we have go-to-implementations we want to find the outline nodes which contain these implementations
+            let implementation_locations =
+                go_to_implementations_response.remove_implementations_vec();
+
+            // keep track of already seen outline nodes
+            let mut implementation_short_outline_nodes = vec![];
+            for implementation_location in implementation_locations.into_iter() {
+                // find the outline node which contains these implementations
+                let implementation_fs_file_path = implementation_location.fs_file_path();
+                let implementation_range = implementation_location.range();
+                let outline_node_containing_range = self
+                    .get_outline_node_for_range(
+                        implementation_range,
+                        implementation_fs_file_path,
+                        message_properties.clone(),
+                    )
+                    .await?;
+                if already_seen_outline_nodes
+                    .contains(&outline_node_containing_range.unique_identifier())
+                {
+                    continue;
+                }
+                already_seen_outline_nodes
+                    .insert(outline_node_containing_range.unique_identifier());
+                implementation_short_outline_nodes.push(outline_node_containing_range);
+            }
+
+            // now we have all the outline nodes for the clickable range we are interested in
+            variables_for_clickable_nodes.extend(
+                implementation_short_outline_nodes
+                    .into_iter()
+                    .map(|implementation_outline_node| {
+                        VariableInformation::create_selection(
+                            implementation_outline_node.range().clone(),
+                            implementation_outline_node.fs_file_path().to_owned(),
+                            format!("Implementation for {}", click_word),
+                            implementation_outline_node.get_outline_short(),
+                            implementation_outline_node.content().language().to_owned(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            additional_user_variables.extend(variables_for_clickable_nodes);
+        }
+        Ok(additional_user_variables)
     }
 }

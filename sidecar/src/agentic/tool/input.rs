@@ -42,6 +42,7 @@ use super::{
         diagnostics::LSPDiagnosticsInput,
         file_diagnostics::FileDiagnosticsInput,
         get_outline_nodes::OutlineNodesUsingEditorRequest,
+        go_to_previous_word::GoToPreviousWordRequest,
         gotodefintion::GoToDefinitionRequest,
         gotoimplementations::GoToImplementationRequest,
         gotoreferences::GoToReferencesRequest,
@@ -151,6 +152,10 @@ pub enum ToolInput {
     FileDiagnostics(FileDiagnosticsInput),
     // Plan step add
     PlanStepAdd(PlanAddRequest),
+    // Go to previous word in a document
+    GoToPreviousWord(GoToPreviousWordRequest),
+    // Go to type definition
+    GoToTypeDefinition(GoToDefinitionRequest),
 }
 
 impl ToolInput {
@@ -221,6 +226,24 @@ impl ToolInput {
             ToolInput::CreateFile(_) => ToolType::CreateFile,
             ToolInput::FileDiagnostics(_) => ToolType::FileDiagnostics,
             ToolInput::PlanStepAdd(_) => ToolType::PlanStepAdd,
+            ToolInput::GoToPreviousWord(_) => ToolType::GoToPreviousWordRange,
+            ToolInput::GoToTypeDefinition(_) => ToolType::GoToTypeDefinition,
+        }
+    }
+
+    pub fn is_go_to_type_definition(self) -> Result<GoToDefinitionRequest, ToolError> {
+        if let ToolInput::GoToTypeDefinition(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::GoToTypeDefinition))
+        }
+    }
+
+    pub fn is_go_to_previous_word_request(self) -> Result<GoToPreviousWordRequest, ToolError> {
+        if let ToolInput::GoToPreviousWord(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::GoToPreviousWordRange))
         }
     }
 

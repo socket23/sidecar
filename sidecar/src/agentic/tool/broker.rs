@@ -39,9 +39,11 @@ use super::{
         diagnostics::LSPDiagnostics,
         file_diagnostics::FileDiagnostics,
         get_outline_nodes::OutlineNodesUsingEditorClient,
+        go_to_previous_word::GoToPreviousWordClient,
         gotodefintion::LSPGoToDefinition,
         gotoimplementations::LSPGoToImplementation,
         gotoreferences::LSPGoToReferences,
+        gototypedefinition::LSPGoToTypeDefinition,
         grep_symbol::GrepSymbolInCodebase,
         inlay_hints::InlayHints,
         open_file::LSPOpenFile,
@@ -408,6 +410,14 @@ impl ToolBroker {
             Box::new(PlanAddStepClient::new(llm_client.clone())),
         );
         tools.insert(ToolType::FileDiagnostics, Box::new(FileDiagnostics::new()));
+        tools.insert(
+            ToolType::GoToPreviousWordRange,
+            Box::new(GoToPreviousWordClient::new()),
+        );
+        tools.insert(
+            ToolType::GoToTypeDefinition,
+            Box::new(LSPGoToTypeDefinition::new()),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

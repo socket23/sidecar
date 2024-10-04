@@ -38,6 +38,7 @@ use super::{
         diagnostics::LSPDiagnosticsOutput,
         file_diagnostics::FileDiagnosticsOutput,
         get_outline_nodes::OutlineNodesUsingEditorResponse,
+        go_to_previous_word::GoToPreviousWordResponse,
         gotodefintion::GoToDefinitionResponse,
         gotoimplementations::GoToImplementationResponse,
         gotoreferences::GoToReferencesResponse,
@@ -179,9 +180,21 @@ pub enum ToolOutput {
     FileDiagnostics(FileDiagnosticsOutput),
     // Plan add step
     PlanAddStep(StepGeneratorResponse),
+    // Go to previous word
+    GoToPreviousWord(GoToPreviousWordResponse),
+    // Go to type definition
+    GoToTypeDefinition(GoToDefinitionResponse),
 }
 
 impl ToolOutput {
+    pub fn go_to_type_definition(response: GoToDefinitionResponse) -> Self {
+        ToolOutput::GoToTypeDefinition(response)
+    }
+
+    pub fn go_to_previous_word(response: GoToPreviousWordResponse) -> Self {
+        ToolOutput::GoToPreviousWord(response)
+    }
+
     pub fn plan_add_step(response: StepGeneratorResponse) -> Self {
         ToolOutput::PlanAddStep(response)
     }
@@ -695,6 +708,20 @@ impl ToolOutput {
     pub fn get_plan_new_steps(self) -> Option<StepGeneratorResponse> {
         match self {
             ToolOutput::PlanAddStep(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn go_to_previous_word_response(self) -> Option<GoToPreviousWordResponse> {
+        match self {
+            ToolOutput::GoToPreviousWord(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn go_to_type_definition_response(self) -> Option<GoToDefinitionResponse> {
+        match self {
+            ToolOutput::GoToTypeDefinition(response) => Some(response),
             _ => None,
         }
     }

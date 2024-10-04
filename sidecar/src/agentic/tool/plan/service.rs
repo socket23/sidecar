@@ -189,11 +189,18 @@ impl PlanService {
                         format!(
                             r#"#{}:
 ---
-Snippet: {}
-Diagnostic: {}
-Files Affected: {}
-Quick fixes: {}
-Parameter hints: {}
+### Snippet:
+{}
+### Diagnostic:
+{}
+### Files Affected:
+{}
+### Quick fixes:
+{}
+### Parameter hints:
+{}
+### Additional symbol outlines:
+{}
 ---
 "#,
                             index + 1,
@@ -206,11 +213,15 @@ Parameter hints: {}
                             error
                                 .quick_fix_labels()
                                 .as_ref()
-                                .map_or_else(|| String::from("None"), |labels| labels.join(", ")),
+                                .map_or_else(|| String::from("None"), |labels| labels.join("\n")),
                             error
                                 .parameter_hints()
                                 .as_ref()
-                                .map_or_else(|| String::from("None"), |labels| labels.join(", ")),
+                                .map_or_else(|| String::from("None"), |labels| labels.join("\n")),
+                            error.user_variables().map_or_else(
+                                || String::from("None"),
+                                |user_variables| { user_variables.join("\n") },
+                            )
                         )
                     })
                     .collect::<Vec<_>>()

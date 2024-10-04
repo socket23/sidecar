@@ -9530,4 +9530,33 @@ FILEPATH: {fs_file_path}
         // update the user context with additional variables which we found
         Ok(user_context)
     }
+
+    pub async fn find_associated_files(&self, primary_file: &str, message_properties: SymbolEventMessageProperties) -> Result<Vec<String>, SymbolError> {
+        let mut associated_files: HashSet<String> = HashSet::new();
+    
+        // // 1. Add files from the local code graph:
+        // let import_nodes = self.find_import_nodes(primary_file, message_properties.clone()).await?;
+        // for (import_name, range) in import_nodes {
+        //     let definitions = self.go_to_definition(primary_file, range.end_position(), message_properties.clone()).await?;
+        //     for definition in definitions.definitions() {
+        //         associated_files.insert(definition.file_path().to_owned());
+        //     }
+        //     // Also check implementations for interfaces/traits:
+        //     let implementations = self.go_to_implementations_exact(primary_file, &range.end_position(), message_properties.clone()).await?;
+        //     for implementation in implementations.get_implementation_locations_vec() {
+        //         associated_files.insert(implementation.fs_file_path().to_owned());
+        //     }
+        // }
+    
+        // 2. (Optional) Add files based on references to top-level symbols in primary_file:
+        let top_level_symbols = self.get_outline_nodes_from_editor(primary_file, message_properties.clone()).await.unwrap_or_default();
+        for symbol in top_level_symbols {
+             let references = self.go_to_references(primary_file.to_owned(), symbol.identifier_range().start_position(), message_properties.clone()).await?;
+             for reference in references.locations() {
+                 associated_files.insert(reference.fs_file_path().to_owned());
+             }
+        }
+    
+        Ok(associated_files.into_iter().collect())
+    }
 }

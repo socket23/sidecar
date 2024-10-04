@@ -1091,6 +1091,8 @@ pub async fn push_diagnostics(
                 webserver_diagnostic.range_content,
                 fs_file_path.to_owned(),
                 webserver_diagnostic.message,
+                None,
+                None,
             )
         })
         .collect::<Vec<_>>();

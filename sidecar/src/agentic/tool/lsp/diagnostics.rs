@@ -135,6 +135,14 @@ impl DiagnosticWithSnippet {
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
     }
+
+    pub fn quick_fix_labels(&self) -> &Option<Vec<String>> {
+        &self.quick_fix_labels
+    }
+
+    pub fn parameter_hints(&self) -> &Option<Vec<String>> {
+        &self.parameter_hints
+    }
 }
 
 #[derive(Debug, Error)]

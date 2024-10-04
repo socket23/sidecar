@@ -16,8 +16,6 @@ pub struct Plan {
     user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
     checkpoint: Option<usize>,
     storage_path: String,
-    // user_id: String,
-    // tag: TagIndex,
 }
 
 impl Plan {

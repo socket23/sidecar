@@ -6097,6 +6097,8 @@ FILEPATH: {fs_file_path}
                 diagnostic.snippet().to_owned(),
                 diagnostic.fs_file_path().to_owned(),
                 diagnostic.message().to_owned(),
+                diagnostic.quick_fix_labels().to_owned(),
+                diagnostic.parameter_hints().to_owned()
             )
         })
         .collect::<Vec<_>>();

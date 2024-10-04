@@ -179,13 +179,25 @@ impl PlanService {
                     .iter()
                     .map(|error| {
                         format!(
-                            "Snippet: {}\nDiagnostic: {}\nFiles Affected: {}",
+                            r#"Snippet: {}
+Diagnostic: {}
+Files Affected: {}
+Quick fixes: {}
+Parameter hints: {}"#,
                             error.snippet(),
                             error.diagnostic_message(),
                             error.associated_files().map_or_else(
                                 || String::from("Only this file."),
                                 |files| files.join(", ")
                             ),
+                            error
+                                .quick_fix_labels()
+                                .as_ref()
+                                .map_or_else(|| String::from("None"), |labels| labels.join(", ")),
+                            error
+                                .parameter_hints()
+                                .as_ref()
+                                .map_or_else(|| String::from("None"), |labels| labels.join(", ")),
                         )
                     })
                     .collect::<Vec<_>>()

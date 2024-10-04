@@ -10,16 +10,27 @@ pub struct LSPDiagnosticError {
     fs_file_path: String,
     diagnostic: String,
     associated_files: Option<Vec<String>>,
+    quick_fix_labels: Option<Vec<String>>,
+    parameter_hints: Option<Vec<String>>,
 }
 
 impl LSPDiagnosticError {
-    pub fn new(range: Range, snippet: String, fs_file_path: String, diagnostic: String) -> Self {
+    pub fn new(
+        range: Range,
+        snippet: String,
+        fs_file_path: String,
+        diagnostic: String,
+        quick_fix_labels: Option<Vec<String>>,
+        parameter_hints: Option<Vec<String>>,
+    ) -> Self {
         Self {
             range,
             snippet,
             fs_file_path,
             diagnostic,
             associated_files: None,
+            quick_fix_labels,
+            parameter_hints,
         }
     }
 
@@ -45,6 +56,14 @@ impl LSPDiagnosticError {
 
     pub fn set_associated_files(&mut self, files: Vec<String>) {
         self.associated_files = Some(files);
+    }
+
+    pub fn quick_fix_labels(&self) -> &Option<Vec<String>> {
+        &self.quick_fix_labels
+    }
+
+    pub fn parameter_hints(&self) -> &Option<Vec<String>> {
+        &self.parameter_hints
     }
 }
 

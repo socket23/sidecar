@@ -74,31 +74,7 @@ impl PlanService {
             .await
             .unwrap_or_default();
 
-        // Do not expand over the lsp diagnostics yet
         file_lsp_diagnostics
-        // stream::iter(file_lsp_diagnostics)
-        //     .map(|mut diagnostic| async {
-        //         if let Ok(response) = self
-        //             .tool_box
-        //             .go_to_references(
-        //                 diagnostic.fs_file_path().to_owned(),
-        //                 diagnostic.range().start_position().clone(),
-        //                 message_properties.clone(),
-        //             )
-        //             .await
-        //         {
-        //             let associated_files: Vec<String> = response
-        //                 .locations()
-        //                 .into_iter()
-        //                 .map(|location| location.fs_file_path().to_owned())
-        //                 .collect();
-        //             diagnostic.set_associated_files(associated_files);
-        //         }
-        //         diagnostic
-        //     })
-        //     .buffer_unordered(10) // will this kill editor? yep 💀
-        //     .collect::<Vec<_>>()
-        //     .await
     }
 
     /// Appends the step to the point after the checkpoint - diagnostics are included by default
@@ -106,7 +82,7 @@ impl PlanService {
         &self,
         mut plan: Plan,
         query: String,
-        user_context: UserContext,
+        mut user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
         is_deep_reasoning: bool,
         with_lsp_enrichment: bool,
@@ -158,6 +134,26 @@ impl PlanService {
                             .push(error);
                         acc
                     });
+
+            // now we try to enrich the context even more if we can by expanding our search space
+            // and grabbing some more context
+            if with_lsp_enrichment {
+                println!("plan_service::lsp_dignostics::enriching_context_using_tree_sitter");
+                for (fs_file_path, lsp_diagnostics) in diagnostics_grouped_by_file.iter() {
+                    let extra_variables = dbg!(
+                        self.tool_box
+                            .grab_type_definition_worthy_positions_using_diagnostics(
+                                fs_file_path,
+                                lsp_diagnostics.to_vec(),
+                                message_properties.clone(),
+                            )
+                            .await
+                    );
+                    if let Ok(extra_variables) = extra_variables {
+                        user_context = user_context.add_variables(extra_variables);
+                    }
+                }
+            }
 
             let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
 

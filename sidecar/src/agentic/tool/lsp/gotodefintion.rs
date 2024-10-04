@@ -30,6 +30,10 @@ impl GoToDefinitionResponse {
     pub fn definitions(self) -> Vec<DefinitionPathAndRange> {
         self.definitions
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.definitions.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

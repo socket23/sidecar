@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::chunking::text_document::Position;
+use crate::chunking::text_document::{Position, Range};
 use async_recursion::async_recursion;
 use futures::{stream, StreamExt};
 use thiserror::Error;
@@ -39,6 +39,24 @@ pub struct VariableInformation {
 }
 
 impl VariableInformation {
+    /// Helps create a new custom selection with name provided by the system
+    pub fn create_selection(
+        range: Range,
+        fs_file_path: String,
+        name: String,
+        content: String,
+        language: String,
+    ) -> Self {
+        Self {
+            start_position: range.start_position(),
+            end_position: range.end_position(),
+            fs_file_path,
+            name,
+            variable_type: VariableType::Selection,
+            content,
+            language,
+        }
+    }
     pub fn is_selection(&self) -> bool {
         self.variable_type == VariableType::Selection
     }
@@ -193,6 +211,11 @@ impl UserContext {
             is_plan_append: false,
             is_plan_drop_from: None,
         }
+    }
+
+    pub fn add_variables(mut self, variables: Vec<VariableInformation>) -> Self {
+        self.variables.extend(variables);
+        self
     }
 
     /// If we are in any part of the plan generation flow over here

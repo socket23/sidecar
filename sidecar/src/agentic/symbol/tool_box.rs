@@ -113,7 +113,7 @@ use crate::chunking::text_document::{Position, Range};
 use crate::chunking::types::{OutlineNode, OutlineNodeContent};
 use crate::repomap::tag::TagIndex;
 use crate::repomap::types::RepoMap;
-use crate::user_context::types::UserContext;
+use crate::user_context::types::{UserContext, VariableInformation};
 use crate::{
     agentic::tool::{broker::ToolBroker, input::ToolInput, lsp::open_file::OpenFileRequest},
     inline_completion::symbols_tracker::SymbolTrackerInline,
@@ -9344,7 +9344,7 @@ FILEPATH: {fs_file_path}
         &self,
         user_context: UserContext,
         message_properties: SymbolEventMessageProperties,
-    ) -> UserContext {
+    ) -> Result<UserContext, SymbolError> {
         let variables = user_context
             .variables
             .iter()
@@ -9412,15 +9412,106 @@ FILEPATH: {fs_file_path}
 
         // Now we try to get the definition of these nodes we have to click and then
         // go to the implementations of this
-        for (_file_path, clickable_nodes) in filtered_file_paths_to_clickable_nodes.into_iter() {
-            for (_click_word, _click_range) in clickable_nodes.into_iter() {
+        let mut additional_user_variables = vec![];
+        for (fs_file_path, clickable_nodes) in filtered_file_paths_to_clickable_nodes.into_iter() {
+            for (click_word, click_range) in clickable_nodes.into_iter() {
                 // here we want to invoke to go to definition
                 // and then we want to invoke go to implementations over here
                 // get the outline nodes which we are interested in and then merge them
                 // together to deduplicate them
                 // and then we want to get the compressed outline nodes over here
+                let go_to_definition = self
+                    .go_to_definition(
+                        &fs_file_path,
+                        click_range.start_position(),
+                        message_properties.clone(),
+                    )
+                    .await?;
+
+                // we want to filter out the definitions which might lead to common modules like Vec, Arc etc
+                if go_to_definition.is_empty() {
+                    continue;
+                }
+                let first_definition = go_to_definition.definitions().remove(0);
+                // now we want to get the outline node which contains this definition
+                let mut variables_for_clickable_nodes = vec![];
+                let outline_node_containing_range = self
+                    .get_outline_node_for_range(
+                        first_definition.range(),
+                        &fs_file_path,
+                        message_properties.clone(),
+                    )
+                    .await?;
+                variables_for_clickable_nodes.push(VariableInformation::create_selection(
+                    outline_node_containing_range.range().clone(),
+                    outline_node_containing_range.fs_file_path().to_owned(),
+                    format!("Definition for {}", click_word),
+                    outline_node_containing_range.get_outline_short(),
+                    outline_node_containing_range
+                        .content()
+                        .language()
+                        .to_owned(),
+                ));
+                // now we want to get the implementations for the outline node
+                let go_to_implementations_response = self
+                    .go_to_implementations_exact(
+                        &fs_file_path,
+                        &outline_node_containing_range
+                            .identifier_range()
+                            .start_position(),
+                        message_properties.clone(),
+                    )
+                    .await?;
+                // now that we have go-to-implementations we want to find the outline nodes which contain these implementations
+                let implementation_locations =
+                    go_to_implementations_response.remove_implementations_vec();
+
+                // keep track of already seen outline nodes
+                let mut already_seen_outline_nodes: HashSet<String> = Default::default();
+                let mut implementation_short_outline_nodes = vec![];
+                for implementation_location in implementation_locations.into_iter() {
+                    // find the outline node which contains these implementations
+                    let implementation_fs_file_path = implementation_location.fs_file_path();
+                    let implementation_range = implementation_location.range();
+                    let outline_node_containing_range = self
+                        .get_outline_node_for_range(
+                            implementation_range,
+                            implementation_fs_file_path,
+                            message_properties.clone(),
+                        )
+                        .await?;
+                    if already_seen_outline_nodes
+                        .contains(&outline_node_containing_range.unique_identifier())
+                    {
+                        continue;
+                    }
+                    already_seen_outline_nodes
+                        .insert(outline_node_containing_range.unique_identifier());
+                    implementation_short_outline_nodes.push(outline_node_containing_range);
+                }
+
+                // now we have all the outline nodes for the clickable range we are interested in
+                variables_for_clickable_nodes.extend(
+                    implementation_short_outline_nodes
+                        .into_iter()
+                        .map(|implementation_outline_node| {
+                            VariableInformation::create_selection(
+                                implementation_outline_node.range().clone(),
+                                implementation_outline_node.fs_file_path().to_owned(),
+                                format!("Implementation for {}", click_word),
+                                implementation_outline_node.get_outline_short(),
+                                implementation_outline_node.content().language().to_owned(),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                additional_user_variables.extend(variables_for_clickable_nodes);
             }
         }
-        user_context
+
+        println!("tool_box::generate_deeper_user_context::additional_user_varibles::len({})", additional_user_variables.len());
+        let user_context = user_context.add_variables(additional_user_variables);
+        // update the user context with additional variables which we found
+        Ok(user_context)
     }
 }

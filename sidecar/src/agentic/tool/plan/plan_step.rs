@@ -7,9 +7,9 @@ pub struct PlanStep {
     id: String,
     index: usize,
     title: String,
-    files_to_edit: Vec<String>, // todo(zi): consider whether this should be constrained to just one; paths of files that step may execute against
+    files_to_edit: Vec<String>, // paths of files that step may execute against
     description: String,        // we want to keep the step's edit as deterministic as possible
-    user_context: Option<UserContext>, // 'Some' if user provides step specific context
+    user_context: UserContext,  // Store the current user context
 }
 
 impl PlanStep {
@@ -19,6 +19,7 @@ impl PlanStep {
         files_to_edit: Vec<String>,
         title: String,
         description: String,
+        user_context: UserContext,
     ) -> Self {
         Self {
             id,
@@ -26,7 +27,7 @@ impl PlanStep {
             title,
             files_to_edit,
             description,
-            user_context: None,
+            user_context,
         }
     }
 
@@ -54,8 +55,12 @@ impl PlanStep {
         self.description = new_description;
     }
 
-    pub fn user_context(&self) -> Option<&UserContext> {
-        self.user_context.as_ref()
+    pub fn user_context(&self) -> &UserContext {
+        &self.user_context
+    }
+
+    pub fn set_user_context(&mut self, user_context: UserContext) {
+        self.user_context = user_context;
     }
 
     pub fn files_to_edit(&self) -> &[String] {
@@ -66,21 +71,16 @@ impl PlanStep {
     pub fn file_to_edit(&self) -> Option<String> {
         self.files_to_edit.first().map(|s| s.to_string())
     }
-
-    pub fn with_user_context(mut self, user_context: UserContext) -> Self {
-        self.user_context = Some(user_context);
-        self
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct StepExecutionContext {
     description: String,
-    user_context: Option<UserContext>,
+    user_context: UserContext,
 }
 
 impl StepExecutionContext {
-    pub fn new(description: String, user_context: Option<UserContext>) -> Self {
+    pub fn new(description: String, user_context: UserContext) -> Self {
         Self {
             description,
             user_context,
@@ -98,23 +98,24 @@ impl StepExecutionContext {
         &self.description
     }
 
-    pub fn user_context(&self) -> Option<&UserContext> {
-        self.user_context.as_ref()
+    pub fn user_context(&self) -> &UserContext {
+        &self.user_context
     }
 
     pub fn update_description(&mut self, new_description: String) {
         self.description = new_description;
     }
 
-    pub fn update_user_context(&mut self, new_user_context: Option<UserContext>) {
+    pub fn update_user_context(&mut self, new_user_context: UserContext) {
         self.user_context = new_user_context;
     }
 
     pub async fn to_string(&self) -> String {
-        let context_string = match &self.user_context {
-            Some(context) => context.to_context_string().await.unwrap_or("".to_owned()),
-            None => "".to_owned(),
-        };
+        let context_string = self
+            .user_context
+            .to_context_string()
+            .await
+            .unwrap_or("".to_owned());
 
         format!(
             r#"Description: {}

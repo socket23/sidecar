@@ -164,7 +164,7 @@ impl PlanService {
 
             let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
 
-            let new_steps = self
+            let mut new_steps = self
                 .tool_box
                 .generate_new_steps_for_plan(
                     plan_until_now,
@@ -177,6 +177,12 @@ impl PlanService {
                     formatted_diagnostics,
                 )
                 .await?;
+
+            // After generating new_steps
+            for step in &mut new_steps {
+                step.set_user_context(plan.user_context().clone());
+            }
+
             plan.add_steps_vec(new_steps);
             let _ = self.save_plan(&plan, plan.storage_path()).await;
             // we want to get the new plan over here and insert it properly
@@ -258,10 +264,15 @@ impl PlanService {
                 .await
                 .unwrap_or(user_context);
         }
-        let plan_steps = self
+        let mut plan_steps = self
             .tool_box
             .generate_plan(&query, &user_context, is_deep_reasoning, message_properties)
             .await?;
+
+        // After generating plan_steps
+        for step in &mut plan_steps {
+            step.set_user_context(user_context.clone());
+        }
 
         Ok(Plan::new(
             plan_id.to_owned(),

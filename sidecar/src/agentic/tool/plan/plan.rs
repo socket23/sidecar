@@ -69,7 +69,8 @@ impl Plan {
         &self.user_query
     }
 
-    pub fn add_step(&mut self, step: PlanStep) {
+    pub fn add_step(&mut self, mut step: PlanStep) {
+        step.set_user_context(self.user_context.clone());
         self.steps.push(step);
     }
 
@@ -77,7 +78,10 @@ impl Plan {
         self.steps.extend(steps.to_vec())
     }
 
-    pub fn add_steps_vec(&mut self, steps: Vec<PlanStep>) {
+    pub fn add_steps_vec(&mut self, mut steps: Vec<PlanStep>) {
+        for step in &mut steps {
+            step.set_user_context(self.user_context.clone());
+        }
         self.steps.extend(steps);
     }
 

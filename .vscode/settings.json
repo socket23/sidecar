@@ -76,5 +76,6 @@
     "vector": "cpp",
     "string": "cpp",
     "__availability": "cpp"
-  }
+},
+"aide.deepReasoning": true
 }

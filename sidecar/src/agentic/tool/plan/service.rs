@@ -154,6 +154,9 @@ impl PlanService {
                         user_context = user_context.add_variables(extra_variables);
                     }
                 }
+                println!(
+                    "plan_service::lsp_diagnostics::enriching_context_using_tree_sitter::finished"
+                );
             }
 
             // update the user context with the one from current run

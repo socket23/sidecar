@@ -93,7 +93,7 @@ You have to generate the plan in strictly the following format:
 <step>
 <files_to_edit>
 <file>
-{{File you want to edit}}
+{{File you want to edit ALWAYS USE THE FULL PATH}}
 </file>
 </files_to_edit>
 <title>
@@ -168,7 +168,7 @@ This is how the format should look like:
 <step>
 <files_to_edit>
 <file>
-{{File you want to edit}}
+{{File you want to edit ALWAYS USE THE FULL PATH}}
 </file>
 </files_to_edit>
 <title>

@@ -113,6 +113,7 @@ fn append_step(plan: &mut Plan) {
         vec![file_to_edit],
         title,
         description,
+        UserContext::new(vec![], vec![], None, vec![]),
     );
 
     plan.add_step(new_step);

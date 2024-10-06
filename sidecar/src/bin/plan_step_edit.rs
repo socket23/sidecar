@@ -2221,6 +2221,7 @@ mod tests {
             vec![], // this is key
             "title".to_owned(),
             description.to_owned(),
+            UserContext::new(vec![], vec![], None, vec![]),
         )
     })
     .collect::<Vec<PlanStep>>();

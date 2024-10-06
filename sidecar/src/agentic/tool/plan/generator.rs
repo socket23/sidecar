@@ -138,6 +138,7 @@ impl Step {
             self.files_to_edit.file,
             self.title,
             self.description,
+            UserContext::new(vec![], vec![], None, vec![]),
         )
     }
 }

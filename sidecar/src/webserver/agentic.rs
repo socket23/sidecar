@@ -1180,6 +1180,10 @@ pub async fn reasoning_thread_create(
     }): Json<AgenticReasoningThreadCreationRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agentic::reasoning_thread_create");
+    println!(
+        "webserver::agentic::reasoning_thread_create::user_context::({:?})",
+        &user_context
+    );
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let plan_output = create_plan(

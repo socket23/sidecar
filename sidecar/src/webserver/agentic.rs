@@ -1160,6 +1160,7 @@ pub struct AgenticReasoningThreadCreationRequest {
     is_deep_reasoning: bool,
 }
 
+// this is PlanResponse on IDE
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticReasoningThreadCreationResponse {
     plan: Option<Plan>,

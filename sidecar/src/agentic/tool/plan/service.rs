@@ -271,7 +271,7 @@ impl PlanService {
 
         // After generating plan_steps
         for step in &mut plan_steps {
-            step.set_user_context(user_context.clone());
+            step.set_user_context(user_context.clone()); // every step gets given a clone of user_context
         }
 
         Ok(Plan::new(

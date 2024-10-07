@@ -274,6 +274,8 @@ plan_information:
         Err(e) => {
             eprintln!("Failed to generate plan: {:?}", e);
             let final_answer = "Failed to generate plan".to_owned();
+
+            // we need to catch this on UI
             let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
                 plan_id,
                 AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(

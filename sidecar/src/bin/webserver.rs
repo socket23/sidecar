@@ -99,7 +99,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .nest("/tree_sitter", tree_sitter_router())
         .nest("/file", file_operations_router())
         .nest("/inline_completion", inline_completion())
-        .nest("/agentic", agentic_router());
+        .nest("/agentic", agentic_router())
+        .nest("/plan", plan_router());
 
     api = api.route("/health", get(sidecar::webserver::health::health));
 
@@ -131,6 +132,21 @@ fn repo_router() -> Router {
         .route("/queue", get(sidecar::webserver::repos::queue_status))
         // Gives back the repos we know about
         .route("/repo_list", get(sidecar::webserver::repos::repo_status))
+}
+
+fn plan_router() -> Router {
+    use axum::routing::*;
+    Router::new()
+        // Probe request routes
+        // These routes handle starting and stopping probe requests
+        .route(
+            "/create",
+            post(sidecar::webserver::agentic::reasoning_thread_create),
+        )
+        .route(
+            "/execute",
+            post(sidecar::webserver::agent::execute_plan_until),
+        )
 }
 
 // Define routes for agentic operations

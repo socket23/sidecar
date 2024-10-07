@@ -458,6 +458,36 @@ pub struct Range {
     pub end_character: usize,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecutePlanUntilRequest {
+    execution_until: usize,
+    thread_id: uuid::Uuid,
+    editor_url: String,
+}
+
+// handler that executes plan until a given index
+pub async fn execute_plan_until(
+    Extension(app): Extension<Application>,
+    Json(ExecutePlanUntilRequest {
+        execution_until,
+        thread_id,
+        editor_url,
+    }): Json<ExecutePlanUntilRequest>,
+) -> Result<impl IntoResponse> {
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    handle_execute_plan_until(
+        execution_until,
+        thread_id,
+        plan_storage_path,
+        editor_url,
+        plan_service,
+    )
+    .await
+}
+
 pub async fn followup_chat(
     Extension(app): Extension<Application>,
     Json(FollowupChatRequest {
@@ -493,15 +523,17 @@ pub async fn followup_chat(
         println!("followup_chat::plan_generation_flow");
         let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
         if let Some(execution_until) = user_context.is_plan_execution_until() {
+            // logic here
             return handle_execute_plan_until(
                 execution_until,
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                editor_url.clone().expect("is_some to hold"),
+                editor_url.clone().expect("is_some to hold"), // why is this needed?
                 plan_service,
             )
             .await;
         } else if user_context.is_plan_drop_from().is_some() {
+            // logic here
             return handle_plan_drop_from(
                 user_context.is_plan_drop_from().expect("is_some to hold"),
                 thread_id,

@@ -488,6 +488,26 @@ pub async fn execute_plan_until(
     .await
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DropPlanFromRequest {
+    drop_from: usize,
+    thread_id: uuid::Uuid,
+}
+
+pub async fn drop_plan_from(
+    Extension(app): Extension<Application>,
+    Json(DropPlanFromRequest {
+        drop_from,
+        thread_id,
+    }): Json<DropPlanFromRequest>,
+) -> Result<impl IntoResponse> {
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    handle_plan_drop_from(drop_from, thread_id, plan_storage_path, plan_service).await
+}
+
 pub async fn followup_chat(
     Extension(app): Extension<Application>,
     Json(FollowupChatRequest {

@@ -14,16 +14,16 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
-use crate::agentic::tool::editor;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
+use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until,
-    handle_plan_drop_from,
+    check_plan_storage_path, drop_plan, handle_append_plan, handle_create_plan,
+    handle_execute_plan_until,
 };
 
 use super::types::ApiResponse;
@@ -510,7 +510,22 @@ pub async fn drop_plan_from(
 
     println!("webserver::agent::drop_plan_from({})", &drop_from);
 
-    handle_plan_drop_from(drop_from, thread_id, plan_storage_path, plan_service).await
+    let result = drop_plan(thread_id, plan_storage_path, plan_service, drop_from).await;
+
+    let response = match result {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+
+    Ok(json(response))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -600,14 +615,7 @@ pub async fn followup_chat(
             )
             .await;
         } else if user_context.is_plan_drop_from().is_some() {
-            // logic here
-            return handle_plan_drop_from(
-                user_context.is_plan_drop_from().expect("is_some to hold"),
-                thread_id,
-                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                plan_service,
-            )
-            .await;
+            // logic WAS here
         } else if user_context.is_plan_append() {
             println!(
                 "webserver::followup_chat::with_lsp_enrichment: {}",

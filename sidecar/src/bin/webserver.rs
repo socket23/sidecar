@@ -148,6 +148,7 @@ fn plan_router() -> Router {
             post(sidecar::webserver::agent::execute_plan_until),
         )
         .route("/drop", post(sidecar::webserver::agent::drop_plan_from))
+        .route("/append", post(sidecar::webserver::agent::append_plan))
 }
 
 // Define routes for agentic operations

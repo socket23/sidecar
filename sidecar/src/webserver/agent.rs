@@ -14,6 +14,7 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
+use crate::agentic::tool::editor;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
@@ -478,6 +479,8 @@ pub async fn execute_plan_until(
     let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
+    println!("webserver::agent::execute_plan_until({})", &execution_until);
+
     handle_execute_plan_until(
         execution_until,
         thread_id,
@@ -505,7 +508,51 @@ pub async fn drop_plan_from(
     let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
+    println!("webserver::agent::drop_plan_from({})", &drop_from);
+
     handle_plan_drop_from(drop_from, thread_id, plan_storage_path, plan_service).await
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AppendPlanRequest {
+    user_query: String,
+    thread_id: uuid::Uuid,
+    editor_url: String,
+    user_context: UserContext,
+    #[serde(default)]
+    is_deep_reasoning: bool,
+    #[serde(default)]
+    with_lsp_enrichment: bool,
+}
+
+pub async fn append_plan(
+    Extension(app): Extension<Application>,
+    Json(AppendPlanRequest {
+        user_query,
+        thread_id,
+        editor_url,
+        user_context,
+        is_deep_reasoning,
+        with_lsp_enrichment,
+    }): Json<AppendPlanRequest>,
+) -> Result<impl IntoResponse> {
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    println!("webserver::agent::append_plan({})", &user_query);
+
+    handle_append_plan(
+        user_query,
+        user_context,
+        editor_url,
+        thread_id,
+        plan_storage_path,
+        plan_service,
+        is_deep_reasoning,
+        with_lsp_enrichment,
+    )
+    .await
 }
 
 pub async fn followup_chat(

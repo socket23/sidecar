@@ -14,15 +14,18 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
+use crate::agentic::symbol::events::input::SymbolEventRequestId;
+use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
+use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
 use crate::webserver::plan::{
-    check_plan_storage_path, handle_append_plan, handle_create_plan, handle_execute_plan_until,
-    handle_plan_drop_from,
+    append_to_plan, check_plan_storage_path, drop_plan, handle_create_plan,
+    handle_execute_plan_until,
 };
 
 use super::types::ApiResponse;
@@ -458,6 +461,140 @@ pub struct Range {
     pub end_character: usize,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecutePlanUntilRequest {
+    execution_until: usize,
+    thread_id: uuid::Uuid,
+    editor_url: String,
+}
+
+// handler that executes plan until a given index
+pub async fn execute_plan_until(
+    Extension(app): Extension<Application>,
+    Json(ExecutePlanUntilRequest {
+        execution_until,
+        thread_id,
+        editor_url,
+    }): Json<ExecutePlanUntilRequest>,
+) -> Result<impl IntoResponse> {
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    println!("webserver::agent::execute_plan_until({})", &execution_until);
+
+    handle_execute_plan_until(
+        execution_until,
+        thread_id,
+        plan_storage_path,
+        editor_url,
+        plan_service,
+    )
+    .await
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DropPlanFromRequest {
+    drop_from: usize,
+    thread_id: uuid::Uuid,
+}
+
+pub async fn drop_plan_from(
+    Extension(app): Extension<Application>,
+    Json(DropPlanFromRequest {
+        drop_from,
+        thread_id,
+    }): Json<DropPlanFromRequest>,
+) -> Result<impl IntoResponse> {
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    println!("webserver::agent::drop_plan_from({})", &drop_from);
+
+    let result = drop_plan(thread_id, plan_storage_path, plan_service, drop_from).await;
+
+    let response = match result {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+
+    Ok(json(response))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AppendPlanRequest {
+    user_query: String,
+    thread_id: uuid::Uuid,
+    editor_url: String,
+    user_context: UserContext,
+    #[serde(default)]
+    is_deep_reasoning: bool,
+    #[serde(default)]
+    with_lsp_enrichment: bool,
+}
+
+pub async fn append_plan(
+    Extension(app): Extension<Application>,
+    Json(AppendPlanRequest {
+        user_query,
+        thread_id,
+        editor_url,
+        user_context,
+        is_deep_reasoning,
+        with_lsp_enrichment,
+    }): Json<AppendPlanRequest>,
+) -> Result<impl IntoResponse> {
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    println!("webserver::agent::append_plan({})", &user_query);
+
+    let plan_id = thread_id;
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(plan_id.to_string(), plan_id.to_string()),
+        tokio::sync::mpsc::unbounded_channel().0, // Dummy sender, as we're not using streaming
+        editor_url,
+        tokio_util::sync::CancellationToken::new(),
+    );
+
+    let result = append_to_plan(
+        plan_id,
+        plan_storage_path,
+        plan_service,
+        user_query,
+        user_context,
+        message_properties,
+        is_deep_reasoning,
+        with_lsp_enrichment,
+    )
+    .await;
+
+    let response = match result {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+
+    Ok(json(response))
+}
+
 pub async fn followup_chat(
     Extension(app): Extension<Application>,
     Json(FollowupChatRequest {
@@ -471,7 +608,7 @@ pub async fn followup_chat(
         system_instruction,
         editor_url,
         is_deep_reasoning,
-        with_lsp_enrichment,
+        with_lsp_enrichment: _,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -493,38 +630,19 @@ pub async fn followup_chat(
         println!("followup_chat::plan_generation_flow");
         let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
         if let Some(execution_until) = user_context.is_plan_execution_until() {
+            // logic here
             return handle_execute_plan_until(
                 execution_until,
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                editor_url.clone().expect("is_some to hold"),
+                editor_url.clone().expect("is_some to hold"), // why is this needed?
                 plan_service,
             )
             .await;
         } else if user_context.is_plan_drop_from().is_some() {
-            return handle_plan_drop_from(
-                user_context.is_plan_drop_from().expect("is_some to hold"),
-                thread_id,
-                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                plan_service,
-            )
-            .await;
+            // logic WAS here
         } else if user_context.is_plan_append() {
-            println!(
-                "webserver::followup_chat::with_lsp_enrichment: {}",
-                with_lsp_enrichment
-            );
-            return handle_append_plan(
-                query,
-                user_context,
-                editor_url.clone().expect("is_some to hold"),
-                thread_id,
-                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                plan_service,
-                is_deep_reasoning,
-                with_lsp_enrichment,
-            )
-            .await;
+            // logic WAS here
         } else {
             return handle_create_plan(
                 query,

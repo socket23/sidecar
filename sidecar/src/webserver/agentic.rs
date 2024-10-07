@@ -1160,11 +1160,12 @@ pub struct AgenticReasoningThreadCreationRequest {
     is_deep_reasoning: bool,
 }
 
+// this is PlanResponse on IDE. using pub here cuz lazy
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticReasoningThreadCreationResponse {
-    plan: Option<Plan>,
-    success: bool,
-    error_if_any: Option<String>,
+    pub plan: Option<Plan>,
+    pub success: bool,
+    pub error_if_any: Option<String>,
 }
 
 impl ApiResponse for AgenticReasoningThreadCreationResponse {}

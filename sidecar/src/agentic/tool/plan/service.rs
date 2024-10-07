@@ -90,6 +90,10 @@ impl PlanService {
         with_lsp_enrichment: bool,
     ) -> Result<Plan, PlanServiceError> {
         let plan_checkpoint = plan.checkpoint();
+        println!(
+            "agentic::planService::append_steps::plan_checkpoint({:?})",
+            &plan_checkpoint
+        );
         if let Some(checkpoint) = plan_checkpoint {
             // append to post checkpoint
             // - gather the plan until the checkpoint
@@ -187,6 +191,7 @@ impl PlanService {
             let _ = self.save_plan(&plan, plan.storage_path()).await;
             // we want to get the new plan over here and insert it properly
         } else {
+            println!("agentic::planService::append_steps::plan_checkpoint(boo_something_wrong_with_append, we need to impl this)");
             // pushes the steps at the start of the plan
         }
         Ok(plan)

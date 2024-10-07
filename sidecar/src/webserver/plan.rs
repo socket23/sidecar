@@ -36,40 +36,19 @@ pub async fn drop_plan(
     Ok(plan)
 }
 
-async fn append_to_plan(
-    plan_id: uuid::Uuid,
+pub async fn append_to_plan(
+    _plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
     query: String,
     user_context: UserContext,
     message_properties: SymbolEventMessageProperties,
-    agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
     is_deep_reasoning: bool,
     with_lsp_enrichment: bool,
-) {
-    let plan = plan_service.load_plan(&plan_storage_path).await;
-    if let Err(_) = plan {
-        let final_answer = "failed to load plan from storage".to_owned();
-        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
-            plan_id,
-            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-                final_answer.to_owned(),
-                Some(final_answer.to_owned()),
-                "Custom".to_owned(),
-            )),
-        )));
-        return;
-    }
-    let plan = plan.expect("plan to be present");
-    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
-        plan_id,
-        AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-            "Generating new steps from the context".to_owned(),
-            Some("Generating new steps from the context".to_owned()),
-            "Custom".to_owned(),
-        )),
-    )));
-    if let Ok(plan) = plan_service
+) -> io::Result<Plan> {
+    let plan = plan_service.load_plan(&plan_storage_path).await?;
+
+    let updated_plan = plan_service
         .append_steps(
             plan,
             query,
@@ -79,28 +58,17 @@ async fn append_to_plan(
             with_lsp_enrichment,
         )
         .await
-    {
-        let plan_debug_view = plan.to_debug_message();
-        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
-            plan_id,
-            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-                plan_debug_view.to_owned(),
-                Some(plan_debug_view),
-                "Custom".to_owned(),
-            )),
-        )));
-        let _ = plan_service.save_plan(&plan, &plan_storage_path).await;
-    } else {
-        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
-            plan_id,
-            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
-                "Failed to add new steps to the plan".to_owned(),
-                Some("Failed to add new steps to the plan".to_owned()),
-                "Custom".to_owned(),
-            )),
-        )));
-        // errored to update the plan
-    }
+        .map_err(|e| {
+            eprintln!("webserver::append_to_plan::append_steps::error::{:?}", e);
+            // this is the most hacked error you've ever seen
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+
+    plan_service
+        .save_plan(&updated_plan, &plan_storage_path)
+        .await?;
+
+    Ok(updated_plan)
 }
 
 /// Executes the plan until a checkpoint
@@ -298,84 +266,6 @@ pub async fn handle_execute_plan_until(
             plan_service,
             message_properties,
             sender,
-        )
-        .await;
-    });
-    let conversation_message_stream =
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-    // TODO(skcd): Re-introduce this again when we have a better way to manage
-    // server side events on the client side
-    let init_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!({
-                "session_id": plan_id.to_owned(),
-            }))
-            // This should never happen, so we force an unwrap.
-            .expect("failed to serialize initialization object"))
-    });
-
-    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
-    let answer_stream = conversation_message_stream.map(
-        |conversation_message: anyhow::Result<ConversationMessage>| {
-            if let Err(e) = &conversation_message {
-                tracing::error!("error in conversation message stream: {}", e);
-            }
-            sse::Event::default()
-                .json_data(conversation_message.expect("should not fail deserialization"))
-                .map_err(anyhow::Error::new)
-        },
-    );
-
-    // TODO(skcd): Re-introduce this again when we have a better way to manage
-    // server side events on the client side
-    let done_stream = futures::stream::once(async move {
-        Ok(sse::Event::default()
-            .json_data(json!(
-                {"done": "[CODESTORY_DONE]".to_owned(),
-                "session_id": plan_id.to_owned(),
-            }))
-            .expect("failed to send done object"))
-    });
-
-    let stream = init_stream.chain(answer_stream).chain(done_stream);
-
-    Ok(Sse::new(Box::pin(stream)))
-}
-
-pub async fn handle_append_plan(
-    user_query: String,
-    user_context: UserContext,
-    editor_url: String,
-    plan_id: uuid::Uuid,
-    plan_storage_path: String,
-    plan_service: PlanService,
-    is_deep_reasoning: bool,
-    with_lsp_enrichment: bool,
-) -> Result<
-    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
-> {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let plan_id_str = plan_id.to_string();
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(plan_id_str.to_owned(), plan_id_str.to_owned()),
-        ui_sender,
-        editor_url,
-        cancellation_token,
-    );
-    // we let the plan creation happen in the background
-    let _ = tokio::spawn(async move {
-        append_to_plan(
-            plan_id,
-            plan_storage_path,
-            plan_service,
-            user_query,
-            user_context,
-            message_properties,
-            sender,
-            is_deep_reasoning,
-            with_lsp_enrichment,
         )
         .await;
     });

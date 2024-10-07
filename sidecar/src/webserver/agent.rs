@@ -14,6 +14,8 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
+use crate::agentic::symbol::events::input::SymbolEventRequestId;
+use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
@@ -22,7 +24,7 @@ use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
 use crate::webserver::plan::{
-    check_plan_storage_path, drop_plan, handle_append_plan, handle_create_plan,
+    append_to_plan, check_plan_storage_path, drop_plan, handle_create_plan,
     handle_execute_plan_until,
 };
 
@@ -557,17 +559,40 @@ pub async fn append_plan(
 
     println!("webserver::agent::append_plan({})", &user_query);
 
-    handle_append_plan(
-        user_query,
-        user_context,
+    let plan_id = thread_id;
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(plan_id.to_string(), plan_id.to_string()),
+        tokio::sync::mpsc::unbounded_channel().0, // Dummy sender, as we're not using streaming
         editor_url,
-        thread_id,
+        tokio_util::sync::CancellationToken::new(),
+    );
+
+    let result = append_to_plan(
+        plan_id,
         plan_storage_path,
         plan_service,
+        user_query,
+        user_context,
+        message_properties,
         is_deep_reasoning,
         with_lsp_enrichment,
     )
-    .await
+    .await;
+
+    let response = match result {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+
+    Ok(json(response))
 }
 
 pub async fn followup_chat(
@@ -583,7 +608,7 @@ pub async fn followup_chat(
         system_instruction,
         editor_url,
         is_deep_reasoning,
-        with_lsp_enrichment,
+        with_lsp_enrichment: _,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -617,21 +642,7 @@ pub async fn followup_chat(
         } else if user_context.is_plan_drop_from().is_some() {
             // logic WAS here
         } else if user_context.is_plan_append() {
-            println!(
-                "webserver::followup_chat::with_lsp_enrichment: {}",
-                with_lsp_enrichment
-            );
-            return handle_append_plan(
-                query,
-                user_context,
-                editor_url.clone().expect("is_some to hold"),
-                thread_id,
-                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                plan_service,
-                is_deep_reasoning,
-                with_lsp_enrichment,
-            )
-            .await;
+            // logic WAS here
         } else {
             return handle_create_plan(
                 query,

@@ -5,8 +5,11 @@ use std::{sync::Arc, time::Instant};
 
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    clients::{
+        ollama::OllamaClient,
+        types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
+    },
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OllamaProvider, OpenAIProvider},
 };
 
 use crate::{
@@ -275,25 +278,34 @@ impl Tool for StepGeneratorClient {
             ),
         ];
 
-        let request = if is_deep_reasoning {
-            LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)
-        } else {
-            LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
-        };
+        // let request = if is_deep_reasoning {
+        //     LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)
+        // } else {
+        //     LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
+        // };
 
-        let llm_properties = if is_deep_reasoning {
-            LLMProperties::new(
-                LLMType::O1Preview,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
-            )
-        } else {
-            LLMProperties::new(
-                LLMType::ClaudeSonnet,
-                LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-            )
-        };
+        let request =
+            LLMClientCompletionRequest::new(LLMType::Llama3_1_8bInstruct, messages, 0.2, None);
+
+        let ollam_client = OllamaClient::new();
+        let api_key = llm_client::provider::LLMProviderAPIKeys::Ollama(OllamaProvider {});
+
+        let llm_properties =
+            LLMProperties::new(LLMType::Llama3_1_8bInstruct, LLMProvider::Ollama, api_key);
+
+        // let llm_properties = if is_deep_reasoning {
+        //     LLMProperties::new(
+        //         LLMType::O1Preview,
+        //         LLMProvider::OpenAI,
+        //         LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+        //     )
+        // } else {
+        //     LLMProperties::new(
+        //         LLMType::ClaudeSonnet,
+        //         LLMProvider::Anthropic,
+        //         LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+        //     )
+        // };
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let start_time = Instant::now();

@@ -172,19 +172,14 @@ This is how the format should look like:
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
-{{The title for the change you are about to make}}
-]]>
+<![CDATA[{{The title for the change you are about to make}}]]>
 </title>
 <description>
-<![CDATA[
-{{The description of the change you are about to make}}
-]]>
+<![CDATA[{{The description of the change you are about to make}}]]>
 </description>
 </step>
 </steps>
 </response>
-Note the use of CDATA sections within <description> and <title> to encapsulate XML-like content
 </reminder_about_format>"#
         ))])
         .collect()

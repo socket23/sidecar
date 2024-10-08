@@ -555,16 +555,21 @@ pub async fn handle_append_plan(
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::append_plan({})", &user_query);
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
-    // let plan_storage_path =
-    //     check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
-    // this is override for plane
+    // reinstate this after override
+    let _plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
     let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
+    dbg!(&plan_storage_path);
 
     // so here, if we have a plan, we append. Else, we create a new plan.
     let plan_result = match plan_service.load_plan(&plan_storage_path).await {
         // if a plan is loaded, we append.
         Ok(plan) => {
+            println!("webserver::agent::handle_append_plan::load_plan(Ok)");
+
+            // we don't use the id
             let plan_id = thread_id;
             let message_properties = SymbolEventMessageProperties::new(
                 SymbolEventRequestId::new(plan_id.to_string(), plan_id.to_string()),
@@ -587,8 +592,10 @@ pub async fn handle_append_plan(
         }
         // else, we create
         Err(err) => {
-            eprintln!("webserver::agent::append_plan::load_plan::error({:?})", err);
+            println!("webserver::agent::append_plan::load_plan::err({:?})", err);
+
             let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
             create_plan(
                 user_query,
                 user_context,

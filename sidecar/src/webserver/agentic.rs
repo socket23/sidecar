@@ -1182,18 +1182,23 @@ pub async fn reasoning_thread_create(
 ) -> Result<impl IntoResponse> {
     println!("webserver::agentic::reasoning_thread_create");
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let plan_output = create_plan(
-        query,
-        user_context,
-        editor_url,
-        thread_id,
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-        plan_service,
-        is_deep_reasoning,
-        sender,
-    )
-    .await;
+    // let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    // let plan_output = create_plan(
+    //     query,
+    //     user_context,
+    //     editor_url,
+    //     thread_id,
+    //     check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+    //     plan_service,
+    //     is_deep_reasoning,
+    //     sender,
+    // )
+    // .await;
+
+    let plan_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
+
+    let plan_output = plan_service.load_plan(&plan_path).await;
+
     let response = match plan_output {
         Ok(plan) => AgenticReasoningThreadCreationResponse {
             plan: Some(plan),

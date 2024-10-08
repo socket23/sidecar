@@ -554,8 +554,10 @@ pub async fn append_plan(
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
-    let plan_storage_path =
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+    // let plan_storage_path =
+    //     check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
 
     println!("webserver::agent::append_plan({})", &user_query);
 
@@ -569,7 +571,7 @@ pub async fn append_plan(
 
     let result = append_to_plan(
         plan_id,
-        plan_storage_path,
+        plan_storage_path.to_owned(),
         plan_service,
         user_query,
         user_context,

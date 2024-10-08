@@ -261,20 +261,18 @@ impl PlanService {
         plan_storage_path: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Plan, PlanServiceError> {
-        // if is_deep_reasoning {
-        //     println!("gathering::deep_context");
-        //     user_context = self
-        //         .tool_box
-        //         .generate_deep_user_context(user_context.clone(), message_properties.clone())
-        //         .await
-        //         .unwrap_or(user_context);
-        // }
+        if is_deep_reasoning {
+            println!("gathering::deep_context");
+            user_context = self
+                .tool_box
+                .generate_deep_user_context(user_context.clone(), message_properties.clone())
+                .await
+                .unwrap_or(user_context);
+        }
         let mut plan_steps = self
             .tool_box
             .generate_plan(&query, &user_context, is_deep_reasoning, message_properties)
             .await?;
-
-        dbg!(&plan_steps);
 
         // After generating plan_steps
         for step in &mut plan_steps {

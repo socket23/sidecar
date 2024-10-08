@@ -31,7 +31,7 @@ impl LLMType {
             LLMType::CodeLLama70BInstruct => Ok("codellama70b".to_owned()),
             LLMType::DeepSeekCoder1_3BInstruct => Ok("deepseek-coder:1.3b-instruct".to_owned()),
             LLMType::DeepSeekCoder6BInstruct => Ok("deepseek-coder:6.7b-instruct".to_owned()),
-            LLMType::Llama3_1_8bInstruct => Ok("llama3.1:latest".to_owned()),
+            LLMType::Llama3_1_8bInstruct => Ok("llama3.1".to_owned()),
             LLMType::Custom(custom) => {
                 if custom == "codestory/export-to-codebase-openhermes-full" {
                     Ok("codestory-finetune-export-to-codebase:latest".to_owned())
@@ -75,7 +75,7 @@ impl OllamaClientRequest {
             model: request.model().to_ollama_model()?,
             options: OllamaClientOptions {
                 temperature: request.temperature(),
-                num_predict: request.get_max_tokens(),
+                num_predict: Some(1000),
             },
             stream: true,
             raw: true,
@@ -128,7 +128,6 @@ impl LLMClient for OllamaClient {
         sender: tokio::sync::mpsc::UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
         let ollama_request = OllamaClientRequest::from_request(request)?;
-        dbg!(&ollama_request);
         let mut response = self
             .client
             .post(self.generation_endpoint())

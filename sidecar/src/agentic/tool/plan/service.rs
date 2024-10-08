@@ -384,6 +384,9 @@ pub enum PlanServiceError {
     #[error("Tool Error: {0}")]
     ToolError(#[from] ToolError),
 
+    #[error("IO Error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("Tool Error: {0}")]
     SymbolError(#[from] SymbolError),
 

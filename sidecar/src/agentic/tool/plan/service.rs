@@ -79,6 +79,7 @@ impl PlanService {
 
     /// Appends the step to the point after the checkpoint
     /// - diagnostics are included by default
+    /// this does not depend on checkpoint anymore, as it is a pure append
     pub async fn append_steps(
         &self,
         mut plan: Plan,
@@ -89,111 +90,102 @@ impl PlanService {
         is_deep_reasoning: bool,
         with_lsp_enrichment: bool,
     ) -> Result<Plan, PlanServiceError> {
-        let plan_checkpoint = plan.checkpoint();
-        println!(
-            "agentic::planService::append_steps::plan_checkpoint({:?})",
-            &plan_checkpoint
-        );
-        if let Some(checkpoint) = plan_checkpoint {
-            // append to post checkpoint
-            // - gather the plan until the checkpoint
-            // - gather the git-diff we have until now
-            // - the files which we are present we keep that in the context
-            // - figure out the new steps which we want and insert them
-            let plan_until_now = plan.plan_until_point(checkpoint);
-            let mut files_until_checkpoint = plan.files_in_plan(checkpoint);
-            // inclued files which are in the variables but not in the user context
-            let file_path_in_variables = user_context
-                .file_paths_from_variables()
+        // append to post checkpoint
+        // - gather the plan until the checkpoint
+        // - gather the git-diff we have until now
+        // - the files which we are present we keep that in the context
+        // - figure out the new steps which we want and insert them
+        let formatted_plan = plan.format_to_string();
+
+        let mut files_in_plan = plan.files_in_plan();
+        // inclued files which are in the variables but not in the user context
+        let file_path_in_variables = user_context
+            .file_paths_from_variables()
+            .into_iter()
+            .filter(|file_path| {
+                // filter out any file which we already have until the checkpoint
+                !files_in_plan
+                    .iter()
+                    .any(|file_in_plan| file_in_plan == file_path)
+            })
+            .collect::<Vec<_>>();
+        files_in_plan.extend(file_path_in_variables);
+        let recent_edits = self
+            .tool_box
+            .recently_edited_files(
+                files_in_plan.clone().into_iter().collect(),
+                message_properties.clone(),
+            )
+            .await?;
+
+        // get all diagnostics present on these files
+        let file_lsp_diagnostics = self
+            .process_diagnostics(
+                files_in_plan,
+                message_properties.clone(),
+                with_lsp_enrichment,
+            ) // this is the main diagnostics caller.
+            .await;
+
+        let diagnostics_grouped_by_file: DiagnosticMap =
+            file_lsp_diagnostics
                 .into_iter()
-                .filter(|file_path| {
-                    // filter out any file which we already have until the checkpoint
-                    !files_until_checkpoint
-                        .iter()
-                        .any(|file_until_checkpoint| file_until_checkpoint == file_path)
-                })
-                .collect::<Vec<_>>();
-            files_until_checkpoint.extend(file_path_in_variables);
-            let recent_edits = self
-                .tool_box
-                .recently_edited_files(
-                    files_until_checkpoint.clone().into_iter().collect(),
-                    message_properties.clone(),
-                )
-                .await?;
+                .fold(HashMap::new(), |mut acc, error| {
+                    acc.entry(error.fs_file_path().to_owned())
+                        .or_insert_with(Vec::new)
+                        .push(error);
+                    acc
+                });
 
-            // get all diagnostics present on these files
-            let file_lsp_diagnostics = self
-                .process_diagnostics(
-                    files_until_checkpoint,
-                    message_properties.clone(),
-                    with_lsp_enrichment,
-                ) // this is the main diagnostics caller.
-                .await;
-
-            let diagnostics_grouped_by_file: DiagnosticMap =
-                file_lsp_diagnostics
-                    .into_iter()
-                    .fold(HashMap::new(), |mut acc, error| {
-                        acc.entry(error.fs_file_path().to_owned())
-                            .or_insert_with(Vec::new)
-                            .push(error);
-                        acc
-                    });
-
-            // now we try to enrich the context even more if we can by expanding our search space
-            // and grabbing some more context
-            if with_lsp_enrichment {
-                println!("plan_service::lsp_dignostics::enriching_context_using_tree_sitter");
-                for (fs_file_path, lsp_diagnostics) in diagnostics_grouped_by_file.iter() {
-                    let extra_variables = self
-                        .tool_box
-                        .grab_type_definition_worthy_positions_using_diagnostics(
-                            fs_file_path,
-                            lsp_diagnostics.to_vec(),
-                            message_properties.clone(),
-                        )
-                        .await;
-                    if let Ok(extra_variables) = extra_variables {
-                        user_context = user_context.add_variables(extra_variables);
-                    }
+        // now we try to enrich the context even more if we can by expanding our search space
+        // and grabbing some more context
+        if with_lsp_enrichment {
+            println!("plan_service::lsp_dignostics::enriching_context_using_tree_sitter");
+            for (fs_file_path, lsp_diagnostics) in diagnostics_grouped_by_file.iter() {
+                let extra_variables = self
+                    .tool_box
+                    .grab_type_definition_worthy_positions_using_diagnostics(
+                        fs_file_path,
+                        lsp_diagnostics.to_vec(),
+                        message_properties.clone(),
+                    )
+                    .await;
+                if let Ok(extra_variables) = extra_variables {
+                    user_context = user_context.add_variables(extra_variables);
                 }
-                println!(
-                    "plan_service::lsp_diagnostics::enriching_context_using_tree_sitter::finished"
-                );
             }
-
-            // update the user context with the one from current run
-            plan = plan.combine_user_context(user_context);
-
-            let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
-
-            let mut new_steps = self
-                .tool_box
-                .generate_new_steps_for_plan(
-                    plan_until_now,
-                    plan.initial_user_query().to_owned(),
-                    query,
-                    plan.user_context().clone(),
-                    recent_edits,
-                    message_properties,
-                    is_deep_reasoning,
-                    formatted_diagnostics,
-                )
-                .await?;
-
-            // After generating new_steps
-            for step in &mut new_steps {
-                step.set_user_context(plan.user_context().clone());
-            }
-
-            plan.add_steps_vec(new_steps);
-            let _ = self.save_plan(&plan, plan.storage_path()).await;
-            // we want to get the new plan over here and insert it properly
-        } else {
-            println!("agentic::planService::append_steps::plan_checkpoint(boo_something_wrong_with_append, we need to impl this)");
-            // pushes the steps at the start of the plan
+            println!(
+                "plan_service::lsp_diagnostics::enriching_context_using_tree_sitter::finished"
+            );
         }
+
+        // update the user context with the one from current run
+        plan = plan.combine_user_context(user_context);
+
+        let formatted_diagnostics = Self::format_diagnostics(&diagnostics_grouped_by_file);
+
+        let mut new_steps = self
+            .tool_box
+            .generate_new_steps_for_plan(
+                formatted_plan,
+                plan.initial_user_query().to_owned(),
+                query,
+                plan.user_context().clone(),
+                recent_edits,
+                message_properties,
+                is_deep_reasoning,
+                formatted_diagnostics,
+            )
+            .await?;
+
+        // After generating new_steps
+        for step in &mut new_steps {
+            step.set_user_context(plan.user_context().clone());
+        }
+
+        plan.add_steps_vec(new_steps);
+        let _ = self.save_plan(&plan, plan.storage_path()).await;
+        // we want to get the new plan over here and insert it properly
         Ok(plan)
     }
 

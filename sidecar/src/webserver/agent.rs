@@ -513,6 +513,7 @@ pub async fn drop_plan_from(
     println!("webserver::agent::drop_plan_from({})", &drop_from);
 
     let result = drop_plan(thread_id, plan_storage_path, plan_service, drop_from).await;
+    dbg!(&result);
 
     let response = match result {
         Ok(plan) => AgenticReasoningThreadCreationResponse {

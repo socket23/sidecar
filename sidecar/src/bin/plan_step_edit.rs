@@ -28,6 +28,7 @@ use sidecar::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::UserContext,
 };
+use uuid::Uuid;
 
 fn default_index_dir() -> PathBuf {
     match directories::ProjectDirs::from("ai", "codestory", "sidecar") {
@@ -2213,11 +2214,9 @@ mod tests {
         .to_string(),
     ]
     .iter()
-    .enumerate()
-    .map(|(index, description)| {
+    .map(|description| {
         PlanStep::new(
-            index.to_string(),
-            index,
+            Uuid::new_v4().to_string(),
             vec![], // this is key
             "title".to_owned(),
             description.to_owned(),

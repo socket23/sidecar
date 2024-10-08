@@ -31,7 +31,11 @@ pub async fn drop_plan(
     drop_from: usize,
 ) -> io::Result<Plan> {
     let mut plan = plan_service.load_plan(&plan_storage_path).await?;
+    println!("plan before");
+    dbg!(plan.steps());
     plan = plan.drop_plan_steps(drop_from);
+    println!("plan after");
+    dbg!(plan.steps());
     plan_service.save_plan(&plan, &plan_storage_path).await?;
     Ok(plan)
 }

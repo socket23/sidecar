@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use quick_xml::de::from_str;
 use serde::Deserialize;
 use std::{sync::Arc, time::Instant};
+use uuid::Uuid;
 
 use llm_client::{
     broker::LLMBroker,
@@ -100,8 +101,7 @@ impl StepGeneratorResponse {
         let plan_steps = self
             .step
             .into_iter()
-            .enumerate()
-            .map(|(index, step)| step.into_plan_step(index))
+            .map(|step| step.into_plan_step())
             .collect::<Vec<_>>();
 
         plan_steps
@@ -134,10 +134,9 @@ pub struct Step {
 }
 
 impl Step {
-    pub fn into_plan_step(self, index: usize) -> PlanStep {
+    pub fn into_plan_step(self) -> PlanStep {
         PlanStep::new(
-            index.to_string(),
-            index,
+            Uuid::new_v4().to_string(),
             self.files_to_edit.file,
             self.title,
             self.description,

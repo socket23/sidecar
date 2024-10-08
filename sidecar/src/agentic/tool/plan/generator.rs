@@ -287,7 +287,6 @@ impl Tool for StepGeneratorClient {
         let request =
             LLMClientCompletionRequest::new(LLMType::Llama3_1_8bInstruct, messages, 0.2, None);
 
-        let ollam_client = OllamaClient::new();
         let api_key = llm_client::provider::LLMProviderAPIKeys::Ollama(OllamaProvider {});
 
         let llm_properties =

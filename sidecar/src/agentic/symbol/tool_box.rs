@@ -9280,6 +9280,8 @@ FILEPATH: {fs_file_path}
             message_properties.editor_url(),
         )
         .with_user_context(user_context);
+        println!("tool_box::generate_plan::start");
+        let start_instant = std::time::Instant::now();
         let plan_steps = self
             .tools
             .invoke(ToolInput::GenerateStep(step_generator_request))
@@ -9288,6 +9290,7 @@ FILEPATH: {fs_file_path}
             .step_generator_output()
             .ok_or(SymbolError::WrongToolOutput)?
             .into_plan_steps();
+        println!("tool_box::generate_plan::end::time_taken({}ms)", &start_instant.elapsed().as_millis());
         Ok(plan_steps)
     }
 
@@ -9354,6 +9357,8 @@ FILEPATH: {fs_file_path}
             diagnostics,
         );
         let tool_input = ToolInput::PlanStepAdd(plan_add_request);
+        println!("tool_box::generate_new_steps_for_plan::start");
+        let start_instant = std::time::Instant::now();
         let plan_steps = self
             .tools
             .invoke(tool_input)
@@ -9362,6 +9367,7 @@ FILEPATH: {fs_file_path}
             .get_plan_new_steps()
             .ok_or(SymbolError::WrongToolOutput)?
             .into_plan_steps();
+        println!("tool_box::generate_new_steps_for_plan::end({}ms)", start_instant.elapsed().as_millis());
         Ok(plan_steps)
     }
 

@@ -172,6 +172,7 @@ pub async fn create_plan(
     // we can send events using this
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
 ) -> Result<Plan, PlanServiceError> {
+    println!("plan_storage_location::{}", &plan_storage_path);
     let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
         plan_id.clone(),
         AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(

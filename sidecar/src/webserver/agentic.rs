@@ -1169,3 +1169,46 @@ pub struct AgenticReasoningThreadCreationResponse {
 }
 
 impl ApiResponse for AgenticReasoningThreadCreationResponse {}
+
+pub async fn reasoning_thread_create(
+    Extension(app): Extension<Application>,
+    Json(AgenticReasoningThreadCreationRequest {
+        query,
+        thread_id,
+        editor_url,
+        user_context,
+        is_deep_reasoning,
+    }): Json<AgenticReasoningThreadCreationRequest>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::agentic::reasoning_thread_create");
+    println!(
+        "webserver::agentic::reasoning_thread_create::user_context::({:?})",
+        &user_context
+    );
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let plan_output = create_plan(
+        query,
+        user_context,
+        editor_url,
+        thread_id,
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
+        plan_service,
+        is_deep_reasoning,
+        sender,
+    )
+    .await;
+    let response = match plan_output {
+        Ok(plan) => AgenticReasoningThreadCreationResponse {
+            plan: Some(plan),
+            success: true,
+            error_if_any: None,
+        },
+        Err(e) => AgenticReasoningThreadCreationResponse {
+            plan: None,
+            success: false,
+            error_if_any: Some(format!("{:?}", e)),
+        },
+    };
+    Ok(json_result(response))
+}

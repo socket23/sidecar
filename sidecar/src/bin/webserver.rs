@@ -140,15 +140,14 @@ fn plan_router() -> Router {
         // Probe request routes
         // These routes handle starting and stopping probe requests
         .route(
-            "/create",
-            post(sidecar::webserver::agentic::reasoning_thread_create),
-        )
-        .route(
             "/execute",
             post(sidecar::webserver::agent::execute_plan_until),
         )
         .route("/drop", post(sidecar::webserver::agent::drop_plan_from))
-        .route("/append", post(sidecar::webserver::agent::append_plan))
+        .route(
+            "/append",
+            post(sidecar::webserver::agent::handle_append_plan),
+        )
 }
 
 // Define routes for agentic operations
@@ -193,10 +192,6 @@ fn agentic_router() -> Router {
         .route(
             "/context_recording",
             post(sidecar::webserver::agentic::context_recording),
-        )
-        .route(
-            "/reasoning_thread_create",
-            post(sidecar::webserver::agentic::reasoning_thread_create),
         )
         // SWE bench route
         // This route is for software engineering benchmarking

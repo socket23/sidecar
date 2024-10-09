@@ -24,7 +24,7 @@ use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
 use crate::webserver::plan::{
-    append_to_plan, check_plan_storage_path, drop_plan, handle_create_plan,
+    append_to_plan, check_plan_storage_path, create_plan, drop_plan, handle_create_plan,
     handle_execute_plan_until,
 };
 
@@ -510,6 +510,9 @@ pub async fn drop_plan_from(
     let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
+    // todo(zi): override, remove
+    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04".to_owned();
+
     println!("webserver::agent::drop_plan_from({})", &drop_from);
 
     let result = drop_plan(thread_id, plan_storage_path, plan_service, drop_from).await;
@@ -542,7 +545,7 @@ pub struct AppendPlanRequest {
     with_lsp_enrichment: bool,
 }
 
-pub async fn append_plan(
+pub async fn handle_append_plan(
     Extension(app): Extension<Application>,
     Json(AppendPlanRequest {
         user_query,
@@ -553,33 +556,63 @@ pub async fn append_plan(
         with_lsp_enrichment,
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
+    println!("webserver::agent::append_plan({})", &user_query);
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+
+    // reinstate this after override
     let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
-    println!("webserver::agent::append_plan({})", &user_query);
+    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
 
-    let plan_id = thread_id;
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(plan_id.to_string(), plan_id.to_string()),
-        tokio::sync::mpsc::unbounded_channel().0, // Dummy sender, as we're not using streaming
-        editor_url,
-        tokio_util::sync::CancellationToken::new(),
-    );
+    // so here, if we have a plan, we append. Else, we create a new plan.
+    let plan_result = match plan_service.load_plan(&plan_storage_path).await {
+        // if a plan is loaded, we append.
+        Ok(plan) => {
+            println!("webserver::agent::handle_append_plan::load_plan(Ok)");
 
-    let result = append_to_plan(
-        plan_id,
-        plan_storage_path,
-        plan_service,
-        user_query,
-        user_context,
-        message_properties,
-        is_deep_reasoning,
-        with_lsp_enrichment,
-    )
-    .await;
+            // we don't use the id
+            let plan_id = thread_id;
+            let message_properties = SymbolEventMessageProperties::new(
+                SymbolEventRequestId::new(plan_id.to_string(), plan_id.to_string()),
+                tokio::sync::mpsc::unbounded_channel().0, // Dummy sender, as we're not using streaming
+                editor_url,
+                tokio_util::sync::CancellationToken::new(),
+            );
 
-    let response = match result {
+            append_to_plan(
+                plan_id,
+                plan,
+                plan_service,
+                user_query,
+                user_context,
+                message_properties,
+                is_deep_reasoning,
+                with_lsp_enrichment,
+            )
+            .await
+        }
+        // else, we create
+        Err(err) => {
+            println!("webserver::agent::append_plan::load_plan::err({:?})", err);
+
+            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+            create_plan(
+                user_query,
+                user_context,
+                editor_url,
+                thread_id,
+                plan_storage_path.to_owned(),
+                plan_service,
+                is_deep_reasoning,
+                sender,
+            )
+            .await
+        }
+    };
+
+    let response = match plan_result {
         Ok(plan) => AgenticReasoningThreadCreationResponse {
             plan: Some(plan),
             success: true,

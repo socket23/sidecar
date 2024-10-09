@@ -5,7 +5,6 @@ use crate::user_context::types::UserContext;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanStep {
     id: String,
-    index: usize,
     title: String,
     files_to_edit: Vec<String>, // paths of files that step may execute against
     description: String,        // we want to keep the step's edit as deterministic as possible
@@ -15,7 +14,6 @@ pub struct PlanStep {
 impl PlanStep {
     pub fn new(
         id: String,
-        index: usize,
         files_to_edit: Vec<String>,
         title: String,
         description: String,
@@ -23,7 +21,6 @@ impl PlanStep {
     ) -> Self {
         Self {
             id,
-            index,
             title,
             files_to_edit,
             description,
@@ -41,10 +38,6 @@ impl PlanStep {
 
     pub fn id(&self) -> String {
         self.id.to_owned()
-    }
-
-    pub fn index(&self) -> usize {
-        self.index
     }
 
     pub fn description(&self) -> &str {

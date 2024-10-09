@@ -31,23 +31,26 @@ pub async fn drop_plan(
     drop_from: usize,
 ) -> io::Result<Plan> {
     let mut plan = plan_service.load_plan(&plan_storage_path).await?;
+    println!("plan before");
+    dbg!(plan.steps());
     plan = plan.drop_plan_steps(drop_from);
+    println!("plan after");
+    dbg!(plan.steps());
     plan_service.save_plan(&plan, &plan_storage_path).await?;
     Ok(plan)
 }
 
 pub async fn append_to_plan(
     _plan_id: uuid::Uuid,
-    plan_storage_path: String,
+    plan: Plan,
     plan_service: PlanService,
     query: String,
     user_context: UserContext,
     message_properties: SymbolEventMessageProperties,
     is_deep_reasoning: bool,
     with_lsp_enrichment: bool,
-) -> io::Result<Plan> {
-    let plan = plan_service.load_plan(&plan_storage_path).await?;
-
+) -> Result<Plan, PlanServiceError> {
+    let plan_storage_path = plan.storage_path().to_owned();
     let updated_plan = plan_service
         .append_steps(
             plan,
@@ -61,9 +64,10 @@ pub async fn append_to_plan(
         .map_err(|e| {
             eprintln!("webserver::append_to_plan::append_steps::error::{:?}", e);
             // this is the most hacked error you've ever seen
-            io::Error::new(io::ErrorKind::Other, e.to_string())
+            e
         })?;
 
+    dbg!(&plan_storage_path);
     plan_service
         .save_plan(&updated_plan, &plan_storage_path)
         .await?;

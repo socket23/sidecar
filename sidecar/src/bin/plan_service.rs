@@ -109,7 +109,6 @@ fn append_step(plan: &mut Plan) {
 
     let new_step = PlanStep::new(
         uuid::Uuid::new_v4().to_string(),
-        plan.steps().len(),
         vec![file_to_edit],
         title,
         description,

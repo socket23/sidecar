@@ -204,6 +204,8 @@ Separation of Concerns: Keeps execution state separate from other data, making t
 - Your job is to be precise and effective, so avoid extraneous steps even if they offer convenience.
 - Do not talk about testing out the changes unless you are instructed to do so.
 - Please ensure that each step includes all required fields and that the steps are logically ordered.
+- Please ensure each code block you emit is INDENTED either using spaces or tabs the original context.
+- Always give the full path in <file> section, do not use the user friendly name but the original path as present on the disk.
 - Each step you suggest must only change a single file and must be a logical unit of work, logic units of work are defined as code changes where the change is complete and encapsulates a logical step forward.
 For example, if you have to import a helper function and use it in the code, it should be combined to a single step instead of it being 2 steps, one which imports the helper function and another which makes the changes.
 - Do not leave placeholder code when its the critical section of the code which you know needs to change

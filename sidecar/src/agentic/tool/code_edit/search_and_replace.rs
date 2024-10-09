@@ -152,9 +152,6 @@ impl StreamedEditingForEditor {
     ) {
         let editor_endpoint = editor_url + "/apply_edits_streamed";
 
-        // temporarily ensuring that apply_directly is always true
-        // let edit_event = edit_event.set_apply_directly();
-
         let _ = self
             .client
             .post(editor_endpoint)

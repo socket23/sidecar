@@ -256,7 +256,6 @@ impl LLMClient for CodeStoryClient {
     ) -> Result<String, LLMClientError> {
         let model = self.model_name(request.model())?;
         let endpoint = self.model_endpoint(request.model())?;
-        dbg!("stream_completion", &request);
 
         let request = CodeStoryRequest::from_chat_request(request, model.to_owned());
         let mut response_stream = self
@@ -268,8 +267,6 @@ impl LLMClient for CodeStoryClient {
             .await?
             .bytes_stream()
             .eventsource();
-
-        dbg!("codestory.provider.streaming");
 
         let mut buffered_stream = "".to_owned();
         while let Some(event) = response_stream.next().await {

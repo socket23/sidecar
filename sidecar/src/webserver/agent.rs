@@ -511,7 +511,7 @@ pub async fn drop_plan_from(
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
     // todo(zi): override, remove
-    let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04".to_owned();
+    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04".to_owned();
 
     println!("webserver::agent::drop_plan_from({})", &drop_from);
 
@@ -560,10 +560,10 @@ pub async fn handle_append_plan(
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
 
     // reinstate this after override
-    let _plan_storage_path =
+    let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
-    let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
+    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
 
     // so here, if we have a plan, we append. Else, we create a new plan.
     let plan_result = match plan_service.load_plan(&plan_storage_path).await {

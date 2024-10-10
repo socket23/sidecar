@@ -1,6 +1,6 @@
 //! Contains the helper functions over here for the plan generation
 
-use std::{io, sync::Arc};
+use std::{collections::HashMap, io, sync::Arc};
 
 use super::types::Result;
 use axum::response::{sse, Sse};
@@ -15,9 +15,12 @@ use crate::{
         symbol::events::{
             input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
         },
-        tool::plan::{
-            plan::Plan,
-            service::{PlanService, PlanServiceError},
+        tool::{
+            lsp::file_diagnostics::DiagnosticMap,
+            plan::{
+                plan::Plan,
+                service::{PlanService, PlanServiceError},
+            },
         },
     },
     application::config::configuration::Configuration,
@@ -57,22 +60,23 @@ pub async fn check_references_on_file(
     // first get the lsp errors on the file we have in our variables
     // over here we can do 2 things: one come up with a plan and then also generate
     // the plan steps so we can render it properly
-    let file_in_focus = user_context
-        .variables
-        .iter()
-        .find(|variable| variable.is_file());
-    if let None = file_in_focus {
-        return Ok(plan);
-    }
-    let file_in_focus = file_in_focus.expect("if let None to hold");
-    let (extra_variables, user_query) = plan_service
+    let (diagnostics, extra_variables) = plan_service
         .tool_box()
-        .broken_references_for_lsp_diagnostics(
-            &file_in_focus.fs_file_path,
-            message_properties.clone(),
-        )
+        .grab_workspace_diagnostics(message_properties.clone())
         .await?;
+
+    // get the extra variables thing here working somehow
     user_context = user_context.add_variables(extra_variables.to_vec());
+
+    let diagnostics_grouped_by_file: DiagnosticMap =
+        diagnostics
+            .into_iter()
+            .fold(HashMap::new(), |mut acc, error| {
+                acc.entry(error.fs_file_path().to_owned())
+                    .or_insert_with(Vec::new)
+                    .push(error);
+                acc
+            });
 
     // send a message with the updated variables
     let other_files_to_check = extra_variables.len();
@@ -90,6 +94,8 @@ pub async fn check_references_on_file(
             .map(|variable| VariableInformation::from_internal_variable_information(variable))
             .collect::<Vec<_>>(),
     )));
+
+    let user_query = PlanService::format_diagnostics(&diagnostics_grouped_by_file);
 
     // now use o1 to create 2 things over here:
     // - now we can generate either a step of plan steps which we want to do

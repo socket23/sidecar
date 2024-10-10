@@ -18,11 +18,7 @@ use sidecar::{
             code_edit::models::broker::CodeEditBroker,
         },
     },
-    chunking::{
-        editor_parsing::EditorParsing,
-        languages::TSLanguageParsing,
-        text_document::{Position, Range},
-    },
+    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
 };
 
@@ -35,7 +31,7 @@ fn default_index_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() {
-    let editor_url = "http://localhost:42450".to_owned();
+    let editor_url = "http://localhost:42430".to_owned();
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -66,11 +62,25 @@ async fn main() {
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
     );
-
-    let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();
-    let lsp_range = Range::new(Position::new(51, 0, 0), Position::new(89, 0, 0));
-    let response = tool_box
-        .get_lsp_diagnostics(&fs_file_path, &lsp_range, event_properties)
+    let fs_file_path =
+        "/Users/skcd/test_repo/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs".to_owned();
+    let references = tool_box
+        .broken_references_for_lsp_diagnostics(&fs_file_path, event_properties.clone())
         .await;
-    println!("{:?}", &response);
+    println!("{:?}", references);
+    let file_diagnostics = tool_box
+        .get_lsp_diagnostics_for_files(
+            vec![fs_file_path.to_owned()],
+            event_properties.clone(),
+            false,
+        )
+        .await;
+    println!("{:?}", file_diagnostics);
+
+    // let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/broker.rs".to_owned();
+    // let lsp_range = Range::new(Position::new(51, 0, 0), Position::new(89, 0, 0));
+    // let response = tool_box
+    //     .get_lsp_diagnostics(&fs_file_path, &lsp_range, event_properties)
+    //     .await;
+    // println!("{:?}", &response);
 }

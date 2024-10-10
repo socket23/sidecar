@@ -78,7 +78,7 @@ use crate::agentic::tool::lsp::diagnostics::{
     DiagnosticWithSnippet, LSPDiagnosticsInput, LSPDiagnosticsOutput,
 };
 use crate::agentic::tool::lsp::file_diagnostics::{
-    DiagnosticMap, FileDiagnosticsInput, FileDiagnosticsOutput,
+    FileDiagnosticsInput, FileDiagnosticsOutput,
 };
 use crate::agentic::tool::lsp::get_outline_nodes::{
     OutlineNodesUsingEditorRequest, OutlineNodesUsingEditorResponse,
@@ -9290,47 +9290,11 @@ FILEPATH: {fs_file_path}
             .step_generator_output()
             .ok_or(SymbolError::WrongToolOutput)?
             .into_plan_steps();
-        println!("tool_box::generate_plan::end::time_taken({}ms)", &start_instant.elapsed().as_millis());
+        println!(
+            "tool_box::generate_plan::end::time_taken({}ms)",
+            &start_instant.elapsed().as_millis()
+        );
         Ok(plan_steps)
-    }
-
-    /// Generates steps with diagnostics provided. This should also accept context one day.
-    pub async fn generate_steps_with_diagnostics(
-        &self,
-        user_query: &str,
-        message_properties: SymbolEventMessageProperties,
-        diagnostics: DiagnosticMap,
-        is_deep_reasoning: bool,
-    ) -> Result<Vec<PlanStep>, SymbolError> {
-        let step_generator_request = StepGeneratorRequest::new(
-            user_query.to_owned(),
-            is_deep_reasoning,
-            message_properties.request_id_str().to_owned(),
-            message_properties.editor_url(),
-        )
-        .with_diagnostics(diagnostics);
-        let plan_steps = self
-            .tools
-            .invoke(ToolInput::GenerateStep(step_generator_request))
-            .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .step_generator_output()
-            .ok_or(SymbolError::WrongToolOutput)?
-            .into_plan_steps();
-        Ok(plan_steps)
-    }
-
-    /// Executes a serach and replace edit
-    pub async fn execute_search_and_replace_edit(
-        &self,
-        request: SearchAndReplaceEditingRequest,
-    ) -> Result<(), SymbolError> {
-        let _ = self
-            .tools
-            .invoke(ToolInput::SearchAndReplaceEditing(request))
-            .await
-            .map_err(|e| SymbolError::ToolError(e))?;
-        Ok(())
     }
 
     /// Creates new steps which can be added to the plan
@@ -9367,7 +9331,10 @@ FILEPATH: {fs_file_path}
             .get_plan_new_steps()
             .ok_or(SymbolError::WrongToolOutput)?
             .into_plan_steps();
-        println!("tool_box::generate_new_steps_for_plan::end({}ms)", start_instant.elapsed().as_millis());
+        println!(
+            "tool_box::generate_new_steps_for_plan::end({}ms)",
+            start_instant.elapsed().as_millis()
+        );
         Ok(plan_steps)
     }
 
@@ -9618,6 +9585,7 @@ FILEPATH: {fs_file_path}
 
         Ok(associated_files.into_iter().collect())
     }
+
     /// This looks at the LSP diagnostics and figures out the type definition to go to
     ///
     /// This is a common mistake on the LLM where it hallucinates a function on a class
@@ -9656,10 +9624,7 @@ FILEPATH: {fs_file_path}
                     .enumerate()
                     .filter_map(|(idx, diagnostic)| {
                         if click_range.contains_check_line_column(diagnostic.range()) {
-                            Some((
-                                idx,
-                                diagnostic,
-                            ))
+                            Some((idx, diagnostic))
                         } else {
                             None
                         }
@@ -9805,8 +9770,11 @@ FILEPATH: {fs_file_path}
                 // do some state management over here, we want to keep track of this for the current
                 // lsp diagnostic
                 current_outline_nodes.push(outline_node_containing_range.unique_identifier());
-                if !additional_outline_node_ids.contains(&outline_node_containing_range.unique_identifier()) {
-                    additional_outline_node_ids.push(outline_node_containing_range.unique_identifier());
+                if !additional_outline_node_ids
+                    .contains(&outline_node_containing_range.unique_identifier())
+                {
+                    additional_outline_node_ids
+                        .push(outline_node_containing_range.unique_identifier());
                 }
                 outline_nodes.insert(
                     outline_node_containing_range.unique_identifier(),
@@ -9815,9 +9783,21 @@ FILEPATH: {fs_file_path}
             }
 
             // now update the lsp diagnostics with the information we generated
-            lsp_diagnositcs.get_mut(lsp_diagnostic_index).map(|lsp_diagnostic| {
-                lsp_diagnostic.set_user_variables(current_outline_nodes.into_iter().filter_map(|current_outline_node| outline_nodes.get(&current_outline_node)).map(|outline_node| VariableInformation::from_outline_node(outline_node)).collect::<Vec<_>>());
-            });
+            lsp_diagnositcs
+                .get_mut(lsp_diagnostic_index)
+                .map(|lsp_diagnostic| {
+                    lsp_diagnostic.set_user_variables(
+                        current_outline_nodes
+                            .into_iter()
+                            .filter_map(|current_outline_node| {
+                                outline_nodes.get(&current_outline_node)
+                            })
+                            .map(|outline_node| {
+                                VariableInformation::from_outline_node(outline_node)
+                            })
+                            .collect::<Vec<_>>(),
+                    );
+                });
         }
 
         // converts everything to a variable information
@@ -9827,11 +9807,276 @@ FILEPATH: {fs_file_path}
             .into_iter()
             .filter_map(|outline_node_id| {
                 let outline_node = outline_nodes.remove(&outline_node_id);
-                outline_node.map(|outline_node| {
-                    VariableInformation::from_outline_node(&outline_node)
-                })
+                outline_node
+                    .map(|outline_node| VariableInformation::from_outline_node(&outline_node))
             })
             .collect::<Vec<_>>();
         Ok(additional_user_variables)
     }
+
+    /// Go-to-references for errors which are happening at the start of the outline
+    /// node
+    /// The end goal here is to create a prompt which can be shared with the o1-preview
+    /// model for background reply and it can come back whenever
+    pub async fn broken_references_for_lsp_diagnostics(
+        &self,
+        fs_file_path: &str,
+        message_properties: SymbolEventMessageProperties,
+        // we return the extra variables and also the prompt which is our query which
+        // we generate
+    ) -> Result<(Vec<VariableInformation>, String), SymbolError> {
+        // Step 1: Get outline nodes and LSP diagnostics
+        let outline_nodes = self
+            .get_outline_nodes_from_editor(fs_file_path, message_properties.clone())
+            .await
+            .unwrap_or_default();
+    
+        let lsp_diagnostics = self
+            .get_lsp_diagnostics_for_files(
+                vec![fs_file_path.to_owned()],
+                message_properties.clone(),
+                true,
+            )
+            .await?;
+    
+        // Step 2: Match diagnostics with outline nodes
+        let clickable_diagnostics = lsp_diagnostics
+            .into_iter()
+            .filter_map(|lsp_diagnostic| {
+                let diagnostic_range = lsp_diagnostic.range();
+                let clickable_outline_node = outline_nodes
+                    .iter()
+                    .filter_map(|outline_node| {
+                        if outline_node.is_class() || outline_node.is_class_definition() {
+                            if diagnostic_range.start_position()
+                                == outline_node.identifier_range().start_position()
+                                && outline_node
+                                    .range()
+                                    .contains_check_line_column(diagnostic_range)
+                            {
+                                Some(outline_node.content().clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            outline_node
+                                .children()
+                                .into_iter()
+                                .filter_map(|child_node| {
+                                    if diagnostic_range.start_position()
+                                        == child_node.identifier_range().start_position()
+                                        && child_node
+                                            .range()
+                                            .contains_check_line_column(diagnostic_range)
+                                    {
+                                        Some(child_node.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .next()
+                        }
+                    })
+                    .next();
+    
+                clickable_outline_node
+                    .map(|clickable_outline_node| (lsp_diagnostic, clickable_outline_node))
+            })
+            .collect::<Vec<_>>();
+    
+        // Step 3: Collect references for outline nodes with diagnostics
+        #[derive(Clone)]
+        struct LSPDiagnosticErrorClickableRange {
+            fs_file_path: String,
+            clickable_range: Range,
+            lsp_diagnostic: LSPDiagnosticError,
+        }
+    
+        struct LSPDiagnosticErrorOnReference<'a> {
+            reference_location: ReferenceLocation,
+            originating_error: LSPDiagnosticErrorClickableRange,
+            originating_outline_node: &'a OutlineNodeContent,
+        }
+    
+        let mut lsp_diagnostic_on_references = Vec::new();
+        for (lsp_diagnostic, outline_node) in &clickable_diagnostics {
+            let references_for_outline_node = self
+                .go_to_references(
+                    outline_node.fs_file_path().to_owned(),
+                    outline_node.range().start_position(),
+                    message_properties.clone(),
+                )
+                .await?
+                .locations();
+    
+            let lsp_diagnostic_clickable_range = LSPDiagnosticErrorClickableRange {
+                fs_file_path: fs_file_path.to_owned(),
+                clickable_range: outline_node.identifier_range().clone(),
+                lsp_diagnostic: lsp_diagnostic.clone(),
+            };
+    
+            lsp_diagnostic_on_references.extend(
+                references_for_outline_node.into_iter().map(|reference_location| {
+                    LSPDiagnosticErrorOnReference {
+                        reference_location,
+                        originating_error: lsp_diagnostic_clickable_range.clone(),
+                        originating_outline_node: outline_node,
+                    }
+                }),
+            );
+        }
+    
+        // Step 4: Collect file paths from references to get their diagnostics
+        let file_paths_to_diagnostics: HashSet<String> = lsp_diagnostic_on_references
+            .iter()
+            .map(|diagnostic| diagnostic.reference_location.fs_file_path().to_owned())
+            .collect();
+    
+        // Step 5: Get diagnostics for reference files
+        let diagnostics_on_file_paths = stream::iter(
+            file_paths_to_diagnostics
+                .clone()
+                .into_iter()
+                .map(|fs_file_path| (fs_file_path, message_properties.clone())),
+        )
+        .map(|(fs_file_path, message_properties)| async move {
+            let diagnostics = self
+                .get_lsp_diagnostics_for_files(vec![fs_file_path.to_owned()], message_properties, true)
+                .await;
+            diagnostics.map(|diagnostics| (fs_file_path, diagnostics))
+        })
+        .buffer_unordered(4)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|s| s.ok())
+        .collect::<HashMap<String, Vec<LSPDiagnosticError>>>();
+    
+        // Step 6: Filter references that correspond to diagnostics
+        let lsp_diagnostic_on_references = lsp_diagnostic_on_references
+            .into_iter()
+            .filter_map(|lsp_diagnostic_on_reference| {
+                let reference_location = &lsp_diagnostic_on_reference.reference_location;
+                let diagnostics_on_reference_file = diagnostics_on_file_paths
+                    .get(reference_location.fs_file_path());
+    
+                if let Some(diagnostics_on_reference_file) = diagnostics_on_reference_file {
+                    if diagnostics_on_reference_file.iter().any(|diagnostic| {
+                        diagnostic.range().contains_check_line_column(reference_location.range())
+                            || reference_location
+                                .range()
+                                .contains_check_line_column(diagnostic.range())
+                    }) {
+                        Some(lsp_diagnostic_on_reference)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+    
+        // Step 7: Group by the original outline node
+        use std::hash::{Hash, Hasher};
+    
+        #[derive(Clone)]
+        struct OutlineNodeKey {
+            fs_file_path: String,
+            identifier_range: Range,
+        }
+    
+        impl PartialEq for OutlineNodeKey {
+            fn eq(&self, other: &Self) -> bool {
+                self.fs_file_path == other.fs_file_path
+                    && self.identifier_range == other.identifier_range
+            }
+        }
+
+        impl Eq for OutlineNodeKey {}
+
+        impl Hash for OutlineNodeKey {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.fs_file_path.hash(state);
+                self.identifier_range.hash(state);
+            }
+        }
+    
+        let mut lsp_diagnostic_on_references_by_outline_node: HashMap<
+            OutlineNodeKey,
+            Vec<LSPDiagnosticErrorOnReference>,
+        > = HashMap::new();
+    
+        for diagnostic_on_reference in lsp_diagnostic_on_references.into_iter() {
+            let outline_node = diagnostic_on_reference.originating_outline_node;
+            let key = OutlineNodeKey {
+                fs_file_path: outline_node.fs_file_path().to_owned(),
+                identifier_range: outline_node.identifier_range().clone(),
+            };
+            lsp_diagnostic_on_references_by_outline_node
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push(diagnostic_on_reference);
+        }
+    
+        // Step 8: Create the prompt
+        let mut prompt = String::new();
+
+        // create a few new user context variables so we can show that on each step
+        // the context we are getting as extra
+        let extra_user_variables = stream::iter(file_paths_to_diagnostics.clone().into_iter().map(|diagnostic_file_path| {
+            (diagnostic_file_path, message_properties.clone())
+        })).map(|(fs_file_path, message_properties)| async move {
+            let file_content = self.file_open(fs_file_path.to_owned(), message_properties).await;
+            file_content.map(|file_content| {
+                let language = file_content.language().to_owned();
+                VariableInformation::create_file(file_content.full_range(), file_content.fs_file_path().to_owned(), file_content.fs_file_path().to_owned(), file_content.contents(), language)
+            })
+        }).buffer_unordered(10).collect::<Vec<_>>().await.into_iter().filter_map(|s| s.ok()).collect::<Vec<_>>();
+    
+        for (_outline_node_key, lsp_diagnostics) in lsp_diagnostic_on_references_by_outline_node.iter() {
+            let outline_node = lsp_diagnostics.first().unwrap().originating_outline_node;
+            let outline_node_name = outline_node.name();
+            let outline_node_type = outline_node.outline_node_type().to_string();
+            let outline_node_fs_file_path = outline_node.fs_file_path();
+    
+            prompt.push_str(&format!(
+                "The {} '{}' in file '{}' has errors in its references:\n",
+                outline_node_type, outline_node_name, outline_node_fs_file_path
+            ));
+    
+            for lsp_diagnostic_on_ref in lsp_diagnostics {
+                let reference_location = &lsp_diagnostic_on_ref.reference_location;
+                let reference_fs_file_path = reference_location.fs_file_path();
+                let reference_range = reference_location.range();
+    
+                if let Some(diagnostics) = diagnostics_on_file_paths.get(reference_fs_file_path) {
+                    let relevant_diagnostics: Vec<_> = diagnostics
+                        .iter()
+                        .filter(|diagnostic| {
+                            diagnostic.range().contains_check_line_column(reference_range)
+                                || reference_range
+                                    .contains_check_line_column(diagnostic.range())
+                        })
+                        .collect();
+    
+                    for diagnostic in relevant_diagnostics {
+                        prompt.push_str(&format!(
+                            r#"- Error in file '{}' at range L{}-{}:
+```
+{}
+```"#,
+                            reference_fs_file_path,
+                            diagnostic.range().start_line(),
+                            diagnostic.range().end_line(),
+                            diagnostic.snippet(),
+                        ));
+                    }
+                }
+            }
+    
+            prompt.push('\n');
+        }    
+        Ok((extra_user_variables, prompt))
+    }    
 }

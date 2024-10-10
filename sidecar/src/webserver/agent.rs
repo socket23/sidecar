@@ -24,8 +24,8 @@ use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
 use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
 use crate::webserver::plan::{
-    append_to_plan, check_plan_storage_path, create_plan, drop_plan, handle_create_plan,
-    handle_execute_plan_until,
+    append_to_plan, check_plan_storage_path, create_plan, drop_plan,
+    handle_check_references_and_stream, handle_create_plan, handle_execute_plan_until,
 };
 
 use super::types::ApiResponse;
@@ -546,6 +546,51 @@ pub struct AppendPlanRequest {
     is_deep_reasoning: bool,
     #[serde(default)]
     with_lsp_enrichment: bool,
+}
+
+/// Checks the references on a file with the user context
+pub async fn handle_check_references(
+    Extension(app): Extension<Application>,
+    Json(AppendPlanRequest {
+        user_query,
+        thread_id,
+        editor_url,
+        user_context,
+        is_deep_reasoning,
+        with_lsp_enrichment,
+    }): Json<AppendPlanRequest>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::agent::handle_check_references({})", &user_query);
+    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+
+    // reinstate this after override
+    let plan_storage_path =
+        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
+
+    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
+
+    // so here, if we have a plan, we append. Else, we create a new plan.
+    let plan_result = match plan_service.load_plan(&plan_storage_path).await {
+        // if a plan is loaded, we append.
+        Ok(plan) => {
+            println!("webserver::agent::handle_check_references::load_plan(Ok)");
+            handle_check_references_and_stream(
+                user_query,
+                user_context,
+                plan,
+                editor_url,
+                thread_id,
+                plan_service,
+                is_deep_reasoning,
+            )
+            .await
+        }
+        // else, we create
+        Err(err) => {
+            unimplemented!("we have not implemented this branch")
+        }
+    };
+    plan_result
 }
 
 pub async fn handle_append_plan(

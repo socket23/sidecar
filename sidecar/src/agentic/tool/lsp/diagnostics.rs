@@ -40,11 +40,16 @@ pub struct Diagnostic {
     range: Range,
     quick_fix_labels: Option<Vec<String>>,
     parameter_hints: Option<Vec<String>>,
+    fs_file_path: String,
 }
 
 impl Diagnostic {
     pub fn range(&self) -> &Range {
         &self.range
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
     }
 
     pub fn message(&self) -> &str {
@@ -96,6 +101,7 @@ impl DiagnosticWithSnippet {
             message,
             quick_fix_labels,
             parameter_hints,
+            fs_file_path,
         } = diagnostic;
 
         let start_line = range.start_line();

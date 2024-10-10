@@ -5,9 +5,12 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::diagnostics::Diagnostic;
-use crate::agentic::{
-    symbol::events::lsp::LSPDiagnosticError,
-    tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+use crate::{
+    agentic::{
+        symbol::events::lsp::LSPDiagnosticError,
+        tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
+    },
+    chunking::text_document::Position,
 };
 
 pub struct FileDiagnostics {
@@ -19,14 +22,24 @@ pub struct FileDiagnosticsInput {
     fs_file_path: String,
     editor_url: String,
     with_enrichment: bool,
+    with_hover_check: Option<Position>,
+    full_workspace: bool,
 }
 
 impl FileDiagnosticsInput {
-    pub fn new(fs_file_path: String, editor_url: String, with_enrichment: bool) -> Self {
+    pub fn new(
+        fs_file_path: String,
+        editor_url: String,
+        with_enrichment: bool,
+        with_hover_check: Option<Position>,
+        full_workspace: bool,
+    ) -> Self {
         Self {
             fs_file_path,
             editor_url,
             with_enrichment,
+            with_hover_check,
+            full_workspace,
         }
     }
 }

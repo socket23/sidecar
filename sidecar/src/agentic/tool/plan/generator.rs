@@ -87,6 +87,7 @@ impl StepGeneratorRequest {
 #[serde(rename_all = "lowercase")]
 pub struct StepGeneratorResponse {
     pub step: Vec<Step>,
+    human_help: Option<String>,
 }
 
 impl StepGeneratorResponse {
@@ -102,6 +103,15 @@ impl StepGeneratorResponse {
             .collect::<Vec<_>>();
 
         plan_steps
+    }
+
+    pub fn huamn_help(&self) -> Option<String> {
+        self.human_help.clone()
+    }
+
+    pub fn set_human_help(mut self, help: String) -> Self {
+        self.human_help = Some(help);
+        self
     }
 }
 
@@ -120,6 +130,18 @@ impl StepGeneratorResponse {
             println!("{:?}", e);
             ToolError::SerdeConversionFailed
         })
+    }
+
+    pub fn grab_human_ask_for_help(response: &str) -> Option<String> {
+        let response = response
+            .lines()
+            .into_iter()
+            .skip_while(|line| !line.contains("<ask_human_for_help>"))
+            .skip(1)
+            .take_while(|line| !line.contains("</ask_human_for_help>"))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        Some(response)
     }
 }
 

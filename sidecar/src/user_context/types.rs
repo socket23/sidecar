@@ -90,6 +90,10 @@ impl VariableInformation {
         self.variable_type == VariableType::Selection
     }
 
+    pub fn is_file(&self) -> bool {
+        self.variable_type == VariableType::File
+    }
+
     pub fn is_code_symbol(&self) -> bool {
         self.variable_type == VariableType::CodeSymbol
     }

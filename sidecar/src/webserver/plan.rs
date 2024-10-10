@@ -10,7 +10,7 @@ use serde_json::json;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    agent::types::{AgentAnswerStreamEvent, ConversationMessage},
+    agent::types::{AgentAnswerStreamEvent, ConversationMessage, VariableInformation},
     agentic::{
         symbol::events::{
             input::SymbolEventRequestId, message_event::SymbolEventMessageProperties,
@@ -36,6 +36,87 @@ pub async fn drop_plan(
     println!("plan after");
     plan_service.save_plan(&plan, &plan_storage_path).await?;
     Ok(plan)
+}
+
+/// Generates the references on a file where there are errors and tries to figure out
+/// how to fix them, either by making the changes on its own or coming up with a plan
+/// for as long as it can
+///
+/// This is the function we want to run and test out if its working properly
+pub async fn _check_references_on_file(
+    plan_id: uuid::Uuid,
+    plan: Plan,
+    plan_service: PlanService,
+    _query: String,
+    mut user_context: UserContext,
+    message_properties: SymbolEventMessageProperties,
+    is_deep_reasoning: bool,
+    // we can send events using this
+    agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+) -> Result<Plan, PlanServiceError> {
+    // first get the lsp errors on the file we have in our variables
+    // over here we can do 2 things: one come up with a plan and then also generate
+    // the plan steps so we can render it properly
+    let file_in_focus = user_context
+        .variables
+        .iter()
+        .find(|variable| variable.is_file());
+    if let None = file_in_focus {
+        return Ok(plan);
+    }
+    let file_in_focus = file_in_focus.expect("if let None to hold");
+    let (extra_variables, user_query) = plan_service
+        .tool_box()
+        .broken_references_for_lsp_diagnostics(
+            &file_in_focus.fs_file_path,
+            message_properties.clone(),
+        )
+        .await?;
+    user_context = user_context.add_variables(extra_variables.to_vec());
+
+    // send a message with the updated variables
+    let other_files_to_check = extra_variables.len();
+    let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+        plan_id,
+        AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+            format!("Checking {other_files_to_check} files").to_owned(),
+            Some(format!("Checking {other_files_to_check} files").to_owned()),
+            "Custom".to_owned(),
+        )),
+    )
+    .extend_user_variables(
+        extra_variables
+            .into_iter()
+            .map(|variable| VariableInformation::from_internal_variable_information(variable))
+            .collect::<Vec<_>>(),
+    )));
+
+    // now use o1 to create 2 things over here:
+    // - now we can generate either a step of plan steps which we want to do
+    // - and another where we can ask the human developer for help
+    let (updated_plan, human_help) = plan_service
+        .generate_plan_steps_and_human_help(
+            plan,
+            user_query,
+            user_context,
+            message_properties,
+            is_deep_reasoning,
+            true,
+        )
+        .await?;
+    if human_help.is_some() {
+        let expected_human_help = human_help.expect("is_some to hold");
+        let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
+            plan_id,
+            AgentAnswerStreamEvent::LLMAnswer(LLMClientCompletionResponse::new(
+                expected_human_help.to_owned(),
+                Some(expected_human_help.to_owned()),
+                "Custom".to_owned(),
+            )),
+        )));
+    }
+    // sends over the updated plan over here
+    Ok(updated_plan)
 }
 
 pub async fn append_to_plan(

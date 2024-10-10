@@ -9297,6 +9297,46 @@ FILEPATH: {fs_file_path}
         Ok(plan_steps)
     }
 
+    pub async fn generate_new_steps_and_user_help_for_plan(
+        &self,
+        plan_up_until_now: String,
+        initial_user_query: String,
+        query: String,
+        user_context: UserContext,
+        recent_diff_changes: DiffRecentChanges,
+        message_properties: SymbolEventMessageProperties,
+        is_deep_reasoning: bool,
+    ) -> Result<(Vec<PlanStep>, Option<String>), SymbolError> {
+        let plan_add_request = PlanAddRequest::new(
+            plan_up_until_now,
+            user_context,
+            initial_user_query,
+            query,
+            recent_diff_changes,
+            message_properties.editor_url(),
+            message_properties.root_request_id().to_owned(),
+            is_deep_reasoning,
+            "".to_owned(),
+        ).ask_human_for_help();
+        let tool_input = ToolInput::PlanStepAdd(plan_add_request);
+        println!("tool_box::generate_new_steps_for_plan::start");
+        let start_instant = std::time::Instant::now();
+        let plan_steps = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_plan_new_steps()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        let human_help = plan_steps.huamn_help();
+        let steps = plan_steps.into_plan_steps();
+        println!(
+            "tool_box::generate_new_steps_for_plan::end({}ms)",
+            start_instant.elapsed().as_millis()
+        );
+        Ok((steps, human_help))
+    }
+
     /// Creates new steps which can be added to the plan
     pub async fn generate_new_steps_for_plan(
         &self,

@@ -44,6 +44,10 @@ impl PlanService {
         }
     }
 
+    pub fn tool_box(&self) -> Arc<ToolBox> {
+        self.tool_box.clone()
+    }
+
     pub async fn save_plan(&self, plan: &Plan, path: &str) -> std::io::Result<()> {
         let serialized = serde_json::to_string(plan).unwrap();
         let mut file = tokio::fs::File::create(path).await?;
@@ -319,10 +323,6 @@ impl PlanService {
         .join("\n");
 
         full_context_as_string
-    }
-
-    pub fn tool_box(&self) -> &ToolBox {
-        &self.tool_box
     }
 
     pub async fn execute_step(

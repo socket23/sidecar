@@ -43,7 +43,7 @@ pub async fn drop_plan(
 /// for as long as it can
 ///
 /// This is the function we want to run and test out if its working properly
-pub async fn _check_references_on_file(
+pub async fn check_references_on_file(
     plan_id: uuid::Uuid,
     plan: Plan,
     plan_service: PlanService,
@@ -365,6 +365,82 @@ pub async fn handle_execute_plan_until(
             plan_storage_path,
             plan_service,
             message_properties,
+            sender,
+        )
+        .await;
+    });
+    let conversation_message_stream =
+        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": plan_id.to_owned(),
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = conversation_message_stream.map(
+        |conversation_message: anyhow::Result<ConversationMessage>| {
+            if let Err(e) = &conversation_message {
+                tracing::error!("error in conversation message stream: {}", e);
+            }
+            sse::Event::default()
+                .json_data(conversation_message.expect("should not fail deserialization"))
+                .map_err(anyhow::Error::new)
+        },
+    );
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": plan_id.to_owned(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
+}
+
+pub async fn handle_check_references_and_stream(
+    user_query: String,
+    user_context: UserContext,
+    plan: Plan,
+    editor_url: String,
+    plan_id: uuid::Uuid,
+    plan_service: PlanService,
+    is_deep_reasoning: bool,
+) -> Result<
+    Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
+> {
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let plan_id_str = plan_id.to_string();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(plan_id_str.to_owned(), plan_id_str.to_owned()),
+        ui_sender,
+        editor_url,
+        cancellation_token,
+    );
+
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let _ = tokio::spawn(async move {
+        let _ = check_references_on_file(
+            plan_id,
+            plan,
+            plan_service,
+            user_query,
+            user_context,
+            message_properties,
+            is_deep_reasoning,
             sender,
         )
         .await;

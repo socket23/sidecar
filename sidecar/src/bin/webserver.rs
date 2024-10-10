@@ -148,6 +148,10 @@ fn plan_router() -> Router {
             "/append",
             post(sidecar::webserver::agent::handle_append_plan),
         )
+        .route(
+            "/check_references",
+            post(sidecar::webserver::agent::handle_check_references),
+        )
 }
 
 // Define routes for agentic operations

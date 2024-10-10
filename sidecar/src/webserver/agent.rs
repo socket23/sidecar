@@ -464,6 +464,7 @@ pub struct Range {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExecutePlanUntilRequest {
     execution_until: usize,
+    self_feedback: bool,
     thread_id: uuid::Uuid,
     editor_url: String,
 }
@@ -473,6 +474,7 @@ pub async fn execute_plan_until(
     Extension(app): Extension<Application>,
     Json(ExecutePlanUntilRequest {
         execution_until,
+        self_feedback,
         thread_id,
         editor_url,
     }): Json<ExecutePlanUntilRequest>,
@@ -485,6 +487,7 @@ pub async fn execute_plan_until(
 
     handle_execute_plan_until(
         execution_until,
+        self_feedback,
         thread_id,
         plan_storage_path,
         editor_url,
@@ -666,6 +669,7 @@ pub async fn followup_chat(
             // logic here
             return handle_execute_plan_until(
                 execution_until,
+                false,
                 thread_id,
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 editor_url.clone().expect("is_some to hold"), // why is this needed?

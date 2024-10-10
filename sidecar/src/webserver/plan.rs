@@ -77,6 +77,7 @@ pub async fn append_to_plan(
 pub async fn execute_plan_until(
     // the checkpoint until which we want to execute the plan
     execute_until: usize,
+    _self_feedback: bool,
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     plan_service: PlanService,
@@ -129,6 +130,19 @@ pub async fn execute_plan_until(
         }
         // starting executing each step over here
         let checkpoint = plan.checkpoint().unwrap_or_default();
+
+        // track the file open response over here so we can keep a state of the original
+        // content of the files
+        let first_fs_file_path = plan_step.files_to_edit().first();
+        let tool_box = plan_service.tool_box();
+        if let Some(fs_file_path) = first_fs_file_path {
+            let file_open_response = tool_box
+                .file_open(fs_file_path.to_owned(), message_properties.clone())
+                .await;
+            if let Ok(file_open_response) = file_open_response {
+                plan.track_original_file(fs_file_path.to_owned(), file_open_response);
+            }
+        }
         let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
         let execution_result = plan_service
             .execute_step(plan_step, context, message_properties.clone())
@@ -243,6 +257,7 @@ plan_information:
 
 pub async fn handle_execute_plan_until(
     execute_until: usize,
+    self_feedback: bool,
     plan_id: uuid::Uuid,
     plan_storage_path: String,
     editor_url: String,
@@ -264,6 +279,7 @@ pub async fn handle_execute_plan_until(
     let _ = tokio::spawn(async move {
         execute_plan_until(
             execute_until,
+            self_feedback,
             plan_id,
             plan_storage_path,
             plan_service,

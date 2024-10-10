@@ -1,8 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::user_context::types::UserContext;
+use crate::{agentic::tool::lsp::open_file::OpenFileResponse, user_context::types::UserContext};
 
 use super::plan_step::PlanStep;
 
@@ -15,6 +15,7 @@ pub struct Plan {
     user_query: String, // this may only be useful for initial plan generation. Steps better represent the overall direction?
     checkpoint: Option<usize>,
     storage_path: String,
+    original_file_content: HashMap<String, OpenFileResponse>,
 }
 
 impl Plan {
@@ -34,6 +35,7 @@ impl Plan {
             user_query,
             checkpoint: None,
             storage_path,
+            original_file_content: Default::default(),
         }
     }
 
@@ -205,6 +207,21 @@ Plan up until now:
             })
         });
         files_in_context
+    }
+
+    /// Tracks the original file content so we can know what all has changed
+    ///
+    /// This allows us to find outline nodes which have changed and then generate
+    /// go-to-reference potential options for it
+    pub fn track_original_file(
+        &mut self,
+        fs_file_path: String,
+        file_open_response: OpenFileResponse,
+    ) {
+        if !self.original_file_content.contains_key(&fs_file_path) {
+            self.original_file_content
+                .insert(fs_file_path, file_open_response);
+        }
     }
 
     pub fn to_debug_message(&self) -> String {

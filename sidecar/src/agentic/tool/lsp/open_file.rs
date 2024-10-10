@@ -1,6 +1,6 @@
 use crate::{
     agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool},
-    chunking::text_document::Range,
+    chunking::text_document::{Position, Range},
 };
 use async_trait::async_trait;
 use gix::bstr::ByteSlice;
@@ -109,6 +109,17 @@ impl OpenFileResponse {
             .into_iter()
             .collect::<Vec<_>>()
             .len()
+    }
+
+    pub fn full_range(&self) -> Range {
+        let mut file_content_len = self.file_content_len();
+        if file_content_len != 0 {
+            file_content_len = file_content_len - 1;
+        }
+        Range::new(
+            Position::new(0, 0, 0),
+            Position::new(file_content_len, 0, 0),
+        )
     }
 }
 

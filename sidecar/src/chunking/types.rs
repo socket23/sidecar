@@ -146,6 +146,24 @@ impl OutlineNodeType {
             _ => None,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::ClassTrait => "definition.class.trait".to_owned(),
+            Self::ClassDefinition => "definition.class.declaration".to_owned(),
+            Self::Class => "definition.class".to_owned(),
+            Self::ClassName => "definition.class.name".to_owned(),
+            Self::Function => "definition.function".to_owned(),
+            Self::FunctionName => "function.name".to_owned(),
+            Self::FunctionBody => "function.body".to_owned(),
+            Self::FunctionClassName => "class.function.name".to_owned(),
+            Self::FunctionParameterIdentifier => "parameter.identifier".to_owned(),
+            Self::Decorator => "decorator".to_owned(),
+            Self::DefinitionAssignment => "definition.assignment".to_owned(),
+            Self::DefinitionIdentifier => "definition.identifier".to_owned(),
+            Self::File => "file".to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, std::hash::Hash)]

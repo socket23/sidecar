@@ -67,6 +67,25 @@ impl VariableInformation {
             language,
         }
     }
+
+    pub fn create_file(
+        range: Range,
+        fs_file_path: String,
+        name: String,
+        content: String,
+        language: String,
+    ) -> Self {
+        Self {
+            start_position: range.start_position(),
+            end_position: range.end_position(),
+            fs_file_path,
+            name,
+            variable_type: VariableType::File,
+            content,
+            language,
+        }
+    }
+
     pub fn is_selection(&self) -> bool {
         self.variable_type == VariableType::Selection
     }

@@ -27,7 +27,10 @@ use crate::{
     db::sqlite::SqlDb,
     indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
-    user_context::types::UserContext,
+    user_context::types::{
+        UserContext, VariableInformation as UserContextVariableInformation,
+        VariableType as UserContextVariableType,
+    },
     webserver::{agent::ActiveWindowData, model_selection::LLMClientConfig},
 };
 
@@ -70,6 +73,16 @@ pub enum VariableType {
     Selection,
 }
 
+impl VariableType {
+    fn from_user_context_variable_type(variable_type: UserContextVariableType) -> Self {
+        match variable_type {
+            UserContextVariableType::CodeSymbol => Self::CodeSymbol,
+            UserContextVariableType::File => Self::File,
+            UserContextVariableType::Selection => Self::CodeSymbol,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VariableInformation {
     pub start_position: Position,
@@ -102,6 +115,22 @@ impl VariableInformation {
 ```\n"#
         );
         prompt
+    }
+
+    pub fn from_internal_variable_information(
+        variable_information: UserContextVariableInformation,
+    ) -> Self {
+        Self {
+            start_position: variable_information.start_position,
+            end_position: variable_information.end_position,
+            fs_file_path: variable_information.fs_file_path,
+            name: variable_information.name,
+            variable_type: VariableType::from_user_context_variable_type(
+                variable_information.variable_type,
+            ),
+            content: variable_information.content,
+            language: variable_information.language,
+        }
     }
 }
 
@@ -335,6 +364,11 @@ impl ConversationMessage {
 
     pub fn answer(&self) -> Option<Answer> {
         self.answer.clone()
+    }
+
+    pub fn extend_user_variables(mut self, user_variable: Vec<VariableInformation>) -> Self {
+        self.user_variables.extend(user_variable);
+        self
     }
 
     pub fn add_user_variable(&mut self, user_variable: VariableInformation) {

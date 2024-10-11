@@ -122,6 +122,10 @@ pub async fn check_references_on_file(
         )));
     }
     // sends over the updated plan over here
+    let _ = agent_sender.send(Ok(ConversationMessage::send_plan_forward(
+        plan_id,
+        updated_plan.clone(),
+    )));
     Ok(updated_plan)
 }
 

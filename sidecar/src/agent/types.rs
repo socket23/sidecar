@@ -22,6 +22,7 @@ use tracing::{debug, info};
 
 use crate::{
     agent::llm_funcs::llm::FunctionCall,
+    agentic::tool::plan::plan::Plan,
     application::application::Application,
     chunking::{editor_parsing::EditorParsing, text_document::Position},
     db::sqlite::SqlDb,
@@ -204,9 +205,34 @@ pub struct ConversationMessage {
     // This is where we store the user context which is selected by the user,
     // we get a chance to expand on this if there is enough context window remaining
     extended_variable_information: Vec<ExtendedVariableInformation>,
+    plan: Option<Plan>,
 }
 
 impl ConversationMessage {
+    pub fn send_plan_forward(session_id: uuid::Uuid, plan: Plan) -> Self {
+        Self {
+            message_id: session_id,
+            query: "".to_owned(),
+            session_id,
+            steps_taken: vec![],
+            agent_state: AgentState::CodeEdit,
+            file_paths: vec![],
+            code_spans: vec![],
+            open_files: vec![],
+            conversation_state: ConversationState::Finished,
+            answer: None,
+            last_updated: 0,
+            created_at: 0,
+            definitions_interested_in: vec![],
+            generated_answer_context: None,
+            user_context: Default::default(),
+            user_variables: vec![],
+            active_window_data: None,
+            extended_variable_information: vec![],
+            plan: Some(plan),
+        }
+    }
+
     pub fn explain_message(session_id: uuid::Uuid, agent_state: AgentState, query: String) -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -231,6 +257,7 @@ impl ConversationMessage {
             user_context: Default::default(),
             active_window_data: None,
             extended_variable_information: vec![],
+            plan: None,
         }
     }
 
@@ -262,6 +289,7 @@ impl ConversationMessage {
             user_context: Default::default(),
             active_window_data: None,
             extended_variable_information: vec![],
+            plan: None,
         }
     }
 
@@ -289,6 +317,7 @@ impl ConversationMessage {
             user_context: Default::default(),
             active_window_data: None,
             extended_variable_information: vec![],
+            plan: None,
         }
     }
 
@@ -316,6 +345,7 @@ impl ConversationMessage {
             user_context: Default::default(),
             active_window_data: None,
             extended_variable_information: vec![],
+            plan: None,
         }
     }
 
@@ -442,6 +472,7 @@ impl ConversationMessage {
                     user_context: Default::default(),
                     active_window_data: None,
                     extended_variable_information: vec![],
+                    plan: None,
                 }
             }
             AgentAnswerStreamEvent::ReRankingFinished => {
@@ -466,6 +497,7 @@ impl ConversationMessage {
                     user_context: Default::default(),
                     active_window_data: None,
                     extended_variable_information: vec![],
+                    plan: None,
                 }
             }
             AgentAnswerStreamEvent::ReRankingStarted => {
@@ -490,6 +522,7 @@ impl ConversationMessage {
                     user_context: Default::default(),
                     active_window_data: None,
                     extended_variable_information: vec![],
+                    plan: None,
                 }
             }
         }
@@ -614,6 +647,7 @@ impl ConversationMessage {
                     user_context,
                     active_window_data: None,
                     extended_variable_information: vec![],
+                    plan: None,
                 }
             })
             .collect())

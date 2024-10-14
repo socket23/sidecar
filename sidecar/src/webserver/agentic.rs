@@ -1252,9 +1252,10 @@ pub async fn agent_session(
         cancellation_token.clone(),
     );
 
+    // TODO(skcd): Over here depending on the exchange reply mode we want to send over the
+    // response using ui_sender with the correct exchange_id and the thread_id
+
     let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-    // TODO(skcd): Re-introduce this again when we have a better way to manage
-    // server side events on the client side
     let init_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
             .json_data(json!({

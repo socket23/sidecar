@@ -94,7 +94,7 @@ impl DiagnosticWithSnippet {
     pub fn from_diagnostic_and_contents(
         diagnostic: Diagnostic,
         file_contents: &str,
-        fs_file_path: String,
+        _fs_file_path: String,
     ) -> Result<Self, DiagnosticSnippetError> {
         let Diagnostic {
             range,

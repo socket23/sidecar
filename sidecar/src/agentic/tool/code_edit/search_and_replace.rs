@@ -600,7 +600,6 @@ impl Tool for SearchAndReplaceEditing {
         let cloned_ui_sender = ui_sender.clone();
         let cloned_root_request_id = root_request_id.to_owned();
         let cloned_edit_request_id = edit_request_id.to_owned();
-        let cloned_session_id = session_id.to_owned();
         let cloned_lsp_open_file = self.lsp_open_file.clone();
         let cloned_fs_file_path = fs_file_path.to_owned();
         let cloned_editor_url = editor_url.to_owned();

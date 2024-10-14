@@ -557,7 +557,7 @@ pub async fn handle_check_references(
         editor_url,
         user_context,
         is_deep_reasoning,
-        with_lsp_enrichment,
+        with_lsp_enrichment: _with_lsp_enrichment,
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::handle_check_references({})", &user_query);
@@ -586,7 +586,7 @@ pub async fn handle_check_references(
             .await
         }
         // else, we create
-        Err(err) => {
+        Err(_err) => {
             unimplemented!("we have not implemented this branch")
         }
     };

@@ -29,6 +29,7 @@ use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::plan::plan::Plan;
 use crate::agentic::tool::plan::service::PlanService;
+use crate::agentic::tool::session::session::ExchangeReply;
 use crate::chunking::text_document::Range;
 use crate::webserver::plan::{check_plan_storage_path, create_plan};
 use crate::{application::application::Application, user_context::types::UserContext};
@@ -1211,4 +1212,77 @@ pub async fn reasoning_thread_create(
         },
     };
     Ok(json_result(response))
+}
+
+/// We keep track of the thread-id over here
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgentSessionRequest {
+    thread_id: uuid::Uuid,
+    exchange_id: String,
+    editor_url: String,
+    // The mode in which we want to reply to the exchanges
+    exchange_reply_mode: ExchangeReply,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgentSessionResponse {
+    done: bool,
+}
+
+impl ApiResponse for AgentSessionResponse {}
+
+/// Handles the agent session and either creates it or appends to it
+///
+/// Whenever we try to do an anchored or agentic editing we also go through this flow
+pub async fn agent_session(
+    Extension(_app): Extension<Application>,
+    Json(AgentSessionRequest {
+        thread_id,
+        exchange_id,
+        editor_url,
+        exchange_reply_mode: _exchange_reply_mode,
+    }): Json<AgentSessionRequest>,
+) -> Result<impl IntoResponse> {
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let _event_message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(exchange_id.to_owned(), thread_id.to_string()),
+        sender.clone(),
+        editor_url,
+        cancellation_token.clone(),
+    );
+
+    let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": thread_id.to_string(),
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = ui_event_stream.map(|ui_event: UIEventWithID| {
+        sse::Event::default()
+            .json_data(ui_event)
+            .map_err(anyhow::Error::new)
+    });
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": thread_id.to_string(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
 }

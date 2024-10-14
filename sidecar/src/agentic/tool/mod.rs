@@ -34,5 +34,6 @@ pub mod plan;
 pub mod ref_filter;
 pub mod rerank;
 pub mod search;
+pub mod session;
 pub mod swe_bench;
 pub mod r#type;

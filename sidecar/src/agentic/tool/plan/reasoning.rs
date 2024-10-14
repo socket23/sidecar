@@ -45,6 +45,7 @@ pub struct ReasoningRequest {
     plan_output_path: String,
     plan_output_content: String,
     editor_url: String,
+    session_id: String,
 }
 
 impl ReasoningRequest {
@@ -58,6 +59,7 @@ impl ReasoningRequest {
         plan_output_path: String,
         plan_output_content: String,
         editor_url: String,
+        session_id: String,
     ) -> Self {
         Self {
             user_query,
@@ -69,6 +71,7 @@ impl ReasoningRequest {
             plan_output_path,
             plan_output_content,
             editor_url,
+            session_id,
         }
     }
 }
@@ -126,6 +129,7 @@ impl Tool for ReasoningClient {
         let scratch_pad_path = context.plan_output_path.to_owned();
         let scratch_pad_content = context.plan_output_content.to_owned();
         let root_id = context.root_request_id.to_owned();
+        let session_id = context.session_id.to_owned();
         let request = LLMClientCompletionRequest::new(
             LLMType::O1Preview,
             vec![LLMClientMessage::user(self.user_message(context))],
@@ -190,6 +194,7 @@ impl Tool for ReasoningClient {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::start_edit(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                 )
@@ -201,6 +206,7 @@ impl Tool for ReasoningClient {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::delta(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
@@ -213,6 +219,7 @@ impl Tool for ReasoningClient {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::delta(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     output.to_owned(),
@@ -225,6 +232,7 @@ impl Tool for ReasoningClient {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::delta(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "\n```".to_owned(),
@@ -237,6 +245,7 @@ impl Tool for ReasoningClient {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::end(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                 )

@@ -138,5 +138,6 @@ impl Session {
     ) {
         // over here we want to convert all the previous exchanges to a context prompt
         // and then generate the appropriate things required
+        // - we have to grab a new exchange id over here before we start sending the reply over
     }
 }

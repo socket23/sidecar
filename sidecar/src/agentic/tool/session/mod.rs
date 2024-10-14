@@ -5,5 +5,6 @@
 //! working on top of
 
 pub(crate) mod chat;
+pub(crate) mod exchange;
 pub mod service;
 pub mod session;

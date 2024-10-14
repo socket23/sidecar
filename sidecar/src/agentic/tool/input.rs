@@ -59,7 +59,7 @@ use super::{
     ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
-    session::chat::SessionChatClientRequest,
+    session::{chat::SessionChatClientRequest, exchange::SessionExchangeNewRequest},
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
@@ -159,6 +159,8 @@ pub enum ToolInput {
     GoToTypeDefinition(GoToDefinitionRequest),
     // Context driven chat reply request
     ContextDrivenChatReply(SessionChatClientRequest),
+    // Create new exchange for the session
+    NewExchangeDuringSession(SessionExchangeNewRequest),
 }
 
 impl ToolInput {
@@ -232,6 +234,17 @@ impl ToolInput {
             ToolInput::GoToPreviousWord(_) => ToolType::GoToPreviousWordRange,
             ToolInput::GoToTypeDefinition(_) => ToolType::GoToTypeDefinition,
             ToolInput::ContextDrivenChatReply(_) => ToolType::ContextDrivenChatReply,
+            ToolInput::NewExchangeDuringSession(_) => ToolType::NewExchangeDuringSession,
+        }
+    }
+
+    pub fn is_new_exchange_during_session(self) -> Result<SessionExchangeNewRequest, ToolError> {
+        if let ToolInput::NewExchangeDuringSession(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::NewExchangeDuringSession,
+            ))
         }
     }
 

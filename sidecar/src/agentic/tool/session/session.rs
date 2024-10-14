@@ -1,8 +1,11 @@
 //! We can create a new session over here and its composed of exchanges
 //! The exchanges can be made by the human or the agent
 
+use std::sync::Arc;
+
 use crate::{
-    agentic::symbol::events::message_event::SymbolEventMessageProperties, repo::types::RepoRef,
+    agentic::symbol::{events::message_event::SymbolEventMessageProperties, tool_box::ToolBox},
+    repo::types::RepoRef,
     user_context::types::UserContext,
 };
 
@@ -102,16 +105,38 @@ impl Session {
         ));
     }
 
+    fn last_exchange(&self) -> Option<&Exchange> {
+        self.exchanges.last()
+    }
+
     /// This reacts to the last message and generates the reply for the user to handle
-    pub async fn reply_to_last_message(
-        &mut self,
+    ///
+    /// we should have a way to sync this up with a queue based system so we react to events
+    /// one after another
+    pub async fn reply_to_last_exchange(
+        mut self,
         exchange_reply: ExchangeReply,
-        _message_properties: SymbolEventMessageProperties,
+        tool_box: Arc<ToolBox>,
+        message_properties: SymbolEventMessageProperties,
     ) {
+        let last_exchange = self.last_exchange();
+        if last_exchange.is_none() {
+            return;
+        }
         match exchange_reply {
-            ExchangeReply::Chat => {}
+            ExchangeReply::Chat => self.chat_reply(tool_box, message_properties).await,
             ExchangeReply::Plan => {}
             ExchangeReply::AnchoredEdit => {}
         }
+    }
+
+    /// This sends back a reply to the user message, using the context we have from before
+    async fn chat_reply(
+        &mut self,
+        tool_box: Arc<ToolBox>,
+        message_properties: SymbolEventMessageProperties,
+    ) {
+        // over here we want to convert all the previous exchanges to a context prompt
+        // and then generate the appropriate things required
     }
 }

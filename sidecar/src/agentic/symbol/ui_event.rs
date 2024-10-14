@@ -10,6 +10,7 @@ use crate::{
         search::iterative::IterativeSearchEvent,
     },
     chunking::text_document::Range,
+    user_context::types::VariableInformation,
 };
 
 use super::{
@@ -335,6 +336,37 @@ impl UIEventWithID {
             event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticSymbolLevelThinking(event)),
         }
     }
+
+    /// Sends over a chat event to the frontend
+    pub fn chat_event(
+        request_id: String,
+        exchange_id: String,
+        answer_up_until_now: String,
+        delta: Option<String>,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::ChatEvent(ChatMessageEvent::new(
+                answer_up_until_now,
+                delta,
+                exchange_id,
+            )),
+        }
+    }
+
+    /// Sends over the variables we are using for this intent
+    pub fn send_variables(
+        request_id: String,
+        exchange_id: String,
+        variables: Vec<VariableInformation>,
+    ) -> Self {
+        Self {
+            request_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ReferencesUsed(
+                FrameworkReferencesUsed::new(exchange_id, variables),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -345,6 +377,7 @@ pub enum UIEvent {
     RequestEvent(RequestEvents),
     EditRequestFinished(String),
     FrameworkEvent(FrameworkEvent),
+    ChatEvent(ChatMessageEvent),
 }
 
 impl From<SymbolEventRequest> for UIEvent {
@@ -811,6 +844,21 @@ pub struct OpenFileRequest {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct FrameworkReferencesUsed {
+    exchange_id: String,
+    variables: Vec<VariableInformation>,
+}
+
+impl FrameworkReferencesUsed {
+    pub fn new(exchange_id: String, variables: Vec<VariableInformation>) -> Self {
+        Self {
+            exchange_id,
+            variables,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
 pub enum FrameworkEvent {
     RepoMapGenerationStart(String),
     RepoMapGenerationFinished(String),
@@ -825,4 +873,22 @@ pub enum FrameworkEvent {
     SearchIteration(IterativeSearchEvent),
     AgenticTopLevelThinking(String),
     AgenticSymbolLevelThinking(StepListItem),
+    ReferencesUsed(FrameworkReferencesUsed),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ChatMessageEvent {
+    answer_up_until_now: String,
+    delta: Option<String>,
+    exchange_id: String,
+}
+
+impl ChatMessageEvent {
+    pub fn new(answer_up_until_now: String, delta: Option<String>, exchange_id: String) -> Self {
+        Self {
+            answer_up_until_now,
+            delta,
+            exchange_id,
+        }
+    }
 }

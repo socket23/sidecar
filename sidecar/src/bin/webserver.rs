@@ -200,6 +200,10 @@ fn agentic_router() -> Router {
         // SWE bench route
         // This route is for software engineering benchmarking
         .route("/swe_bench", get(sidecar::webserver::agentic::swe_bench))
+        .route(
+            "/agent_session",
+            post(sidecar::webserver::agentic::agent_session),
+        )
 }
 
 fn agent_router() -> Router {

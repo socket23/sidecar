@@ -13,7 +13,7 @@ pub struct SessionExchangeNewRequest {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct SessionExchangeNewResponse {
-    exchange_id: String,
+    exchange_id: Option<String>,
 }
 
 pub struct SessionExchangeClient {

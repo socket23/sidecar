@@ -33,6 +33,7 @@ pub struct ApplyOutlineEditsToRangeRequest {
     llm_properties: LLMProperties,
     edit_request_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
+    session_id: String,
 }
 
 impl ApplyOutlineEditsToRangeRequest {
@@ -47,6 +48,7 @@ impl ApplyOutlineEditsToRangeRequest {
         llm_properties: LLMProperties,
         edit_request_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
+        session_id: String,
     ) -> Self {
         Self {
             user_instruction,
@@ -59,6 +61,7 @@ impl ApplyOutlineEditsToRangeRequest {
             llm_properties,
             edit_request_id,
             ui_sender,
+            session_id,
         }
     }
 }
@@ -185,6 +188,7 @@ impl Tool for ApplyOutlineEditsToRange {
         let edited_range = context.outline_range.clone();
         let edit_request_id = context.edit_request_id.to_owned();
         let root_request_id = context.root_request_id.to_owned();
+        let session_id = context.session_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let fs_file_path = context.edited_file.to_owned();
         let system_message = LLMClientMessage::system(self.system_message());
@@ -247,6 +251,7 @@ impl Tool for ApplyOutlineEditsToRange {
                 edit_request_id.to_owned(),
                 edited_range.clone(),
                 fs_file_path.to_owned(),
+                session_id.to_owned(),
             ));
 
             loop {
@@ -264,6 +269,7 @@ impl Tool for ApplyOutlineEditsToRange {
                                         edit_request_id.to_owned(),
                                         edited_range.clone(),
                                         fs_file_path.to_owned(),
+                                        session_id.to_owned(),
                                     ));
                                 }
                             }
@@ -280,6 +286,7 @@ impl Tool for ApplyOutlineEditsToRange {
                                 edit_request_id.to_owned(),
                                 edited_range.clone(),
                                 fs_file_path.to_owned(),
+                                session_id.to_owned(),
                             ));
                         } else {
                             // send over the original selection over here since we had an error
@@ -289,6 +296,7 @@ impl Tool for ApplyOutlineEditsToRange {
                                 edit_request_id.to_owned(),
                                 edited_range.clone(),
                                 fs_file_path.to_owned(),
+                                session_id.to_owned(),
                             ));
                         }
                         stream_result = Some(result);

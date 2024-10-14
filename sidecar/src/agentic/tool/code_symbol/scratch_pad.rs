@@ -556,7 +556,8 @@ impl Tool for ScratchPadAgentBroker {
         let user_messages_context = self.user_message(context, llm_properties.llm().clone());
         let is_cache_warmup = user_messages_context.is_cache_warmup;
         let user_messages = user_messages_context.user_messages;
-        let root_request_id = user_messages_context.root_request_id;
+        let root_request_id = user_messages_context.root_request_id.to_owned();
+        let session_id = user_messages_context.root_request_id;
         let mut request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),
             // o1-preview does not support system-messages
@@ -613,6 +614,7 @@ impl Tool for ScratchPadAgentBroker {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::start_edit(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                 )
@@ -624,6 +626,7 @@ impl Tool for ScratchPadAgentBroker {
                 editor_url.to_owned(),
                 EditedCodeStreamingRequest::delta(
                     edit_request_id.to_owned(),
+                    session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
@@ -643,6 +646,7 @@ impl Tool for ScratchPadAgentBroker {
                                     editor_url.to_owned(),
                                     EditedCodeStreamingRequest::delta(
                                         edit_request_id.to_owned(),
+                                        session_id.to_owned(),
                                         scratch_pad_range.clone(),
                                         fs_file_path.to_owned(),
                                         delta.to_owned(),
@@ -661,6 +665,7 @@ impl Tool for ScratchPadAgentBroker {
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::delta(
                                 edit_request_id.to_owned(),
+                                session_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
@@ -670,6 +675,7 @@ impl Tool for ScratchPadAgentBroker {
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::end(
                                 edit_request_id.to_owned(),
+                                session_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                             ).set_apply_directly()
@@ -680,6 +686,7 @@ impl Tool for ScratchPadAgentBroker {
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::delta(
                                 edit_request_id.to_owned(),
+                                session_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
@@ -689,6 +696,7 @@ impl Tool for ScratchPadAgentBroker {
                             editor_url.to_owned(),
                             EditedCodeStreamingRequest::end(
                                 edit_request_id.to_owned(),
+                                session_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                             ).set_apply_directly()

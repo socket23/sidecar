@@ -86,6 +86,8 @@ pub struct SearchAndReplaceEditingRequest {
     lsp_errors: Vec<DiagnosticWithSnippet>,
     // use a is_warmup field
     is_warmup: bool,
+    // the session id to which this edit belongs to
+    session_id: String,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -110,6 +112,7 @@ impl SearchAndReplaceEditingRequest {
         previous_user_queries: Vec<String>,
         lsp_errors: Vec<DiagnosticWithSnippet>,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
+        session_id: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -130,6 +133,7 @@ impl SearchAndReplaceEditingRequest {
             previous_user_queries,
             lsp_errors,
             is_warmup,
+            session_id,
         }
     }
 }
@@ -543,6 +547,7 @@ impl Tool for SearchAndReplaceEditing {
             };
         }
         let edit_request_id = context.edit_request_id.to_owned();
+        let session_id = context.session_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
         let system_message = LLMClientMessage::system(self.system_message());
@@ -595,6 +600,7 @@ impl Tool for SearchAndReplaceEditing {
         let cloned_ui_sender = ui_sender.clone();
         let cloned_root_request_id = root_request_id.to_owned();
         let cloned_edit_request_id = edit_request_id.to_owned();
+        let cloned_session_id = session_id.to_owned();
         let cloned_lsp_open_file = self.lsp_open_file.clone();
         let cloned_fs_file_path = fs_file_path.to_owned();
         let cloned_editor_url = editor_url.to_owned();
@@ -658,6 +664,7 @@ impl Tool for SearchAndReplaceEditing {
                                 editor_url.to_owned(),
                                 EditedCodeStreamingRequest::start_edit(
                                     edit_request_id.to_owned(),
+                                    session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
                                 ),
@@ -668,6 +675,7 @@ impl Tool for SearchAndReplaceEditing {
                                 editor_url.to_owned(),
                                 EditedCodeStreamingRequest::delta(
                                     edit_request_id.to_owned(),
+                                    session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
                                     "```\n".to_owned(),
@@ -681,6 +689,7 @@ impl Tool for SearchAndReplaceEditing {
                                 editor_url.to_owned(),
                                 EditedCodeStreamingRequest::delta(
                                     edit_request_id.to_owned(),
+                                    session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
                                     delta,
@@ -694,6 +703,7 @@ impl Tool for SearchAndReplaceEditing {
                                 editor_url.to_owned(),
                                 EditedCodeStreamingRequest::delta(
                                     edit_request_id.to_owned(),
+                                    session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
                                     "\n```".to_owned(),
@@ -705,6 +715,7 @@ impl Tool for SearchAndReplaceEditing {
                                 editor_url.to_owned(),
                                 EditedCodeStreamingRequest::end(
                                     edit_request_id.to_owned(),
+                                    session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
                                 ),

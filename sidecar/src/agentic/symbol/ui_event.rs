@@ -207,6 +207,7 @@ impl UIEventWithID {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        session_id: String,
     ) -> Self {
         Self {
             request_id,
@@ -216,6 +217,7 @@ impl UIEventWithID {
                     edit_request_id,
                     range,
                     fs_file_path,
+                    session_id,
                 ),
             ),
         }
@@ -228,6 +230,7 @@ impl UIEventWithID {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        session_id: String,
     ) -> Self {
         Self {
             request_id,
@@ -236,6 +239,7 @@ impl UIEventWithID {
                 edit_request_id,
                 range,
                 fs_file_path,
+                session_id,
             )),
         }
     }
@@ -248,6 +252,7 @@ impl UIEventWithID {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        session_id: String,
     ) -> Self {
         Self {
             request_id,
@@ -258,6 +263,7 @@ impl UIEventWithID {
                     range,
                     fs_file_path,
                     delta,
+                    session_id,
                 ),
             ),
         }
@@ -438,6 +444,8 @@ pub enum EditedCodeStreamingEvent {
 #[derive(Debug, serde::Serialize)]
 pub struct EditedCodeStreamingRequest {
     edit_request_id: String,
+    // This is the id of the session the edit is part of
+    session_id: String,
     range: Range,
     fs_file_path: String,
     updated_code: Option<String>,
@@ -446,9 +454,15 @@ pub struct EditedCodeStreamingRequest {
 }
 
 impl EditedCodeStreamingRequest {
-    pub fn start_edit(edit_request_id: String, range: Range, fs_file_path: String) -> Self {
+    pub fn start_edit(
+        edit_request_id: String,
+        session_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
         Self {
             edit_request_id,
+            session_id,
             range,
             fs_file_path,
             updated_code: None,
@@ -459,12 +473,14 @@ impl EditedCodeStreamingRequest {
 
     pub fn delta(
         edit_request_id: String,
+        session_id: String,
         range: Range,
         fs_file_path: String,
         delta: String,
     ) -> Self {
         Self {
             edit_request_id,
+            session_id,
             range,
             fs_file_path,
             updated_code: None,
@@ -473,9 +489,15 @@ impl EditedCodeStreamingRequest {
         }
     }
 
-    pub fn end(edit_request_id: String, range: Range, fs_file_path: String) -> Self {
+    pub fn end(
+        edit_request_id: String,
+        session_id: String,
+        range: Range,
+        fs_file_path: String,
+    ) -> Self {
         Self {
             edit_request_id,
+            session_id,
             range,
             fs_file_path,
             updated_code: None,
@@ -586,12 +608,14 @@ impl SymbolEventSubStepRequest {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        session_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
             event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCodeStreaming(
                 EditedCodeStreamingRequest {
                     edit_request_id,
+                    session_id,
                     range,
                     fs_file_path,
                     event: EditedCodeStreamingEvent::Start,
@@ -607,12 +631,14 @@ impl SymbolEventSubStepRequest {
         edit_request_id: String,
         range: Range,
         fs_file_path: String,
+        session_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
             event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCodeStreaming(
                 EditedCodeStreamingRequest {
                     edit_request_id,
+                    session_id,
                     range,
                     fs_file_path,
                     updated_code: None,
@@ -645,12 +671,14 @@ impl SymbolEventSubStepRequest {
         range: Range,
         fs_file_path: String,
         delta: String,
+        session_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
             event: SymbolEventSubStep::Edit(SymbolEventEditRequest::EditCodeStreaming(
                 EditedCodeStreamingRequest {
                     edit_request_id,
+                    session_id,
                     range,
                     fs_file_path,
                     event: EditedCodeStreamingEvent::Delta(delta),

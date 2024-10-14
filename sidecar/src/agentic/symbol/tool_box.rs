@@ -5453,6 +5453,8 @@ FILEPATH: {fs_file_path}
             )
             .await
             .unwrap_or_default();
+
+        let session_id = message_properties.root_request_id().to_owned();
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
@@ -5476,6 +5478,7 @@ FILEPATH: {fs_file_path}
             sub_symbol.previous_user_queries().to_vec(),
             lsp_diagnostic_with_content,
             false,
+            session_id,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5570,6 +5573,7 @@ FILEPATH: {fs_file_path}
                 .collect::<Vec<_>>()
                 .join("\n")
         });
+        let session_id = message_properties.root_request_id().to_owned();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5600,6 +5604,7 @@ FILEPATH: {fs_file_path}
             message_properties.ui_sender().clone(),
             true, // disable thinking by default
             None,
+            session_id.to_owned(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5647,6 +5652,7 @@ FILEPATH: {fs_file_path}
                 // this is the special request id sent along with every edit which we want to make
                 uuid::Uuid::new_v4().to_string(),
                 message_properties.ui_sender(),
+                session_id.to_owned(),
             ));
             let response = self
                 .tools
@@ -5711,6 +5717,7 @@ FILEPATH: {fs_file_path}
                 .collect::<Vec<_>>()
                 .join("\n")
         });
+        let session_id = message_properties.root_request_id().to_owned();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5736,6 +5743,7 @@ FILEPATH: {fs_file_path}
             message_properties.ui_sender(),
             true, // disable thinking by default
             user_provided_context,
+            session_id,
         ));
         self.tools
             .invoke(request)
@@ -8699,6 +8707,7 @@ FILEPATH: {fs_file_path}
             .ok();
         let sender = message_properties.ui_sender();
         let request_id = message_properties.request_id_str();
+        let session_id = message_properties.root_request_id().to_owned();
         let editor_url = message_properties.editor_url();
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
@@ -8726,6 +8735,7 @@ FILEPATH: {fs_file_path}
             vec![],
             vec![],
             true,
+            session_id,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();
@@ -9233,6 +9243,8 @@ FILEPATH: {fs_file_path}
         let scratch_pad_content = self
             .file_open(scratch_pad_path.to_owned(), message_properties.clone())
             .await?;
+
+        let session_id = message_properties.request_id_str().to_owned();
         // for the recent edits made we want to grab the l2 cache over here
         let l2_cache = recente_edits_made.l2_changes();
         let tool_input = ToolInput::Reasoning(ReasoningRequest::new(
@@ -9245,6 +9257,7 @@ FILEPATH: {fs_file_path}
             scratch_pad_path.to_owned(),
             scratch_pad_content.contents(),
             message_properties.editor_url().to_owned(),
+            session_id,
         ));
         let reasoning_output = self
             .tools

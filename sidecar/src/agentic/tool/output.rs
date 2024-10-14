@@ -49,7 +49,7 @@ use super::{
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
-    session::chat::SessionChatClientResponse,
+    session::{chat::SessionChatClientResponse, exchange::SessionExchangeNewResponse},
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
 
@@ -187,9 +187,15 @@ pub enum ToolOutput {
     GoToTypeDefinition(GoToDefinitionResponse),
     // context driven chat reply
     ContextDriveChatReply(SessionChatClientResponse),
+    // creates a new exchange for the session
+    NewExchangeDuringSession(SessionExchangeNewResponse),
 }
 
 impl ToolOutput {
+    pub fn new_exchange_during_session(response: SessionExchangeNewResponse) -> Self {
+        ToolOutput::NewExchangeDuringSession(response)
+    }
+
     pub fn context_driven_chat_reply(response: SessionChatClientResponse) -> Self {
         ToolOutput::ContextDriveChatReply(response)
     }

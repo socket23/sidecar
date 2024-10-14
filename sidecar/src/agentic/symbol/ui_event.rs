@@ -21,6 +21,7 @@ use super::{
 #[derive(Debug, serde::Serialize)]
 pub struct UIEventWithID {
     request_id: String,
+    exchange_id: String,
     event: UIEvent,
 }
 
@@ -28,6 +29,7 @@ impl UIEventWithID {
     pub fn code_iteration_finished(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::CodeIterationFinished(request_id)),
         }
     }
@@ -35,6 +37,7 @@ impl UIEventWithID {
     pub fn start_long_context_search(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::LongContextSearchStart(request_id)),
         }
     }
@@ -42,6 +45,7 @@ impl UIEventWithID {
     pub fn finish_long_context_search(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::LongContextSearchFinished(request_id)),
         }
     }
@@ -49,6 +53,7 @@ impl UIEventWithID {
     pub fn finish_edit_request(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::EditRequestFinished(request_id),
         }
     }
@@ -57,6 +62,7 @@ impl UIEventWithID {
     pub fn repo_map_gen_start(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::RepoMapGenerationStart(request_id)),
         }
     }
@@ -65,20 +71,23 @@ impl UIEventWithID {
     pub fn repo_map_gen_end(request_id: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::RepoMapGenerationFinished(request_id)),
         }
     }
 
     pub fn from_symbol_event(request_id: String, input: SymbolEventRequest) -> Self {
         Self {
-            request_id: request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEvent(input),
         }
     }
 
     pub fn symbol_location(request_id: String, symbol_location: SymbolLocation) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolLoctationUpdate(symbol_location),
         }
     }
@@ -88,7 +97,8 @@ impl UIEventWithID {
         sub_symbol_request: SymbolEventSubStepRequest,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(sub_symbol_request),
         }
     }
@@ -99,7 +109,8 @@ impl UIEventWithID {
         probe_answer: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::new(
                 symbol_identifier,
                 SymbolEventSubStep::Probe(SymbolEventProbeRequest::ProbeAnswer(probe_answer)),
@@ -109,14 +120,16 @@ impl UIEventWithID {
 
     pub fn probing_started_event(request_id: String) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::RequestEvent(RequestEvents::ProbingStart),
         }
     }
 
     pub fn probing_finished_event(request_id: String, response: String) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::RequestEvent(RequestEvents::ProbeFinished(
                 RequestEventProbeFinished::new(response),
             )),
@@ -130,7 +143,8 @@ impl UIEventWithID {
         fs_file_path: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(
                 SymbolEventSubStepRequest::range_selection_for_edit(
                     symbol_identifier,
@@ -149,7 +163,8 @@ impl UIEventWithID {
         edited_code: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::edited_code(
                 symbol_identifier,
                 range,
@@ -167,7 +182,8 @@ impl UIEventWithID {
         tool_use_thinking: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id,
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::code_correctness_action(
                 symbol_identifier,
                 range,
@@ -184,6 +200,7 @@ impl UIEventWithID {
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::InitialSearchSymbols(
                 InitialSearchSymbolEvent::new(request_id, symbols),
             )),
@@ -194,6 +211,7 @@ impl UIEventWithID {
     pub fn open_file_event(request_id: String, fs_file_path: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::OpenFile(OpenFileRequest {
                 fs_file_path,
                 request_id,
@@ -211,7 +229,8 @@ impl UIEventWithID {
         session_id: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(
                 SymbolEventSubStepRequest::edited_code_stream_start(
                     symbol_identifier,
@@ -234,7 +253,8 @@ impl UIEventWithID {
         session_id: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::edited_code_stream_end(
                 symbol_identifier,
                 edit_request_id,
@@ -256,7 +276,8 @@ impl UIEventWithID {
         session_id: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(
                 SymbolEventSubStepRequest::edited_code_stream_delta(
                     symbol_identifier,
@@ -277,7 +298,8 @@ impl UIEventWithID {
         edit_request_id: String,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::thinking_for_edit(
                 symbol_identifier,
                 thinking,
@@ -289,6 +311,7 @@ impl UIEventWithID {
     pub fn found_reference(request_id: String, references: FoundReference) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::ReferenceFound(references)),
         }
     }
@@ -301,6 +324,7 @@ impl UIEventWithID {
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::RelevantReference(
                 RelevantReference::new(&fs_file_path, &symbol_name, &thinking),
             )),
@@ -310,20 +334,23 @@ impl UIEventWithID {
     pub fn grouped_by_reason_references(request_id: String, references: GroupedReferences) -> Self {
         Self {
             request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::GroupedReferences(references)),
         }
     }
 
     pub fn search_iteration_event(request_id: String, event: IterativeSearchEvent) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::SearchIteration(event)),
         }
     }
 
     pub fn agentic_top_level_thinking(request_id: String, thinking: &str) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticTopLevelThinking(
                 thinking.to_owned(),
             )),
@@ -332,7 +359,8 @@ impl UIEventWithID {
 
     pub fn agentic_symbol_level_thinking(request_id: String, event: StepListItem) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: request_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticSymbolLevelThinking(event)),
         }
     }
@@ -345,7 +373,8 @@ impl UIEventWithID {
         delta: Option<String>,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
             event: UIEvent::ChatEvent(ChatMessageEvent::new(
                 answer_up_until_now,
                 delta,
@@ -361,7 +390,8 @@ impl UIEventWithID {
         variables: Vec<VariableInformation>,
     ) -> Self {
         Self {
-            request_id,
+            request_id: request_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
             event: UIEvent::FrameworkEvent(FrameworkEvent::ReferencesUsed(
                 FrameworkReferencesUsed::new(exchange_id, variables),
             )),

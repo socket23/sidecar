@@ -114,6 +114,4 @@ impl Session {
             ExchangeReply::AnchoredEdit => {}
         }
     }
-
-    pub async fn generate_plan_from_last_message(&mut self) {}
 }

@@ -1,6 +1,7 @@
 //! Contains the handler for agnetic requests and how they work
 
 use super::model_selection::LLMClientConfig;
+use super::plan::check_session_storage_path;
 use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
@@ -1217,7 +1218,7 @@ pub async fn reasoning_thread_create(
 /// We keep track of the thread-id over here
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgentSessionRequest {
-    thread_id: uuid::Uuid,
+    session_id: uuid::Uuid,
     exchange_id: String,
     editor_url: String,
     // The mode in which we want to reply to the exchanges
@@ -1235,9 +1236,9 @@ impl ApiResponse for AgentSessionResponse {}
 ///
 /// Whenever we try to do an anchored or agentic editing we also go through this flow
 pub async fn agent_session(
-    Extension(_app): Extension<Application>,
+    Extension(app): Extension<Application>,
     Json(AgentSessionRequest {
-        thread_id,
+        session_id,
         exchange_id,
         editor_url,
         exchange_reply_mode: _exchange_reply_mode,
@@ -1246,11 +1247,14 @@ pub async fn agent_session(
     let cancellation_token = tokio_util::sync::CancellationToken::new();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let _event_message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(exchange_id.to_owned(), thread_id.to_string()),
+        SymbolEventRequestId::new(exchange_id.to_owned(), session_id.to_string()),
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
     );
+
+    let _session_storage_path =
+        check_session_storage_path(app.config.clone(), session_id.to_string());
 
     // TODO(skcd): Over here depending on the exchange reply mode we want to send over the
     // response using ui_sender with the correct exchange_id and the thread_id
@@ -1259,7 +1263,7 @@ pub async fn agent_session(
     let init_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
             .json_data(json!({
-                "session_id": thread_id.to_string(),
+                "session_id": session_id.to_string(),
             }))
             // This should never happen, so we force an unwrap.
             .expect("failed to serialize initialization object"))
@@ -1278,7 +1282,7 @@ pub async fn agent_session(
         Ok(sse::Event::default()
             .json_data(json!(
                 {"done": "[CODESTORY_DONE]".to_owned(),
-                "session_id": thread_id.to_string(),
+                "session_id": session_id.to_string(),
             }))
             .expect("failed to send done object"))
     });

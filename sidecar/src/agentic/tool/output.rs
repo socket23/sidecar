@@ -49,6 +49,7 @@ use super::{
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
+    session::chat::SessionChatClientResponse,
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
 
@@ -184,9 +185,15 @@ pub enum ToolOutput {
     GoToPreviousWord(GoToPreviousWordResponse),
     // Go to type definition
     GoToTypeDefinition(GoToDefinitionResponse),
+    // context driven chat reply
+    ContextDriveChatReply(SessionChatClientResponse),
 }
 
 impl ToolOutput {
+    pub fn context_driven_chat_reply(response: SessionChatClientResponse) -> Self {
+        ToolOutput::ContextDriveChatReply(response)
+    }
+
     pub fn go_to_type_definition(response: GoToDefinitionResponse) -> Self {
         ToolOutput::GoToTypeDefinition(response)
     }

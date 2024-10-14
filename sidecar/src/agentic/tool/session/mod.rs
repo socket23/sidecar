@@ -4,4 +4,6 @@
 //! This keeps track of all the different type of edits which we are going to be
 //! working on top of
 
+pub(crate) mod chat;
+pub mod service;
 pub mod session;

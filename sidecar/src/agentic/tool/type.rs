@@ -119,6 +119,8 @@ pub enum ToolType {
     GoToPreviousWordRange,
     // Go to type definition
     GoToTypeDefinition,
+    // Context driven chat reply
+    ContextDrivenChatReply,
 }
 
 impl std::fmt::Display for ToolType {
@@ -199,6 +201,7 @@ impl std::fmt::Display for ToolType {
             ToolType::PlanStepAdd => write!(f, "Plan step add"),
             ToolType::GoToPreviousWordRange => write!(f, "Go to previous word range"),
             ToolType::GoToTypeDefinition => write!(f, "Go to type definition"),
+            ToolType::ContextDrivenChatReply => write!(f, "Context driven chat reply"),
         }
     }
 }

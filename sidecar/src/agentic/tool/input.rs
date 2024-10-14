@@ -59,6 +59,7 @@ use super::{
     ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
+    session::chat::SessionChatClientRequest,
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
@@ -156,6 +157,8 @@ pub enum ToolInput {
     GoToPreviousWord(GoToPreviousWordRequest),
     // Go to type definition
     GoToTypeDefinition(GoToDefinitionRequest),
+    // Context driven chat reply request
+    ContextDrivenChatReply(SessionChatClientRequest),
 }
 
 impl ToolInput {
@@ -228,6 +231,17 @@ impl ToolInput {
             ToolInput::PlanStepAdd(_) => ToolType::PlanStepAdd,
             ToolInput::GoToPreviousWord(_) => ToolType::GoToPreviousWordRange,
             ToolInput::GoToTypeDefinition(_) => ToolType::GoToTypeDefinition,
+            ToolInput::ContextDrivenChatReply(_) => ToolType::ContextDrivenChatReply,
+        }
+    }
+
+    pub fn is_session_context_driven_chat_reply(
+        self,
+    ) -> Result<SessionChatClientRequest, ToolError> {
+        if let ToolInput::ContextDrivenChatReply(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ContextDrivenChatReply))
         }
     }
 

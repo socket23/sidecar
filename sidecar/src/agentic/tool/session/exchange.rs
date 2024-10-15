@@ -11,9 +11,24 @@ pub struct SessionExchangeNewRequest {
     editor_url: String,
 }
 
+impl SessionExchangeNewRequest {
+    pub fn new(session_id: String, editor_url: String) -> Self {
+        Self {
+            session_id,
+            editor_url,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct SessionExchangeNewResponse {
     exchange_id: Option<String>,
+}
+
+impl SessionExchangeNewResponse {
+    pub fn exchange_id(self) -> Option<String> {
+        self.exchange_id
+    }
 }
 
 pub struct SessionExchangeClient {

@@ -10,10 +10,11 @@ use crate::{
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum ExchangeReply {
-    Chat,
-    Plan,
-    AnchoredEdit,
+#[serde(rename_all = "PascalCase")]
+pub enum AideAgentMode {
+    Edit = 1,
+    Plan = 2,
+    Chat = 3,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -115,7 +116,7 @@ impl Session {
     /// one after another
     pub async fn reply_to_last_exchange(
         mut self,
-        exchange_reply: ExchangeReply,
+        exchange_reply: AideAgentMode,
         tool_box: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
     ) {
@@ -124,9 +125,9 @@ impl Session {
             return;
         }
         match exchange_reply {
-            ExchangeReply::Chat => self.chat_reply(tool_box, message_properties).await,
-            ExchangeReply::Plan => {}
-            ExchangeReply::AnchoredEdit => {}
+            AideAgentMode::Chat => self.chat_reply(tool_box, message_properties).await,
+            AideAgentMode::Plan => {}
+            AideAgentMode::Edit => {}
         }
     }
 

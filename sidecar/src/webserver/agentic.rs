@@ -30,7 +30,7 @@ use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::plan::plan::Plan;
 use crate::agentic::tool::plan::service::PlanService;
-use crate::agentic::tool::session::session::ExchangeReply;
+use crate::agentic::tool::session::session::AideAgentMode;
 use crate::chunking::text_document::Range;
 use crate::webserver::plan::{check_plan_storage_path, create_plan};
 use crate::{application::application::Application, user_context::types::UserContext};
@@ -1221,8 +1221,10 @@ pub struct AgentSessionRequest {
     session_id: uuid::Uuid,
     exchange_id: String,
     editor_url: String,
+    query: String,
+    user_context: UserContext,
     // The mode in which we want to reply to the exchanges
-    exchange_reply_mode: ExchangeReply,
+    agent_mode: AideAgentMode,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1241,7 +1243,9 @@ pub async fn agent_session(
         session_id,
         exchange_id,
         editor_url,
-        exchange_reply_mode: _exchange_reply_mode,
+        query: _query,
+        user_context,
+        agent_mode,
     }): Json<AgentSessionRequest>,
 ) -> Result<impl IntoResponse> {
     let cancellation_token = tokio_util::sync::CancellationToken::new();

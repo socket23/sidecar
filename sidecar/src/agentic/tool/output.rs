@@ -739,6 +739,13 @@ impl ToolOutput {
         }
     }
 
+    pub fn new_exchange_response(self) -> Option<SessionExchangeNewResponse> {
+        match self {
+            ToolOutput::NewExchangeDuringSession(response) => Some(response),
+            _ => None,
+        }
+    }
+
     // pub fn plan_updater_output(self) -> Option<_> {
     //     match self {
     //         ToolOutput::PlanUpdater(response) => Some(response),

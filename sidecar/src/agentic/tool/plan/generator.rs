@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use quick_xml::de::from_str;
 use serde::Deserialize;
 use std::{sync::Arc, time::Instant};
+use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 use llm_client::{
@@ -12,7 +13,7 @@ use llm_client::{
 
 use crate::{
     agentic::{
-        symbol::identifier::LLMProperties,
+        symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
         tool::{
             errors::ToolError, input::ToolInput, lsp::file_diagnostics::DiagnosticMap,
             output::ToolOutput, r#type::Tool,
@@ -22,33 +23,6 @@ use crate::{
 };
 
 use super::plan_step::PlanStep;
-
-pub struct StreamedPlanGenerationForEditor {
-    client: reqwest::Client,
-}
-
-impl StreamedPlanGenerationForEditor {
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-        }
-    }
-
-    pub async fn send_edit_event(
-        &self,
-        editor_url: String,
-        edit_event: EditedCodeStreamingRequest,
-    ) {
-        let editor_endpoint = editor_url + "/apply_edits_streamed";
-
-        let _ = self
-            .client
-            .post(editor_endpoint)
-            .body(serde_json::to_string(&edit_event).expect("to work"))
-            .send()
-            .await;
-    }
-}
 
 // consider possibility of constraining number of steps
 #[derive(Debug, Clone)]
@@ -63,6 +37,7 @@ pub struct StepGeneratorRequest {
     exchange_id: String,
     // if we should stream the steps which we are generating
     stream_steps: bool,
+    ui_event: UnboundedSender<UIEventWithID>,
 }
 
 impl StepGeneratorRequest {
@@ -73,6 +48,7 @@ impl StepGeneratorRequest {
         editor_url: String,
         exchange_id: String,
         stream_steps: bool,
+        ui_event: UnboundedSender<UIEventWithID>,
     ) -> Self {
         Self {
             user_query,
@@ -83,6 +59,7 @@ impl StepGeneratorRequest {
             diagnostics: None,
             exchange_id,
             stream_steps,
+            ui_event,
         }
     }
 

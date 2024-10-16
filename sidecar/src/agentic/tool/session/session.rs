@@ -154,6 +154,10 @@ impl Session {
         &self.storage_path
     }
 
+    pub fn exchanges(&self) -> usize {
+        self.exchanges.len()
+    }
+
     pub fn human_message(
         mut self,
         exchange_id: String,
@@ -208,6 +212,7 @@ impl Session {
         tool_box: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
+        println!("session::chat_reply");
         // over here we want to convert all the previous exchanges to a context prompt
         // and then generate the appropriate things required
         let last_exchange = self.last_exchange();
@@ -248,11 +253,11 @@ impl Session {
         tool_box: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Session, SymbolError> {
+        println!("session::human_chat_message_reply");
         // take everything until the exchange id of the message we are supposed to
         // reply to
-        let previous_messages = &self.exchanges[0..self.exchanges.len() - 1];
         let mut converted_messages = vec![];
-        for previous_message in previous_messages.into_iter() {
+        for previous_message in self.exchanges.iter() {
             converted_messages.push(previous_message.to_conversation_message().await);
         }
 

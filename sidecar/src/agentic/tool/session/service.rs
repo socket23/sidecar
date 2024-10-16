@@ -54,6 +54,10 @@ impl SessionService {
         println!("session_service::human_message::start");
         let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
         {
+            println!(
+                "session_service::load_from_storage_ok::session_id({})",
+                &session_id
+            );
             session
         } else {
             self.create_new_session(
@@ -75,7 +79,10 @@ impl SessionService {
             repo_ref,
         );
 
-        println!("session_service::reply_to_last_exchange");
+        println!(
+            "session_service::reply_to_last_exchange::exchanges({})",
+            session.exchanges()
+        );
 
         // now react to the last message
         session = session

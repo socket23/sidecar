@@ -1257,6 +1257,7 @@ pub async fn agent_session(
     // bring this back later
     let agent_mode = AideAgentMode::Chat;
     println!("webserver::agent_session::hit");
+    println!("webserver::agent_session::session_id({})", &session_id);
     let cancellation_token = tokio_util::sync::CancellationToken::new();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     let message_properties = SymbolEventMessageProperties::new(

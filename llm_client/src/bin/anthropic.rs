@@ -1,8 +1,7 @@
-use futures::{stream, StreamExt};
 use llm_client::{
     clients::{
         anthropic::AnthropicClient,
-        types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMClientRole, LLMType},
+        types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
     },
     provider::{AnthropicAPIKey, LLMProviderAPIKeys},
 };
@@ -12,7 +11,7 @@ async fn main() {
     let anthropic_api_key = "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".to_owned();
     let anthropic_client = AnthropicClient::new();
     let api_key = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(anthropic_api_key));
-    let _system_prompt = r#"Act as an expert software developer.
+    let system_prompt = r#"Act as an expert software developer.
 Always use best practices when coding.
 Respect and use existing conventions, libraries, etc that are already present in the code base.
 You are diligent and tireless!
@@ -69,132 +68,19 @@ You NEVER leave comments describing code without implementing it!
 You always COMPLETELY IMPLEMENT the needed code!
 ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
 You always put your thinking in <thinking> section before you suggest *SEARCH/REPLACE* blocks"#;
-    fn _example_messages() -> Vec<LLMClientMessage> {
+    fn example_messages() -> Vec<LLMClientMessage> {
         vec![
-            LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
-            LLMClientMessage::assistant(
-                r#"<thinking>
-To make this change we need to modify `mathweb/flask/app.py` to:
-
-1. Import the math package.
-2. Remove the existing factorial() function.
-3. Update get_factorial() to call math.factorial instead.
-</thinking>
-
-Here are the *SEARCH/REPLACE* blocks:
-
-mathweb/flask/app.py
-```python
-<<<<<<< SEARCH
-from flask import Flask
-=======
-import math
-from flask import Flask
->>>>>>> REPLACE
-```
-
-mathweb/flask/app.py
-```python
-<<<<<<< SEARCH
-def factorial(n):
-"compute factorial"
-
-if n == 0:
-    return 1
-else:
-    return n * factorial(n-1)
-
-=======
->>>>>>> REPLACE
-```
-
-mathweb/flask/app.py
-```python
-<<<<<<< SEARCH
-return str(factorial(n))
-=======
-return str(math.factorial(n))
->>>>>>> REPLACE
-```"#
-                    .to_owned(),
-            )
-            .cache_point(),
+            LLMClientMessage::user(r#"<selection>\n\n\n</selection>"#.to_owned()),
+            LLMClientMessage::user("\nThese are the git diff from the files which were recently edited sorted by the least recent to the most recent:\n<diff_recent_changes>\n\n".to_owned()),
+            LLMClientMessage::user("\n</diff_recent_changes>\n".to_owned()),
+            LLMClientMessage::user("<attached_context>\n<selection>\n\n\n</selection>\n</attached_context>\nsay \"HI\"".to_owned()),
+            LLMClientMessage::assistant("HI".to_owned()),
+            LLMClientMessage::user("<attached_context>\n<selection>\n\n\n</selection>\n</attached_context>\nwhat did I ask before".to_owned()),
         ]
     }
-    let _user_request = r#"<extra_symbols_will_be_created>
-<symbol>
-FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
-code_editing_stop
-</symbol>
-</extra_symbols_will_be_created>This is the extra data which you can use:
-<extra_data>
-FILEPATH: /Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProbeStopRequest {
-    request_id: String,
-}
-</extra_data>
-<code_to_edit_selection>
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProbeStopRequest {
-    request_id: String,
-}
-</code_to_edit_selection>
-Only edit the code in <code_to_edit_selection> my instructions are:
-<user_instruction>
-We can reuse the existing ProbeStopRequest struct for the new API as it already contains the necessary request_id field.
-</user_insturction>
-
-<fs_file_path>
-/Users/skcd/test_repo/sidecar/sidecar/src/webserver/agentic.rs
-</fs_file_path>"#;
-    let file_paths = vec![
-        "/Users/skcd/scratch/sidecar/sidecar/src/webserver/agentic.rs".to_owned(),
-        "/Users/skcd/scratch/sidecar/sidecar/src/bin/webserver.rs".to_owned(),
-    ];
-    let file_content_prompt = stream::iter(file_paths)
-        .map(|file_path| async move {
-            let file_content = tokio::fs::read(file_path.to_owned())
-                .await
-                .expect("to work");
-            let file_content_str = String::from_utf8(file_content).expect("to work");
-            format!(
-                r#"<fs_file_path>
-{file_path}
-</fs_file_path>
-<file_content>
-{file_content_str}
-</file_content>"#
-            )
-        })
-        .buffer_unordered(1)
-        .collect::<Vec<_>>()
-        .await
-        .join("\n");
-    let _context_message = vec![
-        LLMClientMessage::user(format!(
-            r#"You can use the code in these files are inspiration for the coding style and writing out the code in the same way as present in the codebase:
-{file_content_prompt}"#
-        )),
-        LLMClientMessage::assistant(
-            "I will use these files and follow the coding style present in them".to_owned(),
-        )
-        .cache_point(),
-    ];
-    let request = LLMClientCompletionRequest::new(
-        LLMType::ClaudeSonnet,
-        vec![LLMClientMessage::new(
-            LLMClientRole::System,
-            "You are an expert at saying hi, you have to say hi 10 times".to_owned(),
-        )]
-        .into_iter()
-        .chain(vec![LLMClientMessage::user(
-            "say something to me".to_owned(),
-        )])
-        .collect::<Vec<_>>(),
-        0.1,
-        None,
-    );
+    let mut messages = vec![LLMClientMessage::system(system_prompt.to_owned())];
+    messages.extend(example_messages());
+    let request = LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.1, None);
     println!("we are over here");
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let start_instant = std::time::Instant::now();
@@ -218,34 +104,4 @@ We can reuse the existing ProbeStopRequest struct for the new API as it already 
             }
         }
     }
-    // let client = Client::new();
-    // let url = "https://api.anthropic.com/v1/messages";
-    // let api_key = "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";
-
-    // let response = client
-    //     .post(url)
-    //     .header("x-api-key", api_key)
-    //     .header("anthropic-version", "2023-06-01")
-    //     .header("content-type", "application/json")
-    //     .json(&json!({
-    //         "model": "claude-3-opus-20240229",
-    //         "max_tokens": 1024,
-    //         "messages": [
-    //             {
-    //                 "role": "user",
-    //                 "content": "Repeat the following content 5 times"
-    //             }
-    //         ],
-    //         "stream": true
-    //     }))
-    //     .send()
-    //     .await
-    //     .expect("to work");
-
-    // if response.status().is_success() {
-    //     let body = response.text().await.expect("to work");
-    //     println!("Response Body: {}", body);
-    // } else {
-    //     println!("Request failed with status: {}", response.status());
-    // }
 }

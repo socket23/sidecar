@@ -219,6 +219,8 @@ impl Tool for SessionChatClient {
         let mut messages = vec![system_message];
         messages.extend(user_messages);
 
+        println!("{:?}", &messages);
+
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
@@ -267,6 +269,7 @@ impl Tool for SessionChatClient {
 
         // now wait for the llm response to finsih
         let response = llm_response.await;
+        println!("session_chat_client::response::({:?})", &response);
         // wait for the delta streaming to finish
         let _ = polling_llm_response.await;
         match response {

@@ -289,14 +289,6 @@ impl Tool for PlanAddStepClient {
                 )
         };
 
-        // let request =
-        //     LLMClientCompletionRequest::new(LLMType::Llama3_1_8bInstruct, messages, 0.2, None);
-
-        // let api_key = llm_client::provider::LLMProviderAPIKeys::Ollama(OllamaProvider {});
-
-        // let llm_properties =
-        //     LLMProperties::new(LLMType::Llama3_1_8bInstruct, LLMProvider::Ollama, api_key);
-
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let response = self

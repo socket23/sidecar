@@ -23,6 +23,33 @@ use crate::{
 
 use super::plan_step::PlanStep;
 
+pub struct StreamedPlanGenerationForEditor {
+    client: reqwest::Client,
+}
+
+impl StreamedPlanGenerationForEditor {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+
+    pub async fn send_edit_event(
+        &self,
+        editor_url: String,
+        edit_event: EditedCodeStreamingRequest,
+    ) {
+        let editor_endpoint = editor_url + "/apply_edits_streamed";
+
+        let _ = self
+            .client
+            .post(editor_endpoint)
+            .body(serde_json::to_string(&edit_event).expect("to work"))
+            .send()
+            .await;
+    }
+}
+
 // consider possibility of constraining number of steps
 #[derive(Debug, Clone)]
 pub struct StepGeneratorRequest {
@@ -32,6 +59,10 @@ pub struct StepGeneratorRequest {
     root_request_id: String,
     editor_url: String,
     diagnostics: Option<DiagnosticMap>,
+    // the exchange id which belongs to the session
+    exchange_id: String,
+    // if we should stream the steps which we are generating
+    stream_steps: bool,
 }
 
 impl StepGeneratorRequest {
@@ -40,6 +71,8 @@ impl StepGeneratorRequest {
         is_deep_reasoning: bool,
         root_request_id: String,
         editor_url: String,
+        exchange_id: String,
+        stream_steps: bool,
     ) -> Self {
         Self {
             user_query,
@@ -48,6 +81,8 @@ impl StepGeneratorRequest {
             is_deep_reasoning,
             user_context: None,
             diagnostics: None,
+            exchange_id,
+            stream_steps,
         }
     }
 

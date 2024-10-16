@@ -414,6 +414,48 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn plan_title_added(
+        session_id: String,
+        exchange_id: String,
+        index: usize,
+        files_to_edit: Vec<String>,
+        title: String,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::PlanEvent(PlanMessageEvent::PlanStepTitleAdded(PlanStepTitleEvent {
+                session_id,
+                exchange_id,
+                files_to_edit,
+                title,
+                index,
+            })),
+        }
+    }
+
+    pub fn plan_complete_added(
+        session_id: String,
+        exchange_id: String,
+        index: usize,
+        files_to_edit: Vec<String>,
+        title: String,
+        description: String,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::PlanEvent(PlanMessageEvent::PlanStepCompleteAdded(PlanStepAddEvent {
+                session_id,
+                exchange_id,
+                files_to_edit,
+                title,
+                description,
+                index,
+            })),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -426,6 +468,7 @@ pub enum UIEvent {
     FrameworkEvent(FrameworkEvent),
     ChatEvent(ChatMessageEvent),
     ExchangeEvent(ExchangeMessageEvent),
+    PlanEvent(PlanMessageEvent),
 }
 
 impl From<SymbolEventRequest> for UIEvent {
@@ -973,4 +1016,29 @@ impl FinishedExchangeEvent {
             session_id,
         }
     }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum PlanMessageEvent {
+    PlanStepCompleteAdded(PlanStepAddEvent),
+    PlanStepTitleAdded(PlanStepTitleEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct PlanStepAddEvent {
+    session_id: String,
+    exchange_id: String,
+    files_to_edit: Vec<String>,
+    title: String,
+    description: String,
+    index: usize,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct PlanStepTitleEvent {
+    session_id: String,
+    exchange_id: String,
+    files_to_edit: Vec<String>,
+    title: String,
+    index: usize,
 }

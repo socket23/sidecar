@@ -9444,8 +9444,9 @@ FILEPATH: {fs_file_path}
         let step_generator_request = StepGeneratorRequest::new(
             user_query.to_owned(),
             is_deep_reasoning,
-            message_properties.request_id_str().to_owned(),
+            message_properties.root_request_id().to_owned(),
             message_properties.editor_url(),
+            message_properties.request_id_str().to_owned(),
         )
         .with_user_context(user_context);
         println!("tool_box::generate_plan::start");

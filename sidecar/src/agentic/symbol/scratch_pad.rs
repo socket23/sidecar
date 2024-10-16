@@ -817,6 +817,62 @@ impl ScratchPadAgent {
         Ok(())
     }
 
+    pub async fn anchor_editing_on_range(
+        &self,
+        range: Range,
+        fs_file_path: String,
+        query: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        println!("scratch_pad_agent::anchor_editing_on_range::start");
+        // We want to send the content of the files which we have seen before as they
+        // are, this makes sure that we always get the latest git-diff, in case of reverts
+        // which happen by the human outside of the scope of the files we are interested in
+        let recent_edits = self
+            .tool_box
+            .recently_edited_files(
+                vec![fs_file_path.to_owned()].into_iter().collect(),
+                message_properties.clone(),
+            )
+            .await?;
+        println!("scratch_pad_agent::human_message_anchor::recent_edits::done");
+        let symbol_to_edit_request = SymbolToEditRequest::new(
+            vec![SymbolToEdit::new(
+                fs_file_path.to_owned(),
+                range.clone(),
+                fs_file_path.to_owned(),
+                vec![query.to_owned()],
+                false,
+                false,
+                true,
+                query.to_owned(),
+                None,
+                false,
+                None,
+                true,
+                Some(recent_edits.clone()),
+                vec![],
+            )],
+            SymbolIdentifier::with_file_path(&fs_file_path, &fs_file_path),
+            vec![],
+        );
+        let symbol_event_sender = self.symbol_event_sender.clone();
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let symbol_event_request = SymbolEventRequest::new(
+            symbol_to_edit_request.symbol_identifier().clone(),
+            SymbolEvent::Edit(symbol_to_edit_request), // defines event type
+            ToolProperties::new(),
+        );
+        let event = SymbolEventMessage::message_with_properties(
+            symbol_event_request,
+            message_properties,
+            sender,
+        );
+        let _ = symbol_event_sender.send(event);
+        let _ = receiver.await;
+        Ok(())
+    }
+
     async fn human_message_anchor(
         &self,
         anchor_request: HumanAnchorRequest,

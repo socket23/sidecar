@@ -227,6 +227,7 @@ impl UIEventWithID {
         range: Range,
         fs_file_path: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -238,6 +239,7 @@ impl UIEventWithID {
                     range,
                     fs_file_path,
                     session_id,
+                    exchange_id,
                 ),
             ),
         }
@@ -251,6 +253,7 @@ impl UIEventWithID {
         range: Range,
         fs_file_path: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -261,6 +264,7 @@ impl UIEventWithID {
                 range,
                 fs_file_path,
                 session_id,
+                exchange_id,
             )),
         }
     }
@@ -274,6 +278,7 @@ impl UIEventWithID {
         range: Range,
         fs_file_path: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -286,6 +291,7 @@ impl UIEventWithID {
                     fs_file_path,
                     delta,
                     session_id,
+                    exchange_id,
                 ),
             ),
         }
@@ -526,6 +532,8 @@ pub struct EditedCodeStreamingRequest {
     updated_code: Option<String>,
     event: EditedCodeStreamingEvent,
     apply_directly: bool,
+    // The exchange id this edit is part of
+    exchange_id: String,
 }
 
 impl EditedCodeStreamingRequest {
@@ -534,6 +542,7 @@ impl EditedCodeStreamingRequest {
         session_id: String,
         range: Range,
         fs_file_path: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             edit_request_id,
@@ -543,6 +552,7 @@ impl EditedCodeStreamingRequest {
             updated_code: None,
             event: EditedCodeStreamingEvent::Start,
             apply_directly: false,
+            exchange_id,
         }
     }
 
@@ -552,6 +562,7 @@ impl EditedCodeStreamingRequest {
         range: Range,
         fs_file_path: String,
         delta: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             edit_request_id,
@@ -561,6 +572,7 @@ impl EditedCodeStreamingRequest {
             updated_code: None,
             event: EditedCodeStreamingEvent::Delta(delta),
             apply_directly: false,
+            exchange_id,
         }
     }
 
@@ -569,6 +581,7 @@ impl EditedCodeStreamingRequest {
         session_id: String,
         range: Range,
         fs_file_path: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             edit_request_id,
@@ -578,6 +591,7 @@ impl EditedCodeStreamingRequest {
             updated_code: None,
             event: EditedCodeStreamingEvent::End,
             apply_directly: false,
+            exchange_id,
         }
     }
 
@@ -684,6 +698,7 @@ impl SymbolEventSubStepRequest {
         range: Range,
         fs_file_path: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -696,6 +711,7 @@ impl SymbolEventSubStepRequest {
                     event: EditedCodeStreamingEvent::Start,
                     updated_code: None,
                     apply_directly: false,
+                    exchange_id,
                 },
             )),
         }
@@ -707,6 +723,7 @@ impl SymbolEventSubStepRequest {
         range: Range,
         fs_file_path: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -719,6 +736,7 @@ impl SymbolEventSubStepRequest {
                     updated_code: None,
                     event: EditedCodeStreamingEvent::End,
                     apply_directly: false,
+                    exchange_id,
                 },
             )),
         }
@@ -747,6 +765,7 @@ impl SymbolEventSubStepRequest {
         fs_file_path: String,
         delta: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -759,6 +778,7 @@ impl SymbolEventSubStepRequest {
                     event: EditedCodeStreamingEvent::Delta(delta),
                     updated_code: None,
                     apply_directly: false,
+                    exchange_id,
                 },
             )),
         }

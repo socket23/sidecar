@@ -199,6 +199,7 @@ impl ToolBox {
                     recent_diff_with_priority,
                     message_properties.ui_sender(),
                     message_properties.editor_url(),
+                    message_properties.request_id_str().to_owned(),
                 )))
                 .await;
         }
@@ -241,6 +242,7 @@ impl ToolBox {
                     recently_edited_files_with_priority,
                     message_properties.ui_sender(),
                     message_properties.editor_url(),
+                    message_properties.request_id_str().to_owned(),
                 )))
                 .await;
         }
@@ -290,6 +292,7 @@ impl ToolBox {
                     recently_edited_files,
                     message_properties.ui_sender().clone(),
                     message_properties.editor_url(),
+                    message_properties.request_id_str().to_owned(),
                 )))
                 .await;
         } else {
@@ -5456,6 +5459,7 @@ FILEPATH: {fs_file_path}
             .unwrap_or_default();
 
         let session_id = message_properties.root_request_id().to_owned();
+        let exchange_id = message_properties.request_id_str().to_owned();
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
@@ -5480,6 +5484,7 @@ FILEPATH: {fs_file_path}
             lsp_diagnostic_with_content,
             false,
             session_id,
+            exchange_id,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5575,6 +5580,7 @@ FILEPATH: {fs_file_path}
                 .join("\n")
         });
         let session_id = message_properties.root_request_id().to_owned();
+        let exchange_id = message_properties.request_id_str().to_owned();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5606,6 +5612,7 @@ FILEPATH: {fs_file_path}
             true, // disable thinking by default
             None,
             session_id.to_owned(),
+            exchange_id.to_owned(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5654,6 +5661,7 @@ FILEPATH: {fs_file_path}
                 uuid::Uuid::new_v4().to_string(),
                 message_properties.ui_sender(),
                 session_id.to_owned(),
+                exchange_id.to_owned(),
             ));
             let response = self
                 .tools
@@ -5719,6 +5727,7 @@ FILEPATH: {fs_file_path}
                 .join("\n")
         });
         let session_id = message_properties.root_request_id().to_owned();
+        let exchange_id = message_properties.request_id_str().to_owned();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5745,6 +5754,7 @@ FILEPATH: {fs_file_path}
             true, // disable thinking by default
             user_provided_context,
             session_id,
+            exchange_id,
         ));
         self.tools
             .invoke(request)
@@ -8716,6 +8726,8 @@ FILEPATH: {fs_file_path}
             LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
         );
 
+        // we use the same session id for the exchange id
+        let exchange_id = session_id.to_owned();
         // TODO(skcd): Figure out how to maximise the prompt cache hit over here
         let search_and_replace_request = SearchAndReplaceEditingRequest::new(
             "".to_owned(),
@@ -8736,7 +8748,8 @@ FILEPATH: {fs_file_path}
             vec![],
             vec![],
             true,
-            session_id,
+            session_id.to_owned(),
+            exchange_id,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();
@@ -9245,7 +9258,8 @@ FILEPATH: {fs_file_path}
             .file_open(scratch_pad_path.to_owned(), message_properties.clone())
             .await?;
 
-        let session_id = message_properties.request_id_str().to_owned();
+        let session_id = message_properties.root_request_id().to_owned();
+        let exchange_id = message_properties.request_id_str().to_owned();
         // for the recent edits made we want to grab the l2 cache over here
         let l2_cache = recente_edits_made.l2_changes();
         let tool_input = ToolInput::Reasoning(ReasoningRequest::new(
@@ -9259,6 +9273,7 @@ FILEPATH: {fs_file_path}
             scratch_pad_content.contents(),
             message_properties.editor_url().to_owned(),
             session_id,
+            exchange_id,
         ));
         let reasoning_output = self
             .tools

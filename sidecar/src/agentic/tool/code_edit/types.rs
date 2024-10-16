@@ -59,6 +59,8 @@ pub struct CodeEdit {
     user_provided_context: Option<String>,
     // The session id to which this edit belongs
     session_id: String,
+    // The exchange id to which the edit belongs
+    exchange_id: String,
 }
 
 impl CodeEdit {
@@ -86,6 +88,7 @@ impl CodeEdit {
         disable_thinking: bool,
         user_provided_context: Option<String>,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             code_above,
@@ -111,6 +114,7 @@ impl CodeEdit {
             disable_thinking,
             user_provided_context,
             session_id,
+            exchange_id,
         }
     }
 }
@@ -269,6 +273,7 @@ impl Tool for CodeEditingTool {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let code_edit_context = input.is_code_edit()?;
         let root_id = code_edit_context.root_request_id.to_owned();
+        let exchange_id = code_edit_context.exchange_id.to_owned();
         let should_stream = code_edit_context.should_stream;
         let ui_sender = code_edit_context.ui_sender.clone();
         let symbol_identifier = code_edit_context.symbol_identifier.clone();
@@ -375,6 +380,7 @@ impl Tool for CodeEditingTool {
                                         selection_range,
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
+                                        exchange_id.to_owned(),
                                     ));
                                 }
                                 Some(CodeBlockEditDelta::EditDelta(delta)) => {
@@ -386,6 +392,7 @@ impl Tool for CodeEditingTool {
                                         selection_range,
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
+                                        exchange_id.to_owned(),
                                     ));
                                 }
                                 Some(CodeBlockEditDelta::EditEnd) => {
@@ -396,6 +403,7 @@ impl Tool for CodeEditingTool {
                                         selection_range,
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
+                                        exchange_id.to_owned(),
                                     ));
                                 }
                                 None => {

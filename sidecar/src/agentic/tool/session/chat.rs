@@ -35,6 +35,22 @@ pub struct SessionChatMessage {
     role: SessionChatRole,
 }
 
+impl SessionChatMessage {
+    pub fn assistant(message: String) -> Self {
+        Self {
+            message,
+            role: SessionChatRole::Assistant,
+        }
+    }
+
+    pub fn user(message: String) -> Self {
+        Self {
+            message,
+            role: SessionChatRole::User,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionChatClientRequest {
     diff_recent_edits: DiffRecentChanges,
@@ -74,6 +90,12 @@ impl SessionChatClientRequest {
 #[derive(Debug, Clone)]
 pub struct SessionChatClientResponse {
     reply: String,
+}
+
+impl SessionChatClientResponse {
+    pub fn reply(self) -> String {
+        self.reply
+    }
 }
 
 pub struct SessionChatClient {

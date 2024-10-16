@@ -397,6 +397,17 @@ impl UIEventWithID {
             )),
         }
     }
+
+    /// Finished exchange
+    pub fn finished_exchange(request_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: request_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::FinishedExchange(
+                FinishedExchangeEvent::new(exchange_id, request_id),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -408,6 +419,7 @@ pub enum UIEvent {
     EditRequestFinished(String),
     FrameworkEvent(FrameworkEvent),
     ChatEvent(ChatMessageEvent),
+    ExchangeEvent(ExchangeMessageEvent),
 }
 
 impl From<SymbolEventRequest> for UIEvent {
@@ -919,6 +931,26 @@ impl ChatMessageEvent {
             answer_up_until_now,
             delta,
             exchange_id,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum ExchangeMessageEvent {
+    FinishedExchange(FinishedExchangeEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct FinishedExchangeEvent {
+    exchange_id: String,
+    session_id: String,
+}
+
+impl FinishedExchangeEvent {
+    pub fn new(exchange_id: String, session_id: String) -> Self {
+        Self {
+            exchange_id,
+            session_id,
         }
     }
 }

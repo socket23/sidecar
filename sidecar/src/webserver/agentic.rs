@@ -30,8 +30,10 @@ use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::plan::plan::Plan;
 use crate::agentic::tool::plan::service::PlanService;
+use crate::agentic::tool::session::service::SessionService;
 use crate::agentic::tool::session::session::AideAgentMode;
 use crate::chunking::text_document::Range;
+use crate::repo::types::RepoRef;
 use crate::webserver::plan::{check_plan_storage_path, create_plan};
 use crate::{application::application::Application, user_context::types::UserContext};
 
@@ -1218,13 +1220,15 @@ pub async fn reasoning_thread_create(
 /// We keep track of the thread-id over here
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgentSessionRequest {
-    session_id: uuid::Uuid,
+    session_id: String,
     exchange_id: String,
     editor_url: String,
     query: String,
     user_context: UserContext,
     // The mode in which we want to reply to the exchanges
-    agent_mode: AideAgentMode,
+    // agent_mode: AideAgentMode,
+    repo_ref: RepoRef,
+    project_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1243,37 +1247,65 @@ pub async fn agent_session(
         session_id,
         exchange_id,
         editor_url,
-        query: _query,
+        query,
         user_context,
-        agent_mode,
+        // agent_mode,
+        repo_ref,
+        project_labels,
     }): Json<AgentSessionRequest>,
 ) -> Result<impl IntoResponse> {
+    // bring this back later
+    let agent_mode = AideAgentMode::Chat;
+    println!("webserver::agent_session::hit");
     let cancellation_token = tokio_util::sync::CancellationToken::new();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let _event_message_properties = SymbolEventMessageProperties::new(
+    let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(exchange_id.to_owned(), session_id.to_string()),
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
     );
 
-    let _session_storage_path =
-        check_session_storage_path(app.config.clone(), session_id.to_string());
+    let session_storage_path =
+        check_session_storage_path(app.config.clone(), session_id.to_string()).await;
+
+    let cloned_session_id = session_id.to_string();
+    let _ = tokio::spawn(async move {
+        let session_service = SessionService::new(app.tool_box.clone(), app.symbol_manager.clone());
+        let _ = session_service
+            .human_message(
+                cloned_session_id,
+                session_storage_path,
+                exchange_id,
+                query,
+                user_context,
+                project_labels,
+                repo_ref,
+                agent_mode,
+                message_properties,
+            )
+            .await;
+    });
 
     // TODO(skcd): Over here depending on the exchange reply mode we want to send over the
     // response using ui_sender with the correct exchange_id and the thread_id
+    // do we go for a global ui_sender which is being sent to a sink which sends over the data
+    // to the editor via http or streaming or whatever (keep an active conneciton always?)
+    // how do we notify when the streaming is really completed
 
     let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    let cloned_session_id = session_id.to_string();
     let init_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
             .json_data(json!({
-                "session_id": session_id.to_string(),
+                "session_id": cloned_session_id,
+                "started": true,
             }))
             // This should never happen, so we force an unwrap.
             .expect("failed to serialize initialization object"))
     });
 
-    // // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
     let answer_stream = ui_event_stream.map(|ui_event: UIEventWithID| {
         sse::Event::default()
             .json_data(ui_event)
@@ -1282,6 +1314,9 @@ pub async fn agent_session(
 
     // TODO(skcd): Re-introduce this again when we have a better way to manage
     // server side events on the client side
+
+    // this will never get sent cause the sender is never dropped in a way, it will be
+    // dropped once we have completed the tokio::spawn above
     let done_stream = futures::stream::once(async move {
         Ok(sse::Event::default()
             .json_data(json!(

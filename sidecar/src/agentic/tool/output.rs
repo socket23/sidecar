@@ -746,6 +746,13 @@ impl ToolOutput {
         }
     }
 
+    pub fn context_drive_chat_reply(self) -> Option<SessionChatClientResponse> {
+        match self {
+            ToolOutput::ContextDriveChatReply(response) => Some(response),
+            _ => None,
+        }
+    }
+
     // pub fn plan_updater_output(self) -> Option<_> {
     //     match self {
     //         ToolOutput::PlanUpdater(response) => Some(response),

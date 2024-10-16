@@ -342,28 +342,36 @@ impl Tool for StepGeneratorClient {
 
         let start_time = Instant::now();
 
-        let response = self
-            .llm_client
-            .stream_completion(
-                llm_properties.api_key().clone(),
-                request,
-                llm_properties.provider().clone(),
-                vec![
-                    ("root_id".to_owned(), root_id),
-                    ("event_type".to_owned(), "generate_steps".to_owned()),
-                ]
-                .into_iter()
-                .collect(),
-                sender,
-            )
-            .await?;
+        let cloned_llm_client = self.llm_client.clone();
+
+        // we have to poll both the futures in parallel and stream it back to the
+        // editor so we can get it as quickly as possible
+        let llm_response = tokio::spawn(async move {
+            cloned_llm_client
+                .stream_completion(
+                    llm_properties.api_key().clone(),
+                    request,
+                    llm_properties.provider().clone(),
+                    vec![
+                        ("root_id".to_owned(), root_id),
+                        ("event_type".to_owned(), "generate_steps".to_owned()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    sender,
+                )
+                .await
+        });
 
         let elapsed_time = start_time.elapsed();
         println!("LLM request took: {:?}", elapsed_time);
 
-        let response = StepGeneratorResponse::parse_response(&response)?;
-
-        Ok(ToolOutput::StepGenerator(response))
+        match llm_response.await {
+            Ok(Ok(response)) => Ok(ToolOutput::StepGenerator(
+                StepGeneratorResponse::parse_response(&response)?,
+            )),
+            _ => Err(ToolError::RetriesExhausted),
+        }
     }
 }
 

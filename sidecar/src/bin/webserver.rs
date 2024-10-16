@@ -212,6 +212,10 @@ fn agentic_router() -> Router {
             "/agent_session_edit_agentic",
             post(sidecar::webserver::agentic::agent_session_edit_agentic),
         )
+        .route(
+            "/agent_session_plan",
+            post(sidecar::webserver::agentic::agent_session_plan),
+        )
 }
 
 fn agent_router() -> Router {

@@ -1,7 +1,10 @@
 use thiserror::Error;
 use tokio::sync::{mpsc::error::SendError, oneshot::error::RecvError};
 
-use crate::agentic::tool::{errors::ToolError, lsp::diagnostics::DiagnosticSnippetError};
+use crate::{
+    agentic::tool::{errors::ToolError, lsp::diagnostics::DiagnosticSnippetError},
+    user_context::types::UserContextError,
+};
 
 use super::events::message_event::SymbolEventMessage;
 
@@ -72,4 +75,7 @@ pub enum SymbolError {
 
     #[error("IO error: {0}")]
     IOError(std::io::Error),
+
+    #[error("User context error: {0}")]
+    UserContextError(UserContextError),
 }

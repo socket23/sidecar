@@ -822,6 +822,7 @@ impl ScratchPadAgent {
         range: Range,
         fs_file_path: String,
         query: String,
+        user_context_str: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         println!("scratch_pad_agent::anchor_editing_on_range::start");
@@ -848,7 +849,7 @@ impl ScratchPadAgent {
                 query.to_owned(),
                 None,
                 false,
-                None,
+                Some(user_context_str),
                 true,
                 Some(recent_edits.clone()),
                 vec![],

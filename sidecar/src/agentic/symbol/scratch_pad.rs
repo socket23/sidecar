@@ -472,7 +472,7 @@ impl ScratchPadAgent {
         Ok(())
     }
 
-    async fn human_message_agentic(
+    pub async fn human_message_agentic(
         &self,
         human_agentic_request: HumanAgenticRequest,
         message_properties: SymbolEventMessageProperties,

@@ -95,9 +95,55 @@ impl SessionService {
         Ok(())
     }
 
-    /// We are going to try and do code edit
-    ///
-    /// We have to figure out if its anchored or agentic and then execute on it
+    pub async fn code_edit_agentic(
+        &self,
+        session_id: String,
+        storage_path: String,
+        scratch_pad_agent: ScratchPadAgent,
+        exchange_id: String,
+        edit_request: String,
+        user_context: UserContext,
+        project_labels: Vec<String>,
+        repo_ref: RepoRef,
+        root_directory: String,
+        codebase_search: bool,
+        mut message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        println!("session_service::code_edit::agentic::start");
+        let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
+        {
+            println!(
+                "session_service::load_from_storage_ok::session_id({})",
+                &session_id
+            );
+            session
+        } else {
+            self.create_new_session(
+                session_id.to_owned(),
+                project_labels.to_vec(),
+                repo_ref.clone(),
+                storage_path,
+            )
+        };
+
+        // add an exchange that we are going to perform anchored edits
+        session = session.agentic_edit(exchange_id, edit_request, user_context, codebase_search);
+
+        let edit_exchange_id = self
+            .tool_box
+            .create_new_exchange(session_id, message_properties.clone())
+            .await?;
+
+        message_properties = message_properties.set_request_id(edit_exchange_id);
+
+        session
+            .perform_agentic_editing(scratch_pad_agent, root_directory, message_properties)
+            .await?;
+        println!("session_service::code_edit::agentic::stop");
+        Ok(())
+    }
+
+    /// We are going to try and do code edit since we are donig anchored edit
     pub async fn code_edit_anchored(
         &self,
         session_id: String,
@@ -110,7 +156,7 @@ impl SessionService {
         repo_ref: RepoRef,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
-        println!("session_service::code_edit::start");
+        println!("session_service::code_edit::anchored::start");
         let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
         {
             println!(

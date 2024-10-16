@@ -6,8 +6,11 @@ use std::sync::Arc;
 use crate::{
     agentic::{
         symbol::{
-            errors::SymbolError, events::message_event::SymbolEventMessageProperties,
-            scratch_pad::ScratchPadAgent, tool_box::ToolBox, ui_event::UIEventWithID,
+            errors::SymbolError,
+            events::{human::HumanAgenticRequest, message_event::SymbolEventMessageProperties},
+            scratch_pad::ScratchPadAgent,
+            tool_box::ToolBox,
+            ui_event::UIEventWithID,
         },
         tool::{input::ToolInput, r#type::Tool},
     },
@@ -27,23 +30,47 @@ pub enum AideAgentMode {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum AideEditMode {
+    Anchored = 1,
+    Agentic = 2,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ExchangeType {
     HumanChat(ExchangeTypeHuman),
     AgentChat(String),
     // what do we store over here for the anchored edit, it can't just be the
     // user query? we probably have to store the snippet we were trying to edit
     // as well
-    AnchoredEdit(ExchangeTypeAnchoredEdit),
+    Edit(ExchangeTypeEdit),
     Plan(String),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ExchangeTypeAnchoredEdit {
+pub struct ExchangeEditInformationAgentic {
+    query: String,
+    codebase_search: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeEditInformationAnchored {
     query: String,
     fs_file_path: String,
     range: Range,
     selection_context: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ExchangeEditInformation {
+    Agentic(ExchangeEditInformationAgentic),
+    Anchored(ExchangeEditInformationAnchored),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeTypeEdit {
+    information: ExchangeEditInformation,
     user_context: UserContext,
+    exchange_type: AideEditMode,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -95,6 +122,25 @@ impl Exchange {
         }
     }
 
+    fn agentic_edit(
+        exchange_id: String,
+        query: String,
+        codebase_search: bool,
+        user_context: UserContext,
+    ) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::Edit(ExchangeTypeEdit {
+                information: ExchangeEditInformation::Agentic(ExchangeEditInformationAgentic {
+                    query,
+                    codebase_search,
+                }),
+                user_context,
+                exchange_type: AideEditMode::Agentic,
+            }),
+        }
+    }
+
     fn anchored_edit(
         exchange_id: String,
         query: String,
@@ -105,12 +151,15 @@ impl Exchange {
     ) -> Self {
         Self {
             exchange_id,
-            exchange_type: ExchangeType::AnchoredEdit(ExchangeTypeAnchoredEdit {
-                query,
-                fs_file_path,
-                range,
-                selection_context,
+            exchange_type: ExchangeType::Edit(ExchangeTypeEdit {
+                information: ExchangeEditInformation::Anchored(ExchangeEditInformationAnchored {
+                    query,
+                    fs_file_path,
+                    range,
+                    selection_context,
+                }),
                 user_context,
+                exchange_type: AideEditMode::Anchored,
             }),
         }
     }
@@ -151,7 +200,7 @@ impl Exchange {
             ExchangeType::Plan(_plan) => {
                 todo!("plan branch not impmlemented yet")
             }
-            ExchangeType::AnchoredEdit(_anchored_edit) => {
+            ExchangeType::Edit(_anchored_edit) => {
                 todo!("anchored_edit branch not implemented yet")
             }
         }
@@ -189,6 +238,18 @@ impl Session {
 
     pub fn exchanges(&self) -> usize {
         self.exchanges.len()
+    }
+
+    pub fn agentic_edit(
+        mut self,
+        exchange_id: String,
+        query: String,
+        user_context: UserContext,
+        codebase_search: bool,
+    ) -> Session {
+        let exchange = Exchange::agentic_edit(exchange_id, query, codebase_search, user_context);
+        self.exchanges.push(exchange);
+        self
     }
 
     pub fn anchored_edit(
@@ -291,7 +352,7 @@ impl Session {
             ExchangeType::AgentChat(_agent_message) => {
                 todo!("figure out what to do over here")
             }
-            ExchangeType::AnchoredEdit(_anchored_edit) => {
+            ExchangeType::Edit(_edit) => {
                 todo!("figure out what to do over here")
             }
             ExchangeType::Plan(_plan) => {
@@ -346,6 +407,75 @@ impl Session {
         Ok(self)
     }
 
+    /// we are going to perform the agentic editing
+    pub async fn perform_agentic_editing(
+        mut self,
+        scratch_pad_agent: ScratchPadAgent,
+        root_directory: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        let last_exchange = self.last_exchange();
+        if let Some(Exchange {
+            exchange_id: _,
+            exchange_type:
+                ExchangeType::Edit(ExchangeTypeEdit {
+                    information:
+                        ExchangeEditInformation::Agentic(ExchangeEditInformationAgentic {
+                            query,
+                            codebase_search,
+                        }),
+                    user_context,
+                    ..
+                }),
+        }) = last_exchange
+        {
+            let edits_performed = scratch_pad_agent
+                .human_message_agentic(
+                    HumanAgenticRequest::new(
+                        query.to_owned(),
+                        root_directory,
+                        *codebase_search,
+                        user_context.clone(),
+                        false,
+                    ),
+                    message_properties.clone(),
+                )
+                .await;
+            let message = match edits_performed {
+                Ok(_) => {
+                    // add a message to the same exchange that we are done
+                    "Finished editing".to_owned()
+                }
+                Err(_) => "Failed to edit".to_owned(),
+            };
+
+            // Send a reply on the exchange
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::chat_event(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                    message.to_owned(),
+                    Some(message.to_owned()),
+                ));
+
+            // Add to the exchange
+            self.exchanges.push(Exchange::agent_reply(
+                message_properties.request_id_str().to_owned(),
+                message.to_owned(),
+            ));
+
+            // now close the exchange
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::finished_exchange(
+                    self.session_id.to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+        }
+        Ok(self)
+    }
+
     /// We perform the anchored edit over here
     pub async fn perform_anchored_edit(
         mut self,
@@ -355,16 +485,26 @@ impl Session {
         let last_exchange = self.last_exchange();
         if let Some(Exchange {
             exchange_id: _,
-            exchange_type: ExchangeType::AnchoredEdit(anchored_edit),
+            exchange_type:
+                ExchangeType::Edit(ExchangeTypeEdit {
+                    information:
+                        ExchangeEditInformation::Anchored(ExchangeEditInformationAnchored {
+                            query,
+                            fs_file_path,
+                            range,
+                            selection_context: _,
+                        }),
+                    user_context,
+                    ..
+                }),
         }) = last_exchange
         {
             let edits_performed = scratch_pad_agent
                 .anchor_editing_on_range(
-                    anchored_edit.range.clone(),
-                    anchored_edit.fs_file_path.to_owned(),
-                    anchored_edit.query.to_owned(),
-                    anchored_edit
-                        .user_context
+                    range.clone(),
+                    fs_file_path.to_owned(),
+                    query.to_owned(),
+                    user_context
                         .clone()
                         .to_xml(Default::default())
                         .await

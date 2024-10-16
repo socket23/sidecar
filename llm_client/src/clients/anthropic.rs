@@ -46,26 +46,6 @@ impl AnthropicMessage {
             }],
         }
     }
-
-    pub fn new_with_content_vec(role: String, content: Vec<(String, bool)>) -> Self {
-        Self {
-            role,
-            content: content
-                .into_iter()
-                .map(|(content, cache_point)| AnthropicMessageContent {
-                    r#type: "text".to_owned(),
-                    text: content,
-                    cache_control: if cache_point {
-                        Some(AnthropicCacheControl {
-                            r#type: AnthropicCacheType::Ephemeral,
-                        })
-                    } else {
-                        None
-                    },
-                })
-                .collect::<Vec<_>>(),
-        }
-    }
 }
 
 use serde::Deserialize;

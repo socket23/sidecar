@@ -5,9 +5,12 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
-    agentic::symbol::{
-        errors::SymbolError, events::message_event::SymbolEventMessageProperties,
-        manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
+    agentic::{
+        symbol::{
+            errors::SymbolError, events::message_event::SymbolEventMessageProperties,
+            manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
+        },
+        tool::plan::service::PlanService,
     },
     chunking::text_document::Range,
     repo::types::RepoRef,
@@ -92,6 +95,25 @@ impl SessionService {
 
         // save the session to the disk
         self.save_to_storage(&session).await?;
+        Ok(())
+    }
+
+    /// Generates the plan over here and upon invocation we take care of executing
+    /// the steps
+    pub async fn plan_generation(
+        &self,
+        _session_id: String,
+        _storage_path: String,
+        _plan_service: PlanService,
+        _exchange_id: String,
+        _query: String,
+        _user_context: UserContext,
+        _project_labels: Vec<String>,
+        _repo_ref: RepoRef,
+        _root_directory: String,
+        _codebase_search: bool,
+        mut _message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
         Ok(())
     }
 

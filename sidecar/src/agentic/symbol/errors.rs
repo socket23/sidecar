@@ -69,4 +69,7 @@ pub enum SymbolError {
 
     #[error("Diagnostic snippet error: {0}")]
     DiagnosticSnippetError(DiagnosticSnippetError),
+
+    #[error("IO error: {0}")]
+    IOError(std::io::Error),
 }

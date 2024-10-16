@@ -104,9 +104,9 @@ use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::StepGeneratorRequest;
 use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
-use crate::agentic::tool::session::exchange::SessionExchangeNewRequest;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
+use crate::agentic::tool::session::exchange::SessionExchangeNewRequest;
 use crate::agentic::tool::swe_bench::test_tool::{SWEBenchTestRepsonse, SWEBenchTestRequest};
 use crate::chunking::editor_parsing::EditorParsing;
 use crate::chunking::text_document::{Position, Range};
@@ -10296,18 +10296,26 @@ FILEPATH: {fs_file_path}
 
     /// Creates a new exchange for the session, this helps the agent send over
     /// more messages as and when required
-    pub async fn create_new_exchange(&self, session_id: String, message_properties: SymbolEventMessageProperties) -> Result<String, SymbolError> {
-        let tool_input = ToolInput::NewExchangeDuringSession(SessionExchangeNewRequest::new(session_id, message_properties.editor_url()));
-        let response = self.tools
-        .invoke(tool_input)
-        .await
-        .map_err(|e| SymbolError::ToolError(e))?
-        .new_exchange_response()
-        .ok_or(SymbolError::WrongToolOutput)?;
+    pub async fn create_new_exchange(
+        &self,
+        session_id: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<String, SymbolError> {
+        let tool_input = ToolInput::NewExchangeDuringSession(SessionExchangeNewRequest::new(
+            session_id,
+            message_properties.editor_url(),
+        ));
+        let response = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .new_exchange_response()
+            .ok_or(SymbolError::WrongToolOutput)?;
         match response.exchange_id() {
             Some(exchange_id) => Ok(exchange_id),
             // we have a tool output which has gone wrong
-            None => Err(SymbolError::WrongToolOutput)
+            None => Err(SymbolError::WrongToolOutput),
         }
     }
 }

@@ -112,6 +112,7 @@ async fn main() {
     let user_context = UserContext::new(vec![], file_contents, None, vec![]); // this is big, should be passed using references
 
     // toggle this to true to use o1-preview for planning
+    let (ui_sender, _ui_receiver) = tokio::sync::mpsc::unbounded_channel();
     let is_deep_reasoning = false;
     let step_generator_request = StepGeneratorRequest::new(
         user_query.clone(),
@@ -119,6 +120,8 @@ async fn main() {
         request_id_str.to_owned(),
         editor_url,
         request_id_str,
+        false,
+        ui_sender,
     )
     .with_user_context(&user_context);
 

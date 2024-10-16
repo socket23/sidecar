@@ -9447,6 +9447,8 @@ FILEPATH: {fs_file_path}
             message_properties.root_request_id().to_owned(),
             message_properties.editor_url(),
             message_properties.request_id_str().to_owned(),
+            true, // stream by default
+            message_properties.ui_sender(),
         )
         .with_user_context(user_context);
         println!("tool_box::generate_plan::start");

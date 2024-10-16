@@ -88,6 +88,8 @@ pub struct SearchAndReplaceEditingRequest {
     is_warmup: bool,
     // the session id to which this edit belongs to
     session_id: String,
+    // The exchange id this is part of
+    exchange_id: String,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -113,6 +115,7 @@ impl SearchAndReplaceEditingRequest {
         lsp_errors: Vec<DiagnosticWithSnippet>,
         is_warmup: bool, // If true, this is a warmup request to initialize the LLM without performing actual edits
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -134,6 +137,7 @@ impl SearchAndReplaceEditingRequest {
             lsp_errors,
             is_warmup,
             session_id,
+            exchange_id,
         }
     }
 }
@@ -547,6 +551,7 @@ impl Tool for SearchAndReplaceEditing {
             };
         }
         let edit_request_id = context.edit_request_id.to_owned();
+        let exchange_id = context.exchange_id.to_owned();
         let session_id = context.session_id.to_owned();
         let llm_properties = context.llm_properties.clone();
         let root_request_id = context.root_request_id.to_owned();
@@ -600,6 +605,7 @@ impl Tool for SearchAndReplaceEditing {
         let cloned_ui_sender = ui_sender.clone();
         let cloned_root_request_id = root_request_id.to_owned();
         let cloned_edit_request_id = edit_request_id.to_owned();
+        let cloned_exchange_id = exchange_id.to_owned();
         let cloned_lsp_open_file = self.lsp_open_file.clone();
         let cloned_fs_file_path = fs_file_path.to_owned();
         let cloned_editor_url = editor_url.to_owned();
@@ -666,6 +672,7 @@ impl Tool for SearchAndReplaceEditing {
                                     session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
+                                    cloned_exchange_id.to_owned(),
                                 ),
                             )
                             .await;
@@ -678,6 +685,7 @@ impl Tool for SearchAndReplaceEditing {
                                     range,
                                     fs_file_path.to_owned(),
                                     "```\n".to_owned(),
+                                    cloned_exchange_id.to_owned(),
                                 ),
                             )
                             .await;
@@ -692,6 +700,7 @@ impl Tool for SearchAndReplaceEditing {
                                     range,
                                     fs_file_path.to_owned(),
                                     delta,
+                                    cloned_exchange_id.to_owned(),
                                 ),
                             )
                             .await;
@@ -706,6 +715,7 @@ impl Tool for SearchAndReplaceEditing {
                                     range,
                                     fs_file_path.to_owned(),
                                     "\n```".to_owned(),
+                                    cloned_exchange_id.to_owned(),
                                 ),
                             )
                             .await;
@@ -717,6 +727,7 @@ impl Tool for SearchAndReplaceEditing {
                                     session_id.to_owned(),
                                     range,
                                     fs_file_path.to_owned(),
+                                    cloned_exchange_id.to_owned(),
                                 ),
                             )
                             .await;

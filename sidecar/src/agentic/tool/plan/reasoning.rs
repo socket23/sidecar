@@ -46,6 +46,7 @@ pub struct ReasoningRequest {
     plan_output_content: String,
     editor_url: String,
     session_id: String,
+    exchange_id: String,
 }
 
 impl ReasoningRequest {
@@ -60,6 +61,7 @@ impl ReasoningRequest {
         plan_output_content: String,
         editor_url: String,
         session_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             user_query,
@@ -72,6 +74,7 @@ impl ReasoningRequest {
             plan_output_content,
             editor_url,
             session_id,
+            exchange_id,
         }
     }
 }
@@ -130,6 +133,7 @@ impl Tool for ReasoningClient {
         let scratch_pad_content = context.plan_output_content.to_owned();
         let root_id = context.root_request_id.to_owned();
         let session_id = context.session_id.to_owned();
+        let exchange_id = context.exchange_id.to_owned();
         let request = LLMClientCompletionRequest::new(
             LLMType::O1Preview,
             vec![LLMClientMessage::user(self.user_message(context))],
@@ -197,6 +201,7 @@ impl Tool for ReasoningClient {
                     session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )
@@ -210,6 +215,7 @@ impl Tool for ReasoningClient {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )
@@ -223,6 +229,7 @@ impl Tool for ReasoningClient {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     output.to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )
@@ -236,6 +243,7 @@ impl Tool for ReasoningClient {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "\n```".to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )
@@ -248,6 +256,7 @@ impl Tool for ReasoningClient {
                     session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )

@@ -1219,7 +1219,7 @@ pub async fn reasoning_thread_create(
 
 /// We keep track of the thread-id over here
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgentSessionRequest {
+pub struct AgentSessionChatRequest {
     session_id: String,
     exchange_id: String,
     editor_url: String,
@@ -1231,19 +1231,12 @@ pub struct AgentSessionRequest {
     project_labels: Vec<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgentSessionResponse {
-    done: bool,
-}
-
-impl ApiResponse for AgentSessionResponse {}
-
 /// Handles the agent session and either creates it or appends to it
 ///
 /// Whenever we try to do an anchored or agentic editing we also go through this flow
-pub async fn agent_session(
+pub async fn agent_session_chat(
     Extension(app): Extension<Application>,
-    Json(AgentSessionRequest {
+    Json(AgentSessionChatRequest {
         session_id,
         exchange_id,
         editor_url,
@@ -1252,7 +1245,7 @@ pub async fn agent_session(
         // agent_mode,
         repo_ref,
         project_labels,
-    }): Json<AgentSessionRequest>,
+    }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
     let agent_mode = AideAgentMode::Chat;

@@ -159,6 +159,7 @@ pub struct ScratchPadAgentInput {
     diff_recent_changes: Option<DiffRecentChanges>,
     _ui_sender: UnboundedSender<UIEventWithID>,
     editor_url: String,
+    exchange_id: String,
 }
 
 impl ScratchPadAgentInput {
@@ -172,6 +173,7 @@ impl ScratchPadAgentInput {
         diff_recent_changes: Option<DiffRecentChanges>,
         ui_sender: UnboundedSender<UIEventWithID>,
         editor_url: String,
+        exchange_id: String,
     ) -> Self {
         Self {
             files_context,
@@ -183,6 +185,7 @@ impl ScratchPadAgentInput {
             diff_recent_changes,
             _ui_sender: ui_sender,
             editor_url,
+            exchange_id,
         }
     }
 }
@@ -521,6 +524,7 @@ impl Tool for ScratchPadAgentBroker {
         println!("scratch_pad_agent_broker::invoked");
         let context = input.should_scratch_pad_input()?;
         let editor_url = context.editor_url.to_owned();
+        let exchange_id = context.exchange_id.to_owned();
         let fs_file_path = context.scratch_pad_path.to_owned();
         let scratch_pad_range = Range::new(
             Position::new(0, 0, 0),
@@ -617,6 +621,7 @@ impl Tool for ScratchPadAgentBroker {
                     session_id.to_owned(),
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )
@@ -630,6 +635,7 @@ impl Tool for ScratchPadAgentBroker {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
+                    exchange_id.to_owned(),
                 )
                 .set_apply_directly(),
             )
@@ -650,6 +656,7 @@ impl Tool for ScratchPadAgentBroker {
                                         scratch_pad_range.clone(),
                                         fs_file_path.to_owned(),
                                         delta.to_owned(),
+                                        exchange_id.to_owned(),
                                     ).set_apply_directly(),
                                 ).await;
                             }
@@ -669,6 +676,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
+                                exchange_id.to_owned(),
                             ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
@@ -678,6 +686,7 @@ impl Tool for ScratchPadAgentBroker {
                                 session_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
+                                exchange_id.to_owned(),
                             ).set_apply_directly()
                         ).await;
                     } else {
@@ -690,6 +699,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
+                                exchange_id.to_owned(),
                             ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
@@ -699,6 +709,7 @@ impl Tool for ScratchPadAgentBroker {
                                 session_id.to_owned(),
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
+                                exchange_id.to_owned(),
                             ).set_apply_directly()
                         ).await;
                     }

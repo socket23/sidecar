@@ -582,7 +582,7 @@ pub async fn check_plan_storage_path(config: Arc<Configuration>, plan_id: String
 /// Checks for the session directory and creates the path for the session
 pub async fn check_session_storage_path(config: Arc<Configuration>, session_id: String) -> String {
     let mut session_path = config.index_dir.clone();
-    session_path = session_path.join("plans");
+    session_path = session_path.join("session");
     // check if the plan_storage_path_exists
     if tokio::fs::metadata(&session_path).await.is_err() {
         tokio::fs::create_dir(&session_path)

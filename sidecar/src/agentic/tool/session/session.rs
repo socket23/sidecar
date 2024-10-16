@@ -7,10 +7,11 @@ use crate::{
     agentic::{
         symbol::{
             errors::SymbolError, events::message_event::SymbolEventMessageProperties,
-            tool_box::ToolBox, ui_event::UIEventWithID,
+            scratch_pad::ScratchPadAgent, tool_box::ToolBox, ui_event::UIEventWithID,
         },
         tool::{input::ToolInput, r#type::Tool},
     },
+    chunking::text_document::Range,
     repo::types::RepoRef,
     user_context::types::UserContext,
 };
@@ -29,8 +30,20 @@ pub enum AideAgentMode {
 pub enum ExchangeType {
     HumanChat(ExchangeTypeHuman),
     AgentChat(String),
-    AnchoredEdit(String),
+    // what do we store over here for the anchored edit, it can't just be the
+    // user query? we probably have to store the snippet we were trying to edit
+    // as well
+    AnchoredEdit(ExchangeTypeAnchoredEdit),
     Plan(String),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeTypeAnchoredEdit {
+    query: String,
+    fs_file_path: String,
+    range: Range,
+    selection_context: String,
+    user_context: UserContext,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -79,6 +92,26 @@ impl Exchange {
                 project_labels,
                 repo_ref,
             )),
+        }
+    }
+
+    fn anchored_edit(
+        exchange_id: String,
+        query: String,
+        user_context: UserContext,
+        range: Range,
+        fs_file_path: String,
+        selection_context: String,
+    ) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::AnchoredEdit(ExchangeTypeAnchoredEdit {
+                query,
+                fs_file_path,
+                range,
+                selection_context,
+                user_context,
+            }),
         }
     }
 
@@ -156,6 +189,27 @@ impl Session {
 
     pub fn exchanges(&self) -> usize {
         self.exchanges.len()
+    }
+
+    pub fn anchored_edit(
+        mut self,
+        exchange_id: String,
+        query: String,
+        user_context: UserContext,
+        range: Range,
+        fs_file_path: String,
+        file_content_in_selection: String,
+    ) -> Session {
+        let exchange = Exchange::anchored_edit(
+            exchange_id,
+            query,
+            user_context,
+            range,
+            fs_file_path,
+            file_content_in_selection,
+        );
+        self.exchanges.push(exchange);
+        self
     }
 
     pub fn human_message(
@@ -289,6 +343,67 @@ impl Session {
             self.session_id.to_owned(),
             exchange_id,
         ));
+        Ok(self)
+    }
+
+    /// We perform the anchored edit over here
+    pub async fn perform_anchored_edit(
+        mut self,
+        scratch_pad_agent: ScratchPadAgent,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        let last_exchange = self.last_exchange();
+        if let Some(Exchange {
+            exchange_id: _,
+            exchange_type: ExchangeType::AnchoredEdit(anchored_edit),
+        }) = last_exchange
+        {
+            let edits_performed = scratch_pad_agent
+                .anchor_editing_on_range(
+                    anchored_edit.range.clone(),
+                    anchored_edit.fs_file_path.to_owned(),
+                    anchored_edit.query.to_owned(),
+                    anchored_edit
+                        .user_context
+                        .clone()
+                        .to_xml(Default::default())
+                        .await
+                        .map_err(|e| SymbolError::UserContextError(e))?,
+                    message_properties.clone(),
+                )
+                .await;
+            let message = match edits_performed {
+                Ok(_) => {
+                    // add a message to the same exchange that we are done
+                    "Finished editing".to_owned()
+                }
+                Err(_) => "Failed to edit".to_owned(),
+            };
+
+            // Send a reply on the exchange
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::chat_event(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                    message.to_owned(),
+                    Some(message.to_owned()),
+                ));
+
+            // Add to the exchange
+            self.exchanges.push(Exchange::agent_reply(
+                message_properties.request_id_str().to_owned(),
+                message.to_owned(),
+            ));
+
+            // now close the exchange
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::finished_exchange(
+                    self.session_id.to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+        }
         Ok(self)
     }
 }

@@ -7,8 +7,9 @@ use tokio::io::AsyncWriteExt;
 use crate::{
     agentic::symbol::{
         errors::SymbolError, events::message_event::SymbolEventMessageProperties,
-        manager::SymbolManager, tool_box::ToolBox,
+        manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
     },
+    chunking::text_document::Range,
     repo::types::RepoRef,
     user_context::types::UserContext,
 };
@@ -91,6 +92,87 @@ impl SessionService {
 
         // save the session to the disk
         self.save_to_storage(&session).await?;
+        Ok(())
+    }
+
+    /// We are going to try and do code edit
+    ///
+    /// We have to figure out if its anchored or agentic and then execute on it
+    pub async fn code_edit_anchored(
+        &self,
+        session_id: String,
+        storage_path: String,
+        scratch_pad_agent: ScratchPadAgent,
+        exchange_id: String,
+        edit_request: String,
+        user_context: UserContext,
+        project_labels: Vec<String>,
+        repo_ref: RepoRef,
+        mut message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        println!("session_service::code_edit::start");
+        let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
+        {
+            println!(
+                "session_service::load_from_storage_ok::session_id({})",
+                &session_id
+            );
+            session
+        } else {
+            self.create_new_session(
+                session_id.to_owned(),
+                project_labels.to_vec(),
+                repo_ref.clone(),
+                storage_path,
+            )
+        };
+
+        let selection_variable = user_context.variables.iter().find(|variable| {
+            variable.is_selection()
+                && !(variable.start_position.line() == 0 && variable.end_position.line() == 0)
+        });
+        if selection_variable.is_none() {
+            return Ok(());
+        }
+        let selection_variable = selection_variable.expect("is_none to hold above");
+        let selection_range = Range::new(
+            selection_variable.start_position,
+            selection_variable.end_position,
+        );
+        let selection_fs_file_path = selection_variable.fs_file_path.to_owned();
+        let file_content = self
+            .tool_box
+            .file_open(
+                selection_fs_file_path.to_owned(),
+                message_properties.clone(),
+            )
+            .await?;
+        let file_content_in_range = file_content
+            .content_in_range(&selection_range)
+            .unwrap_or(selection_variable.content.to_owned());
+
+        let edit_exchange_id = self
+            .tool_box
+            .create_new_exchange(session_id, message_properties.clone())
+            .await?;
+
+        message_properties = message_properties.set_request_id(edit_exchange_id);
+
+        // add an exchange that we are going to perform anchored edits
+        session = session.anchored_edit(
+            exchange_id,
+            edit_request,
+            user_context,
+            selection_range,
+            selection_fs_file_path,
+            file_content_in_range,
+        );
+
+        // Now we can start editing the selection over here
+        session
+            .perform_anchored_edit(scratch_pad_agent, message_properties)
+            .await?;
+        println!("session_service::code_edit::anchored_edit::finished");
         Ok(())
     }
 

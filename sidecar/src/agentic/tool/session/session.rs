@@ -441,6 +441,7 @@ impl Session {
                     message_properties.clone(),
                 )
                 .await;
+            println!("session::perform_agentic_editing::finsihed_editing");
             let message = match edits_performed {
                 Ok(_) => {
                     // add a message to the same exchange that we are done
@@ -472,6 +473,7 @@ impl Session {
                     self.session_id.to_owned(),
                     message_properties.request_id_str().to_owned(),
                 ));
+            println!("session::finished_agentic_editing_exchange");
         }
         Ok(self)
     }

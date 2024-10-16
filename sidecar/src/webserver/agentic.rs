@@ -1230,6 +1230,7 @@ pub struct AgentSessionChatRequest {
     repo_ref: RepoRef,
     root_directory: String,
     project_labels: Vec<String>,
+    #[serde(default)]
     codebase_search: bool,
 }
 

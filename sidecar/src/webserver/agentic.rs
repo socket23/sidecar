@@ -1501,6 +1501,7 @@ pub async fn agent_session_edit_agentic(
                 message_properties,
             )
             .await;
+        println!("tokio::spawn::code_edit_agentic::finished");
     });
 
     // TODO(skcd): Over here depending on the exchange reply mode we want to send over the

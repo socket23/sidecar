@@ -453,16 +453,109 @@ impl Session {
     ///
     /// we have to carefully send the undo request as well to make sure that the
     /// editor changes state
+    ///
+    /// when we generate the new plan we have to make sure that the edits are still
+    /// mapped to the previous plan or should they still belong to the same plan?
+    /// TODO(skcd): Debug this flow tomorrow, I do not think this is correct
     pub async fn perform_plan_revert(
-        self,
-        _plan_service: PlanService,
-        _plan_id: String,
-        _plan_storage_path: String,
-        _symbol_manager: Arc<SymbolManager>,
-        _previous_plan_exchange_id: String,
-        _step_index: usize,
-        _message_properties: SymbolEventMessageProperties,
+        mut self,
+        plan_service: PlanService,
+        previous_plan_exchange_id: String,
+        step_index: usize,
+        tool_box: Arc<ToolBox>,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
+        let original_plan = plan_service
+            .load_plan_from_id(
+                &plan_service.generate_unique_plan_id(&self.session_id, &previous_plan_exchange_id),
+            )
+            .await
+            .map_err(|e| SymbolError::IOError(e))?;
+
+        let exchange_id = message_properties.request_id_str().to_owned();
+
+        if step_index == 0 {
+            let ui_sender = message_properties.ui_sender();
+            // revert the changes back by talking to the editor
+            let _ = tool_box
+                .undo_changes_made_during_session(
+                    self.session_id.to_owned(),
+                    exchange_id.to_owned(),
+                    Some(step_index),
+                    message_properties.clone(),
+                )
+                .await;
+
+            let reply = "Reverted the full plan".to_owned();
+            let _ = ui_sender.send(UIEventWithID::chat_event(
+                self.session_id.to_owned(),
+                exchange_id.to_owned(),
+                reply.to_owned(),
+                Some(reply.to_owned()),
+            ));
+
+            // update our exchanges and add what we did
+            self.exchanges.push(Exchange::agent_reply(
+                message_properties.request_id_str().to_owned(),
+                reply,
+            ));
+
+            // now close the exchange
+            let _ = ui_sender.send(UIEventWithID::finished_exchange(
+                self.session_id.to_owned(),
+                exchange_id,
+            ));
+        } else {
+            let updated_plan = original_plan.drop_plan_steps(step_index);
+            let ui_sender = message_properties.ui_sender();
+            // send all the updated plan steps to the exchange
+            updated_plan
+                .steps()
+                .into_iter()
+                .enumerate()
+                .for_each(|(idx, plan_step)| {
+                    let _ = ui_sender.send(UIEventWithID::plan_complete_added(
+                        self.session_id.to_owned(),
+                        exchange_id.to_owned(),
+                        idx,
+                        plan_step.files_to_edit().to_vec(),
+                        plan_step.title().to_owned(),
+                        plan_step.description().to_owned(),
+                    ));
+                });
+
+            // revert the changes back by talking to the editor
+            let _ = tool_box
+                .undo_changes_made_during_session(
+                    self.session_id.to_owned(),
+                    exchange_id.to_owned(),
+                    Some(step_index),
+                    message_properties.clone(),
+                )
+                .await;
+
+            // now send a message to the exchange telling that we have reverted
+            // the changes
+            let _ = ui_sender.send(UIEventWithID::chat_event(
+                self.session_id.to_owned(),
+                exchange_id.to_owned(),
+                "I have reverted the changes made by the plan".to_owned(),
+                Some("I have reverted the changes made by the plan".to_owned()),
+            ));
+
+            // update our exchanges and add what we did
+            self.exchanges.push(Exchange::agent_reply(
+                message_properties.request_id_str().to_owned(),
+                "I have reverted the changes made by the plan".to_owned(),
+            ));
+
+            // now close the exchange
+            let _ = ui_sender.send(UIEventWithID::finished_exchange(
+                self.session_id.to_owned(),
+                exchange_id,
+            ));
+        }
+
         Ok(self)
     }
 

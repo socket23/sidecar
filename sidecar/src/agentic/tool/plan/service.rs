@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    generator::{Step, StepSenderEvent},
+    generator::StepSenderEvent,
     plan::Plan,
     plan_step::{PlanStep, StepExecutionContext},
 };

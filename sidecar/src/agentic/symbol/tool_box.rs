@@ -101,7 +101,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     LSPQuickFixInvocationResponse,
 };
 use crate::agentic::tool::plan::add_steps::PlanAddRequest;
-use crate::agentic::tool::plan::generator::{Step, StepGeneratorRequest, StepSenderEvent};
+use crate::agentic::tool::plan::generator::{StepGeneratorRequest, StepSenderEvent};
 use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
 use crate::agentic::tool::r#type::Tool;

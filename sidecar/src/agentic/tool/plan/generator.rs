@@ -25,6 +25,13 @@ use crate::{
 
 use super::plan_step::PlanStep;
 
+/// Exposes 2 kinds of events one which notifies that a new step has been
+/// added and another which is the case when the steps are done
+pub enum StepSenderEvent {
+    NewStep(Step),
+    Done,
+}
+
 // consider possibility of constraining number of steps
 #[derive(Debug, Clone)]
 pub struct StepGeneratorRequest {
@@ -38,7 +45,9 @@ pub struct StepGeneratorRequest {
     exchange_id: String,
     ui_event: UnboundedSender<UIEventWithID>,
     // if we should stream the steps which we are generating
-    _stream_steps: bool,
+    // the caller takes care of reacting to this stream if they are interested in
+    // this
+    stream_steps: Option<UnboundedSender<StepSenderEvent>>,
 }
 
 impl StepGeneratorRequest {
@@ -48,8 +57,8 @@ impl StepGeneratorRequest {
         root_request_id: String,
         editor_url: String,
         exchange_id: String,
-        stream_steps: bool,
         ui_event: UnboundedSender<UIEventWithID>,
+        stream_steps: Option<UnboundedSender<StepSenderEvent>>,
     ) -> Self {
         Self {
             user_query,
@@ -60,7 +69,7 @@ impl StepGeneratorRequest {
             diagnostics: None,
             exchange_id,
             ui_event,
-            _stream_steps: stream_steps,
+            stream_steps,
         }
     }
 
@@ -174,6 +183,14 @@ impl Step {
             self.description,
             UserContext::new(vec![], vec![], None, vec![]),
         )
+    }
+
+    pub fn file_to_edit(&self) -> Option<String> {
+        self.files_to_edit.file.first().cloned()
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
     }
 }
 
@@ -296,6 +313,7 @@ impl Tool for StepGeneratorClient {
         let ui_sender = context.ui_event.clone();
         let root_id = context.root_request_id.to_owned();
         let is_deep_reasoning = context.is_deep_reasoning;
+        let stream_steps = context.stream_steps.clone();
 
         let messages = vec![
             LLMClientMessage::system(Self::system_message()),
@@ -303,15 +321,6 @@ impl Tool for StepGeneratorClient {
                 Self::user_message(context.user_query(), context.user_context()).await,
             ),
         ];
-
-        // llama3.1-8B-Insturct testing
-        // let request =
-        //     LLMClientCompletionRequest::new(LLMType::Llama3_1_8bInstruct, messages, 0.2, None);
-
-        // let api_key = llm_client::provider::LLMProviderAPIKeys::Ollama(OllamaProvider {});
-
-        // let llm_properties =
-        //     LLMProperties::new(LLMType::Llama3_1_8bInstruct, LLMProvider::Ollama, api_key);
 
         let request = if is_deep_reasoning {
             LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)
@@ -359,7 +368,7 @@ impl Tool for StepGeneratorClient {
 
         let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
         let mut plan_step_incremental_parser =
-            PlanStepGenerator::new(session_id, exchange_id, ui_sender);
+            PlanStepGenerator::new(session_id, exchange_id, ui_sender, stream_steps.clone());
         while let Some(stream_msg) = delta_stream.next().await {
             let delta = stream_msg.delta();
             if let Some(delta) = delta {
@@ -375,9 +384,16 @@ impl Tool for StepGeneratorClient {
 
         let elapsed_time = start_time.elapsed();
         println!("LLM request took: {:?}", elapsed_time);
+        // now close the step sender since we are not going to be sending any more steps
+        // at this point
+        if let Some(stream_steps) = stream_steps {
+            // we want to send a close event over here to let the receiver know that
+            // we are done streaming all the steps which we have
+            let _ = stream_steps.send(StepSenderEvent::Done);
+        }
 
         match llm_response.await {
-            Ok(Ok(response)) => {
+            Ok(Ok(_)) => {
                 let steps = plan_step_incremental_parser.generated_steps;
                 Ok(ToolOutput::StepGenerator(StepGeneratorResponse {
                     step: steps,
@@ -412,6 +428,7 @@ struct PlanStepGenerator {
     session_id: String,
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
+    stream_steps: Option<UnboundedSender<StepSenderEvent>>,
 }
 
 impl PlanStepGenerator {
@@ -419,6 +436,7 @@ impl PlanStepGenerator {
         session_id: String,
         exchange_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
+        stream_steps: Option<UnboundedSender<StepSenderEvent>>,
     ) -> Self {
         Self {
             stream_up_until_now: "".to_owned(),
@@ -431,6 +449,7 @@ impl PlanStepGenerator {
             session_id,
             exchange_id,
             ui_sender,
+            stream_steps,
         }
     }
 
@@ -456,6 +475,9 @@ impl PlanStepGenerator {
                     step.title.to_owned(),
                     step.description.to_owned(),
                 ));
+                if let Some(step_sender) = self.stream_steps.clone() {
+                    let _ = step_sender.send(StepSenderEvent::NewStep(step.clone()));
+                }
                 self.generated_steps.push(step);
             }
             _ => {}

@@ -120,8 +120,8 @@ async fn main() {
         request_id_str.to_owned(),
         editor_url,
         request_id_str,
-        false,
         ui_sender,
+        None,
     )
     .with_user_context(&user_context);
 

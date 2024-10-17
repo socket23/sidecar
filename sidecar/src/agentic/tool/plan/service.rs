@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::{stream, StreamExt};
 use thiserror::Error;
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncWriteExt, sync::mpsc::UnboundedSender};
 
 use crate::{
     agentic::{
@@ -26,6 +26,7 @@ use crate::{
 };
 
 use super::{
+    generator::{Step, StepSenderEvent},
     plan::Plan,
     plan_step::{PlanStep, StepExecutionContext},
 };
@@ -366,6 +367,7 @@ impl PlanService {
         mut user_context: UserContext,
         is_deep_reasoning: bool,
         plan_storage_path: String,
+        step_sender: Option<UnboundedSender<StepSenderEvent>>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Plan, PlanServiceError> {
         println!("plan::service::deep_reasoning::({})", is_deep_reasoning);
@@ -379,7 +381,13 @@ impl PlanService {
         }
         let mut plan_steps = self
             .tool_box
-            .generate_plan(&query, &user_context, is_deep_reasoning, message_properties)
+            .generate_plan(
+                &query,
+                &user_context,
+                is_deep_reasoning,
+                step_sender,
+                message_properties,
+            )
             .await?;
 
         // After generating plan_steps
@@ -387,14 +395,16 @@ impl PlanService {
             step.set_user_context(user_context.clone()); // every step gets given a clone of user_context
         }
 
-        Ok(Plan::new(
+        let plan = Plan::new(
             plan_id.to_owned(),
             "Placeholder Title (to be computed)".to_owned(),
             user_context,
             query,
             plan_steps,
-            plan_storage_path,
-        ))
+            plan_storage_path.to_owned(),
+        );
+        self.save_plan(&plan, &plan_storage_path).await?;
+        Ok(plan)
     }
 
     /// gets all files_to_edit from PlanSteps up to index

@@ -305,6 +305,7 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
                     .to_str()
                     .map(|plan_str| plan_str.to_owned())
                     .expect("PathBuf to str conversion to not fail on platforms"),
+                None,
                 event_properties.clone(),
             )
             .await

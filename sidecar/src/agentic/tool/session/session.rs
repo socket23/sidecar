@@ -479,8 +479,9 @@ impl Session {
             // now we want to poll from the receiver over here and start reacting to
             // the events
             let cloned_message_properties = message_properties.clone();
+            let cloned_plan_service = plan_service.clone();
             let plan = tokio::spawn(async move {
-                plan_service
+                cloned_plan_service
                     .create_plan(
                         plan_id,
                         query.to_owned(),
@@ -554,8 +555,11 @@ impl Session {
             println!("session::perform_plan_generation::finished_plan_generation");
             // we have to also start working on top of the plan after this
             let message = match plan.await {
-                Ok(_) => "Generated plan".to_owned(),
-                Err(_) => "Failed to generate plan".to_owned(),
+                Ok(Ok(plan)) => {
+                    let _ = plan_service.mark_plan_completed(plan).await;
+                    "Generated plan".to_owned()
+                }
+                _ => "Failed to generate plan".to_owned(),
             };
 
             // send a reply on the exchange

@@ -32,6 +32,7 @@ use super::{
 };
 
 /// Operates on Plan
+#[derive(Clone)]
 pub struct PlanService {
     tool_box: Arc<ToolBox>,
     symbol_manager: Arc<SymbolManager>,
@@ -525,6 +526,17 @@ impl PlanService {
         } else {
             None
         }
+    }
+
+    /// Marks the plan as complete over here
+    pub async fn mark_plan_completed(&self, mut plan: Plan) {
+        let step_count = plan.step_count();
+        if step_count == 0 {
+            plan.set_checkpoint(0);
+        } else {
+            plan.set_checkpoint(step_count - 1);
+        }
+        let _ = self.save_plan(&plan, plan.storage_path()).await;
     }
 }
 

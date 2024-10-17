@@ -204,12 +204,9 @@ impl StepGeneratorClient {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Represent Execution State if Necessary
-]]>
 </title>
 <description>
-<![CDATA[
 If you need to track whether a step is paused, pending, or completed, you can introduce an ExecutionState enum:
 
 ```rs
@@ -223,7 +220,6 @@ Reasons for this approach:
 State Management: Clearly represents the current state of the step's execution.
 Extensibility: Allows for additional states in the future if needed (e.g., Failed, Skipped).
 Separation of Concerns: Keeps execution state separate from other data, making the code cleaner and more maintainable.
-]]>
 </description>
 </step>
 </steps>
@@ -256,14 +252,10 @@ For example, if you have to import a helper function and use it in the code, it 
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 {{The title for the change you are about to make}}
-]]>
 </title>
 <description>
-<![CDATA[
 {{The description of the change you are about to make}}
-]]>
 </description>
 </step>
 </steps>
@@ -271,8 +263,6 @@ For example, if you have to import a helper function and use it in the code, it 
 
 Below we show you an example of how the output will look like:
 {}
-
-Note the use of CDATA sections within <description> and <title> to encapsulate XML-like content
 "#,
             Self::plan_schema()
         )
@@ -367,20 +357,169 @@ impl Tool for StepGeneratorClient {
         println!("LLM request took: {:?}", elapsed_time);
 
         match llm_response.await {
-            Ok(Ok(response)) => Ok(ToolOutput::StepGenerator(
-                StepGeneratorResponse::parse_response(&response)?,
-            )),
+            Ok(Ok(response)) => {
+                let mut plan_step_incremental_parser = PlanStepGenerator::new();
+                let _ = plan_step_incremental_parser.add_delta(response).await;
+                let steps = plan_step_incremental_parser.generated_steps;
+                Ok(ToolOutput::StepGenerator(StepGeneratorResponse {
+                    step: steps,
+                    human_help: None,
+                }))
+            }
             _ => Err(ToolError::RetriesExhausted),
         }
     }
+}
+
+/// The various parts of the steps which we have on the stream
+#[derive(Debug, Clone)]
+enum StepBlockStatus {
+    NoBlock,
+    StepStart,
+    StepFile,
+    StepTitle,
+    StepDescription,
+}
+
+/// Takes care of generating the plan steps and making sure we can parse it
+/// while its arriving on the stream
+struct PlanStepGenerator {
+    stream_up_until_now: String,
+    step_block_status: StepBlockStatus,
+    previous_answer_line_number: Option<usize>,
+    current_files_to_edit: Vec<String>,
+    current_title: Option<String>,
+    current_description: Option<String>,
+    generated_steps: Vec<Step>,
+}
+
+impl PlanStepGenerator {
+    pub fn new() -> Self {
+        Self {
+            stream_up_until_now: "".to_owned(),
+            step_block_status: StepBlockStatus::NoBlock,
+            previous_answer_line_number: None,
+            current_files_to_edit: vec![],
+            current_title: None,
+            current_description: None,
+            generated_steps: vec![],
+        }
+    }
+
+    fn generate_step_if_possible(&mut self) {
+        match (self.current_title.clone(), self.current_description.clone()) {
+            (Some(title), Some(description)) => self.generated_steps.push(Step {
+                files_to_edit: FilesToEdit {
+                    file: self.current_files_to_edit.to_vec(),
+                },
+                title,
+                description,
+            }),
+            _ => {}
+        }
+        self.current_title = None;
+        self.current_description = None;
+    }
+
+    async fn add_delta(&mut self, delta: String) {
+        self.stream_up_until_now.push_str(&delta);
+        self.process_answer().await;
+    }
+
+    async fn process_answer(&mut self) {
+        let line_number_to_process = get_last_newline_line_number(&self.stream_up_until_now);
+        if line_number_to_process.is_none() {
+            return;
+        }
+        let line_number_to_process_until =
+            line_number_to_process.expect("is_none to hold above") - 1;
+
+        let stream_lines = self.stream_up_until_now.to_owned();
+        let stream_lines = stream_lines.lines().into_iter().collect::<Vec<_>>();
+
+        let start_index = self
+            .previous_answer_line_number
+            .map_or(0, |line_number| line_number + 1);
+
+        for line_number in start_index..=line_number_to_process_until {
+            self.previous_answer_line_number = Some(line_number);
+            let answer_line_at_index = stream_lines[line_number];
+
+            match self.step_block_status.clone() {
+                StepBlockStatus::NoBlock => {
+                    // we had no block but found the start of a step over here
+                    if answer_line_at_index == "<step>" {
+                        self.step_block_status = StepBlockStatus::StepStart;
+                    }
+                }
+                StepBlockStatus::StepStart => {
+                    if answer_line_at_index == "<file>" {
+                        self.step_block_status = StepBlockStatus::StepFile;
+                    } else if answer_line_at_index == "<title>" {
+                        self.step_block_status = StepBlockStatus::StepTitle;
+                    } else if answer_line_at_index == "<description>" {
+                        self.step_block_status = StepBlockStatus::StepDescription;
+                    } else if answer_line_at_index == "</step>" {
+                        // over here we should have a plan at this point which we can
+                        // send back, for now we can start by logging this properly
+                        self.generate_step_if_possible();
+                        self.step_block_status = StepBlockStatus::NoBlock;
+                    }
+                }
+                StepBlockStatus::StepFile => {
+                    if answer_line_at_index == "</file>" {
+                        self.step_block_status = StepBlockStatus::StepStart;
+                    } else {
+                        self.current_files_to_edit
+                            .push(answer_line_at_index.to_owned());
+                    }
+                }
+                StepBlockStatus::StepTitle => {
+                    if answer_line_at_index == "</title>" {
+                        self.step_block_status = StepBlockStatus::StepStart;
+                    } else {
+                        match self.current_title.clone() {
+                            Some(title) => {
+                                self.current_title = Some(title + "\n" + answer_line_at_index);
+                            }
+                            None => {
+                                self.current_title = Some(answer_line_at_index.to_owned());
+                            }
+                        }
+                    }
+                }
+                StepBlockStatus::StepDescription => {
+                    if answer_line_at_index == "</description>" {
+                        self.step_block_status = StepBlockStatus::StepStart;
+                    } else {
+                        match self.current_description.clone() {
+                            Some(description) => {
+                                self.current_description =
+                                    Some(description + "\n" + answer_line_at_index);
+                            }
+                            None => {
+                                self.current_description = Some(answer_line_at_index.to_owned());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Helps to get the last line number which has a \n
+fn get_last_newline_line_number(s: &str) -> Option<usize> {
+    s.rfind('\n')
+        .map(|last_index| s[..=last_index].chars().filter(|&c| c == '\n').count())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_parse_response_with_cdata() {
+    #[tokio::test]
+    async fn test_parse_response_with_cdata() {
         let input = r#"Certainly! I'll create a stepped plan to implement a new Tool called StepGeneratorClient, similar to the ReasoningClient. Here's the plan:
 
 <response>
@@ -392,12 +531,9 @@ mod tests {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Create StepGeneratorClient struct and implement basic methods
-]]>
 </title>
 <description>
-<![CDATA[
 Create a new file `generator.rs` in the `plan` directory. Define the `StepGeneratorClient` struct and implement basic methods:
 
 ```rust
@@ -420,7 +556,6 @@ impl StepGeneratorClient {
     }
 }
 ```
-]]>
 </description>
 </step>
 
@@ -431,12 +566,9 @@ impl StepGeneratorClient {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Define StepGeneratorRequest and StepGeneratorResponse structs
-]]>
 </title>
 <description>
-<![CDATA[
 Add the following structs to `generator.rs`:
 
 ```rust
@@ -469,7 +601,6 @@ impl StepGeneratorRequest {
     }
 }
 ```
-]]>
 </description>
 </step>
 
@@ -480,12 +611,9 @@ impl StepGeneratorRequest {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Implement the Tool trait for StepGeneratorClient
-]]>
 </title>
 <description>
-<![CDATA[
 Implement the `Tool` trait for `StepGeneratorClient`:
 
 ```rust
@@ -506,7 +634,6 @@ impl Tool for StepGeneratorClient {
     }
 }
 ```
-]]>
 </description>
 </step>
 
@@ -517,12 +644,9 @@ impl Tool for StepGeneratorClient {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Update ToolInput enum to include StepGenerator
-]]>
 </title>
 <description>
-<![CDATA[
 Add a new variant to the `ToolInput` enum in `input.rs`:
 
 ```rust
@@ -543,7 +667,6 @@ impl ToolInput {
     }
 }
 ```
-]]>
 </description>
 </step>
 
@@ -554,12 +677,9 @@ impl ToolInput {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Update ToolOutput enum to include StepGenerator
-]]>
 </title>
 <description>
-<![CDATA[
 Add a new variant to the `ToolOutput` enum in `output.rs`:
 
 ```rust
@@ -583,7 +703,6 @@ impl ToolOutput {
     }
 }
 ```
-]]>
 </description>
 </step>
 
@@ -594,12 +713,9 @@ impl ToolOutput {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Update ToolType enum to include StepGenerator
-]]>
 </title>
 <description>
-<![CDATA[
 Add a new variant to the `ToolType` enum in `type.rs`:
 
 ```rust
@@ -617,7 +733,6 @@ impl std::fmt::Display for ToolType {
     }
 }
 ```
-]]>
 </description>
 </step>
 
@@ -628,12 +743,9 @@ impl std::fmt::Display for ToolType {
 </file>
 </files_to_edit>
 <title>
-<![CDATA[
 Update ToolBroker to include StepGeneratorClient
-]]>
 </title>
 <description>
-<![CDATA[
 Update the `ToolBroker::new` method in `broker.rs` to include the `StepGeneratorClient`:
 
 ```rust
@@ -656,16 +768,17 @@ impl ToolBroker {
     }
 }
 ```
-]]>
 </description>
 </step>
 </steps>
 </response>
 
 This plan outlines the steps to create a new `StepGeneratorClient` tool, similar to the `ReasoningClient`. It includes creating the necessary structs, implementing the `Tool` trait, and updating the relevant enums and broker to include the new tool. You can follow these steps to implement the `StepGeneratorClient` in your project."#;
-        let result = StepGeneratorResponse::parse_response(input);
+        let mut plan_step_generator = PlanStepGenerator::new();
+        plan_step_generator.add_delta(input.to_owned()).await;
 
-        assert!(result.is_ok());
-        // let response = result.unwrap();
+        // we should have 7 steps over here
+        let steps = plan_step_generator.generated_steps;
+        assert_eq!(steps.len(), 7);
     }
 }

@@ -1176,7 +1176,7 @@ impl SearchAndReplaceAccumulator {
     }
 }
 
-/// Hels to get the last line number which has a \n
+/// Helps to get the last line number which has a \n
 fn get_last_newline_line_number(s: &str) -> Option<usize> {
     s.rfind('\n')
         .map(|last_index| s[..=last_index].chars().filter(|&c| c == '\n').count())

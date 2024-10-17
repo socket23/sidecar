@@ -281,11 +281,13 @@ For example, if you have to import a helper function and use it in the code, it 
 
 Below we show you an example of how the output will look like:
 {}
-"#,
+
+Each xml tag in the response should be in its own line and the content in the xml tag should be on the line after the xml tag. This is essential because we are going to be parsing the output as it is generating line by line"#,
             Self::plan_schema()
         )
     }
 
+    // TODO(skcd): Send a reminder about the perferred output over here
     pub async fn user_message(user_query: &str, user_context: Option<&UserContext>) -> String {
         let context_xml = match user_context {
             Some(ctx) => match ctx.to_owned().to_xml(Default::default()).await {

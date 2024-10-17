@@ -3,16 +3,30 @@
 
 use std::sync::Arc;
 
+use futures::StreamExt;
+
 use crate::{
     agentic::{
         symbol::{
             errors::SymbolError,
-            events::{human::HumanAgenticRequest, message_event::SymbolEventMessageProperties},
+            events::{
+                edit::SymbolToEdit,
+                human::HumanAgenticRequest,
+                message_event::{SymbolEventMessage, SymbolEventMessageProperties},
+            },
+            identifier::SymbolIdentifier,
+            manager::SymbolManager,
             scratch_pad::ScratchPadAgent,
             tool_box::ToolBox,
+            tool_properties::ToolProperties,
+            types::SymbolEventRequest,
             ui_event::UIEventWithID,
         },
-        tool::{input::ToolInput, plan::service::PlanService, r#type::Tool},
+        tool::{
+            input::ToolInput,
+            plan::{generator::StepSenderEvent, service::PlanService},
+            r#type::Tool,
+        },
     },
     chunking::text_document::Range,
     repo::types::RepoRef,
@@ -441,9 +455,10 @@ impl Session {
         plan_service: PlanService,
         plan_id: String,
         plan_storage_path: String,
+        symbol_manager: Arc<SymbolManager>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
-        let last_exchange = self.last_exchange();
+        let last_exchange = self.last_exchange().cloned();
         if let Some(Exchange {
             exchange_id: _,
             exchange_type:
@@ -453,19 +468,87 @@ impl Session {
                 }),
         }) = last_exchange
         {
-            let plan = plan_service
-                .create_plan(
-                    plan_id,
-                    query.to_owned(),
-                    user_context.clone(),
-                    false, // deep reasoning toggle, set to false right now by default
-                    plan_storage_path,
-                    message_properties.clone(),
-                )
-                .await;
+            // since we are going to be streaming the steps over here as we also
+            // have to very quickly start editing the files as the steps are coming
+            // in, in a very optimistic way
+            let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+            let mut stream_receiver =
+                tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+
+            // now we want to poll from the receiver over here and start reacting to
+            // the events
+            let cloned_message_properties = message_properties.clone();
+            let plan = tokio::spawn(async move {
+                plan_service
+                    .create_plan(
+                        plan_id,
+                        query.to_owned(),
+                        user_context.clone(),
+                        false, // deep reasoning toggle, set to false right now by default
+                        plan_storage_path,
+                        Some(sender),
+                        cloned_message_properties.clone(),
+                    )
+                    .await
+            });
+
+            while let Some(step_message) = stream_receiver.next().await {
+                match step_message {
+                    StepSenderEvent::NewStep(step) => {
+                        println!("session::perform_plan_generation::new_step_found");
+                        let instruction = step.description();
+                        let file_to_edit = step.file_to_edit();
+                        if file_to_edit.is_none() {
+                            continue;
+                        }
+                        let file_to_edit = file_to_edit.expect("is_none to hold");
+                        let hub_sender = symbol_manager.hub_sender();
+                        let (edit_done_sender, edit_done_receiver) =
+                            tokio::sync::oneshot::channel();
+                        let _ = hub_sender.send(SymbolEventMessage::new(
+                            SymbolEventRequest::simple_edit_request(
+                                SymbolIdentifier::with_file_path(&file_to_edit, &file_to_edit),
+                                SymbolToEdit::new(
+                                    file_to_edit.to_owned(),
+                                    Range::default(),
+                                    file_to_edit.to_owned(),
+                                    vec![instruction.to_owned()],
+                                    false,
+                                    false,
+                                    true,
+                                    instruction.to_owned(),
+                                    None,
+                                    false,
+                                    None,
+                                    true,
+                                    None,
+                                    vec![],
+                                ),
+                                ToolProperties::new(),
+                            ),
+                            message_properties.request_id().clone(),
+                            message_properties.ui_sender().clone(),
+                            edit_done_sender,
+                            tokio_util::sync::CancellationToken::new(),
+                            message_properties.editor_url(),
+                        ));
+
+                        // wait for the edits to finish over here
+                        let _ = edit_done_receiver.await;
+                    }
+                    StepSenderEvent::Done => {
+                        break;
+                    }
+                }
+            }
+            // close the receiver stream since we are no longer interested in any
+            // of the events after getting a done event
+            stream_receiver.close();
+            // we will start polling from the receiver soon
             println!("session::perform_plan_generation::finished_plan_generation");
             // we have to also start working on top of the plan after this
-            let message = match plan {
+            let message = match plan.await {
                 Ok(_) => "Generated plan".to_owned(),
                 Err(_) => "Failed to generate plan".to_owned(),
             };

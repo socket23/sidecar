@@ -301,6 +301,7 @@ pub async fn create_plan(
             user_context,
             is_deep_reasoning,
             plan_storage_path.to_owned(),
+            None,
             message_properties,
         )
         .await;

@@ -101,7 +101,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     LSPQuickFixInvocationResponse,
 };
 use crate::agentic::tool::plan::add_steps::PlanAddRequest;
-use crate::agentic::tool::plan::generator::StepGeneratorRequest;
+use crate::agentic::tool::plan::generator::{Step, StepGeneratorRequest, StepSenderEvent};
 use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
 use crate::agentic::tool::r#type::Tool;
@@ -9439,6 +9439,7 @@ FILEPATH: {fs_file_path}
         user_query: &str,
         user_context: &UserContext,
         is_deep_reasoning: bool,
+        step_sender: Option<UnboundedSender<StepSenderEvent>>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Vec<PlanStep>, SymbolError> {
         let step_generator_request = StepGeneratorRequest::new(
@@ -9447,8 +9448,8 @@ FILEPATH: {fs_file_path}
             message_properties.root_request_id().to_owned(),
             message_properties.editor_url(),
             message_properties.request_id_str().to_owned(),
-            true, // stream by default
             message_properties.ui_sender(),
+            step_sender,
         )
         .with_user_context(user_context);
         println!("tool_box::generate_plan::start");

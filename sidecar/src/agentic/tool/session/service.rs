@@ -22,14 +22,14 @@ use super::session::{AideAgentMode, Session};
 /// The session service which takes care of creating the session and manages the storage
 pub struct SessionService {
     tool_box: Arc<ToolBox>,
-    _symbol_manager: Arc<SymbolManager>,
+    symbol_manager: Arc<SymbolManager>,
 }
 
 impl SessionService {
     pub fn new(tool_box: Arc<ToolBox>, symbol_manager: Arc<SymbolManager>) -> Self {
         Self {
             tool_box,
-            _symbol_manager: symbol_manager,
+            symbol_manager,
         }
     }
 
@@ -146,7 +146,13 @@ impl SessionService {
 
         // now we can perform the plan generation over here
         session
-            .perform_plan_generation(plan_service, plan_id, plan_storage_path, message_properties)
+            .perform_plan_generation(
+                plan_service,
+                plan_id,
+                plan_storage_path,
+                self.symbol_manager.clone(),
+                message_properties,
+            )
             .await?;
 
         println!("session_service::plan_generation::stop");

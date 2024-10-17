@@ -1224,6 +1224,35 @@ pub async fn reasoning_thread_create(
     Ok(json_result(response))
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticCancelRunningExchange {
+    exchange_id: String,
+    session_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticCancelRunningExchangeResponse {
+    success: bool,
+}
+
+impl ApiResponse for AgenticCancelRunningExchangeResponse {}
+
+pub async fn cancel_running_exchange(
+    Extension(_app): Extension<Application>,
+    Json(AgenticCancelRunningExchange {
+        exchange_id,
+        session_id,
+    }): Json<AgenticCancelRunningExchange>,
+) -> Result<impl IntoResponse> {
+    println!(
+        "cancel_running_exchange::session_id({})::exchange_id({})",
+        session_id, exchange_id
+    );
+    Ok(json_result(AgenticCancelRunningExchangeResponse {
+        success: true,
+    }))
+}
+
 /// We keep track of the thread-id over here
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgentSessionChatRequest {

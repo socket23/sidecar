@@ -13,3 +13,4 @@ pub mod grep_symbol;
 pub mod inlay_hints;
 pub mod open_file;
 pub mod quick_fix;
+pub(crate) mod undo_changes;

@@ -50,6 +50,7 @@ use super::{
         inlay_hints::InlayHintsRequest,
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
+        undo_changes::UndoChangesMadeDuringExchangeRequest,
     },
     plan::{
         add_steps::PlanAddRequest, generator::StepGeneratorRequest, reasoning::ReasoningRequest,
@@ -161,6 +162,8 @@ pub enum ToolInput {
     ContextDrivenChatReply(SessionChatClientRequest),
     // Create new exchange for the session
     NewExchangeDuringSession(SessionExchangeNewRequest),
+    // Undo changes made during a session
+    UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRequest),
 }
 
 impl ToolInput {
@@ -235,6 +238,19 @@ impl ToolInput {
             ToolInput::GoToTypeDefinition(_) => ToolType::GoToTypeDefinition,
             ToolInput::ContextDrivenChatReply(_) => ToolType::ContextDrivenChatReply,
             ToolInput::NewExchangeDuringSession(_) => ToolType::NewExchangeDuringSession,
+            ToolInput::UndoChangesMadeDuringSession(_) => ToolType::UndoChangesMadeDuringSession,
+        }
+    }
+
+    pub fn is_undo_request_during_session(
+        self,
+    ) -> Result<UndoChangesMadeDuringExchangeRequest, ToolError> {
+        if let ToolInput::UndoChangesMadeDuringSession(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::UndoChangesMadeDuringSession,
+            ))
         }
     }
 

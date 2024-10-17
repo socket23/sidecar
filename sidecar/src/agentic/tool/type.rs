@@ -123,6 +123,8 @@ pub enum ToolType {
     ContextDrivenChatReply,
     // Create a new exchange during a session
     NewExchangeDuringSession,
+    // Undo changes made via exchange
+    UndoChangesMadeDuringSession,
 }
 
 impl std::fmt::Display for ToolType {
@@ -205,6 +207,7 @@ impl std::fmt::Display for ToolType {
             ToolType::GoToTypeDefinition => write!(f, "Go to type definition"),
             ToolType::ContextDrivenChatReply => write!(f, "Context driven chat reply"),
             ToolType::NewExchangeDuringSession => write!(f, "New exchange during session"),
+            ToolType::UndoChangesMadeDuringSession => write!(f, "Undo changes made during session"),
         }
     }
 }

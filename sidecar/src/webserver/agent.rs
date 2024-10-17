@@ -26,6 +26,7 @@ use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
 use crate::webserver::plan::{
     append_to_plan, check_plan_storage_path, create_plan, drop_plan,
     handle_check_references_and_stream, handle_create_plan, handle_execute_plan_until,
+    plan_storage_directory,
 };
 
 use super::types::ApiResponse;
@@ -479,7 +480,12 @@ pub async fn execute_plan_until(
         editor_url,
     }): Json<ExecutePlanUntilRequest>,
 ) -> Result<impl IntoResponse> {
-    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
     let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
@@ -509,7 +515,12 @@ pub async fn drop_plan_from(
         thread_id,
     }): Json<DropPlanFromRequest>,
 ) -> Result<impl IntoResponse> {
-    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
     let plan_storage_path =
         check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
 
@@ -561,7 +572,12 @@ pub async fn handle_check_references(
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::handle_check_references({})", &user_query);
-    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
 
     // reinstate this after override
     let plan_storage_path =
@@ -605,7 +621,12 @@ pub async fn handle_append_plan(
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::append_plan({})", &user_query);
-    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
 
     // reinstate this after override
     let plan_storage_path =
@@ -709,7 +730,12 @@ pub async fn followup_chat(
     // check if we are in the process of generating a plan and the editor url is present
     if editor_url.is_some() && (user_context.is_plan_generation_flow()) {
         println!("followup_chat::plan_generation_flow");
-        let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+        let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+        let plan_service = PlanService::new(
+            app.tool_box.clone(),
+            app.symbol_manager.clone(),
+            plan_storage_directory,
+        );
         if let Some(execution_until) = user_context.is_plan_execution_until() {
             // logic here
             return handle_execute_plan_until(

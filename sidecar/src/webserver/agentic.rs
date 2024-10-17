@@ -34,7 +34,9 @@ use crate::agentic::tool::session::service::SessionService;
 use crate::agentic::tool::session::session::AideAgentMode;
 use crate::chunking::text_document::Range;
 use crate::repo::types::RepoRef;
-use crate::webserver::plan::{check_plan_storage_path, check_scratch_pad_path, create_plan};
+use crate::webserver::plan::{
+    check_plan_storage_path, check_scratch_pad_path, create_plan, plan_storage_directory,
+};
 use crate::{application::application::Application, user_context::types::UserContext};
 
 use super::types::ApiResponse;
@@ -1189,7 +1191,12 @@ pub async fn reasoning_thread_create(
         "webserver::agentic::reasoning_thread_create::user_context::({:?})",
         &user_context
     );
-    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let plan_output = create_plan(
         query,
@@ -1583,10 +1590,16 @@ pub async fn agent_session_plan(
     let session_storage_path =
         check_session_storage_path(app.config.clone(), session_id.to_string()).await;
 
-    let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
 
     // plan-id is made up of session_id and the exchange-id joined together
-    let plan_id = format!("{}-{}", &session_id, &exchange_id);
+    let plan_id = plan_service.generate_unique_plan_id(&session_id, &exchange_id);
     let plan_storage_path = check_plan_storage_path(app.config.clone(), plan_id.to_owned()).await;
 
     let cloned_session_id = session_id.to_string();

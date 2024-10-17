@@ -272,7 +272,9 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
 
     let _ui_sender = event_properties.ui_sender();
 
-    let plan_service = PlanService::new(tool_box.clone(), symbol_manager);
+    let mut config_path = default_index_dir();
+    config_path = config_path.join("plans");
+    let plan_service = PlanService::new(tool_box.clone(), symbol_manager, config_path);
 
     // let path = "/Users/skcd/scratch/sidecar/sidecar/src/bin/plan.json";
 

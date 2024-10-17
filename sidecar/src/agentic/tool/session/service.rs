@@ -133,27 +133,59 @@ impl SessionService {
             )
         };
 
-        // add an exchange that we are going to genrate a plan over here
-        session = session.plan(exchange_id, query, user_context);
+        // here we first check if we are going to revert and if we are, then we need
+        // to go back certain steps
+        if let Some((previous_exchange_id, step_index)) = plan_service.should_drop_plan(&query) {
+            println!(
+                "dropping_plan::exchange_id({})::step_index({:?})",
+                &previous_exchange_id, &step_index
+            );
+            // we first add an exchange that the human has request us to rollback
+            // on the plan
+            session =
+                session.human_message(exchange_id, query, user_context, project_labels, repo_ref);
 
-        // create a new exchange over here for the plan
-        let plan_exchange_id = self
-            .tool_box
-            .create_new_exchange(session_id, message_properties.clone())
-            .await?;
+            let plan_exchange_id = self
+                .tool_box
+                .create_new_exchange(session_id, message_properties.clone())
+                .await?;
 
-        message_properties = message_properties.set_request_id(plan_exchange_id);
+            message_properties = message_properties.set_request_id(plan_exchange_id);
 
-        // now we can perform the plan generation over here
-        session
-            .perform_plan_generation(
-                plan_service,
-                plan_id,
-                plan_storage_path,
-                self.symbol_manager.clone(),
-                message_properties,
-            )
-            .await?;
+            session
+                .perform_plan_revert(
+                    plan_service,
+                    plan_id,
+                    plan_storage_path,
+                    self.symbol_manager.clone(),
+                    previous_exchange_id,
+                    step_index,
+                    message_properties,
+                )
+                .await?;
+        } else {
+            // add an exchange that we are going to genrate a plan over here
+            session = session.plan(exchange_id, query, user_context);
+
+            // create a new exchange over here for the plan
+            let plan_exchange_id = self
+                .tool_box
+                .create_new_exchange(session_id, message_properties.clone())
+                .await?;
+
+            message_properties = message_properties.set_request_id(plan_exchange_id);
+
+            // now we can perform the plan generation over here
+            session
+                .perform_plan_generation(
+                    plan_service,
+                    plan_id,
+                    plan_storage_path,
+                    self.symbol_manager.clone(),
+                    message_properties,
+                )
+                .await?;
+        }
 
         println!("session_service::plan_generation::stop");
         Ok(())

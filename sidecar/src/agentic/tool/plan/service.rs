@@ -36,7 +36,7 @@ use super::{
 pub struct PlanService {
     tool_box: Arc<ToolBox>,
     symbol_manager: Arc<SymbolManager>,
-    _plan_storage_directory: PathBuf,
+    plan_storage_directory: PathBuf,
 }
 
 impl PlanService {
@@ -48,7 +48,7 @@ impl PlanService {
         Self {
             tool_box,
             symbol_manager,
-            _plan_storage_directory: plan_storage_directory,
+            plan_storage_directory,
         }
     }
 
@@ -547,6 +547,14 @@ impl PlanService {
 
     pub fn generate_unique_plan_id(&self, session_id: &str, exchange_id: &str) -> String {
         format!("{}-{}", session_id, exchange_id)
+    }
+
+    pub async fn load_plan_from_id(&self, plan_id: &str) -> std::io::Result<Plan> {
+        let mut plan_storage_path = self.plan_storage_directory.clone();
+        plan_storage_path = plan_storage_path.join(plan_id);
+        let content = tokio::fs::read_to_string(plan_storage_path).await?;
+        let plan: Plan = serde_json::from_str(&content).unwrap();
+        Ok(plan)
     }
 }
 

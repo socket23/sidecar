@@ -152,17 +152,17 @@ impl SessionService {
 
             message_properties = message_properties.set_request_id(plan_exchange_id);
 
-            session
+            session = session
                 .perform_plan_revert(
                     plan_service,
-                    plan_id,
-                    plan_storage_path,
-                    self.symbol_manager.clone(),
                     previous_exchange_id,
                     step_index,
+                    self.tool_box.clone(),
                     message_properties,
                 )
                 .await?;
+            // save the session to the disk
+            self.save_to_storage(&session).await?;
         } else {
             // add an exchange that we are going to genrate a plan over here
             session = session.plan(exchange_id, query, user_context);
@@ -176,7 +176,7 @@ impl SessionService {
             message_properties = message_properties.set_request_id(plan_exchange_id);
 
             // now we can perform the plan generation over here
-            session
+            session = session
                 .perform_plan_generation(
                     plan_service,
                     plan_id,
@@ -185,6 +185,8 @@ impl SessionService {
                     message_properties,
                 )
                 .await?;
+            // save the session to the disk
+            self.save_to_storage(&session).await?;
         }
 
         println!("session_service::plan_generation::stop");
@@ -232,9 +234,12 @@ impl SessionService {
 
         message_properties = message_properties.set_request_id(edit_exchange_id);
 
-        session
+        session = session
             .perform_agentic_editing(scratch_pad_agent, root_directory, message_properties)
             .await?;
+
+        // save the session to the disk
+        self.save_to_storage(&session).await?;
         println!("session_service::code_edit::agentic::stop");
         Ok(())
     }
@@ -311,9 +316,12 @@ impl SessionService {
         );
 
         // Now we can start editing the selection over here
-        session
+        session = session
             .perform_anchored_edit(scratch_pad_agent, message_properties)
             .await?;
+
+        // save the session to the disk
+        self.save_to_storage(&session).await?;
         println!("session_service::code_edit::anchored_edit::finished");
         Ok(())
     }

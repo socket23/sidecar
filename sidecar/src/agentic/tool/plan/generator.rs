@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::StreamExt;
 use quick_xml::de::from_str;
 use serde::Deserialize;
 use std::{sync::Arc, time::Instant};
@@ -35,9 +36,9 @@ pub struct StepGeneratorRequest {
     diagnostics: Option<DiagnosticMap>,
     // the exchange id which belongs to the session
     exchange_id: String,
-    // if we should stream the steps which we are generating
-    stream_steps: bool,
     ui_event: UnboundedSender<UIEventWithID>,
+    // if we should stream the steps which we are generating
+    _stream_steps: bool,
 }
 
 impl StepGeneratorRequest {
@@ -58,8 +59,8 @@ impl StepGeneratorRequest {
             user_context: None,
             diagnostics: None,
             exchange_id,
-            stream_steps,
             ui_event,
+            _stream_steps: stream_steps,
         }
     }
 
@@ -290,6 +291,9 @@ impl Tool for StepGeneratorClient {
         let context = ToolInput::step_generator(input)?;
 
         let _editor_url = context.editor_url.to_owned();
+        let session_id = context.root_request_id.to_owned();
+        let exchange_id = context.exchange_id.to_owned();
+        let ui_sender = context.ui_event.clone();
         let root_id = context.root_request_id.to_owned();
         let is_deep_reasoning = context.is_deep_reasoning;
 
@@ -328,7 +332,7 @@ impl Tool for StepGeneratorClient {
                 LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
             )
         };
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let start_time = Instant::now();
 
@@ -353,13 +357,27 @@ impl Tool for StepGeneratorClient {
                 .await
         });
 
+        let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+        let mut plan_step_incremental_parser =
+            PlanStepGenerator::new(session_id, exchange_id, ui_sender);
+        while let Some(stream_msg) = delta_stream.next().await {
+            let delta = stream_msg.delta();
+            if let Some(delta) = delta {
+                plan_step_incremental_parser
+                    .add_delta(delta.to_owned())
+                    .await;
+            }
+        }
+
+        // force flush the remaining part of the stream over here
+        println!("step_generator_client::flusing_entries");
+        plan_step_incremental_parser.process_answer().await;
+
         let elapsed_time = start_time.elapsed();
         println!("LLM request took: {:?}", elapsed_time);
 
         match llm_response.await {
             Ok(Ok(response)) => {
-                let mut plan_step_incremental_parser = PlanStepGenerator::new();
-                let _ = plan_step_incremental_parser.add_delta(response).await;
                 let steps = plan_step_incremental_parser.generated_steps;
                 Ok(ToolOutput::StepGenerator(StepGeneratorResponse {
                     step: steps,
@@ -391,10 +409,17 @@ struct PlanStepGenerator {
     current_title: Option<String>,
     current_description: Option<String>,
     generated_steps: Vec<Step>,
+    session_id: String,
+    exchange_id: String,
+    ui_sender: UnboundedSender<UIEventWithID>,
 }
 
 impl PlanStepGenerator {
-    pub fn new() -> Self {
+    pub fn new(
+        session_id: String,
+        exchange_id: String,
+        ui_sender: UnboundedSender<UIEventWithID>,
+    ) -> Self {
         Self {
             stream_up_until_now: "".to_owned(),
             step_block_status: StepBlockStatus::NoBlock,
@@ -403,22 +428,41 @@ impl PlanStepGenerator {
             current_title: None,
             current_description: None,
             generated_steps: vec![],
+            session_id,
+            exchange_id,
+            ui_sender,
         }
     }
 
     fn generate_step_if_possible(&mut self) {
         match (self.current_title.clone(), self.current_description.clone()) {
-            (Some(title), Some(description)) => self.generated_steps.push(Step {
-                files_to_edit: FilesToEdit {
-                    file: self.current_files_to_edit.to_vec(),
-                },
-                title,
-                description,
-            }),
+            // at this point since we have a plan step which we are generating
+            // we should also send the ui_event for this so the editor is updated in real time
+            (Some(title), Some(description)) => {
+                let step = Step {
+                    files_to_edit: FilesToEdit {
+                        file: self.current_files_to_edit.to_vec(),
+                    },
+                    title,
+                    description,
+                };
+                println!("generating_steps");
+                // send over the ui event here for the step
+                let _ = self.ui_sender.send(UIEventWithID::plan_complete_added(
+                    self.session_id.to_owned(),
+                    self.exchange_id.to_owned(),
+                    self.generated_steps.len(),
+                    step.files_to_edit.file.to_vec(),
+                    step.title.to_owned(),
+                    step.description.to_owned(),
+                ));
+                self.generated_steps.push(step);
+            }
             _ => {}
         }
         self.current_title = None;
         self.current_description = None;
+        self.current_files_to_edit = vec![];
     }
 
     async fn add_delta(&mut self, delta: String) {

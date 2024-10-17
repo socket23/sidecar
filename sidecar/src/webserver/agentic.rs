@@ -1585,6 +1585,10 @@ pub async fn agent_session_plan(
 
     let plan_service = PlanService::new(app.tool_box.clone(), app.symbol_manager.clone());
 
+    // plan-id is made up of session_id and the exchange-id joined together
+    let plan_id = format!("{}-{}", &session_id, &exchange_id);
+    let plan_storage_path = check_plan_storage_path(app.config.clone(), plan_id.to_owned()).await;
+
     let cloned_session_id = session_id.to_string();
     let _ = tokio::spawn(async move {
         let session_service = SessionService::new(app.tool_box.clone(), app.symbol_manager.clone());
@@ -1592,6 +1596,8 @@ pub async fn agent_session_plan(
             .plan_generation(
                 cloned_session_id,
                 session_storage_path,
+                plan_storage_path,
+                plan_id,
                 plan_service,
                 exchange_id,
                 query,

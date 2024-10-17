@@ -12,7 +12,7 @@ use crate::{
             tool_box::ToolBox,
             ui_event::UIEventWithID,
         },
-        tool::{input::ToolInput, r#type::Tool},
+        tool::{input::ToolInput, plan::service::PlanService, r#type::Tool},
     },
     chunking::text_document::Range,
     repo::types::RepoRef,
@@ -43,7 +43,13 @@ pub enum ExchangeType {
     // user query? we probably have to store the snippet we were trying to edit
     // as well
     Edit(ExchangeTypeEdit),
-    Plan(String),
+    Plan(ExchangeTypePlan),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeTypePlan {
+    query: String,
+    user_context: UserContext,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -119,6 +125,16 @@ impl Exchange {
                 project_labels,
                 repo_ref,
             )),
+        }
+    }
+
+    fn plan_request(exchange_id: String, query: String, user_context: UserContext) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::Plan(ExchangeTypePlan {
+                query,
+                user_context,
+            }),
         }
     }
 
@@ -238,6 +254,17 @@ impl Session {
 
     pub fn exchanges(&self) -> usize {
         self.exchanges.len()
+    }
+
+    pub fn plan(
+        mut self,
+        exchange_id: String,
+        query: String,
+        user_context: UserContext,
+    ) -> Session {
+        let exchange = Exchange::plan_request(exchange_id, query, user_context);
+        self.exchanges.push(exchange);
+        self
     }
 
     pub fn agentic_edit(
@@ -404,6 +431,70 @@ impl Session {
             self.session_id.to_owned(),
             exchange_id,
         ));
+        Ok(self)
+    }
+
+    /// going to work on plan generation
+    /// TODO(skcd): This should also perform the edits properly over here
+    pub async fn perform_plan_generation(
+        mut self,
+        plan_service: PlanService,
+        plan_id: String,
+        plan_storage_path: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        let last_exchange = self.last_exchange();
+        if let Some(Exchange {
+            exchange_id: _,
+            exchange_type:
+                ExchangeType::Plan(ExchangeTypePlan {
+                    query,
+                    user_context,
+                }),
+        }) = last_exchange
+        {
+            let plan = plan_service
+                .create_plan(
+                    plan_id,
+                    query.to_owned(),
+                    user_context.clone(),
+                    false, // deep reasoning toggle, set to false right now by default
+                    plan_storage_path,
+                    message_properties.clone(),
+                )
+                .await;
+            println!("session::perform_plan_generation::finished_plan_generation");
+            // we have to also start working on top of the plan after this
+            let message = match plan {
+                Ok(_) => "Generated plan".to_owned(),
+                Err(_) => "Failed to generate plan".to_owned(),
+            };
+
+            // send a reply on the exchange
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::chat_event(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                    message.to_owned(),
+                    Some(message.to_owned()),
+                ));
+
+            // Add to the exchange
+            self.exchanges.push(Exchange::agent_reply(
+                message_properties.request_id_str().to_owned(),
+                message.to_owned(),
+            ));
+
+            // now close the exchange
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::finished_exchange(
+                    self.session_id.to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+            println!("session::finished_plan_generation");
+        }
         Ok(self)
     }
 

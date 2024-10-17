@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use futures::{stream, StreamExt};
 use thiserror::Error;
@@ -36,13 +36,19 @@ use super::{
 pub struct PlanService {
     tool_box: Arc<ToolBox>,
     symbol_manager: Arc<SymbolManager>,
+    _plan_storage_directory: PathBuf,
 }
 
 impl PlanService {
-    pub fn new(tool_box: Arc<ToolBox>, symbol_manager: Arc<SymbolManager>) -> Self {
+    pub fn new(
+        tool_box: Arc<ToolBox>,
+        symbol_manager: Arc<SymbolManager>,
+        plan_storage_directory: PathBuf,
+    ) -> Self {
         Self {
             tool_box,
             symbol_manager,
+            _plan_storage_directory: plan_storage_directory,
         }
     }
 
@@ -537,6 +543,10 @@ impl PlanService {
             plan.set_checkpoint(step_count - 1);
         }
         let _ = self.save_plan(&plan, plan.storage_path()).await;
+    }
+
+    pub fn generate_unique_plan_id(&self, session_id: &str, exchange_id: &str) -> String {
+        format!("{}-{}", session_id, exchange_id)
     }
 }
 

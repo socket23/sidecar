@@ -1,6 +1,6 @@
 //! Contains the helper functions over here for the plan generation
 
-use std::{collections::HashMap, io, sync::Arc};
+use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
 
 use super::types::Result;
 use axum::response::{sse, Sse};
@@ -578,6 +578,18 @@ pub async fn check_plan_storage_path(config: Arc<Configuration>, plan_id: String
         .to_str()
         .expect("path conversion to work on all platforms")
         .to_owned()
+}
+
+pub async fn plan_storage_directory(config: Arc<Configuration>) -> PathBuf {
+    let mut plan_path = config.index_dir.clone();
+    plan_path = plan_path.join("plans");
+    // check if the plan_storage_path_exists
+    if tokio::fs::metadata(&plan_path).await.is_err() {
+        tokio::fs::create_dir(&plan_path)
+            .await
+            .expect("directory creation to not fail");
+    }
+    plan_path
 }
 
 /// Checks for the session directory and creates the path for the session

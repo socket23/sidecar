@@ -448,8 +448,25 @@ impl Session {
         Ok(self)
     }
 
+    /// we want to perform the plan revert by first loading the plan using the exchange
+    /// id which we have and then creating the new plan by dropping the steps
+    ///
+    /// we have to carefully send the undo request as well to make sure that the
+    /// editor changes state
+    pub async fn perform_plan_revert(
+        self,
+        _plan_service: PlanService,
+        _plan_id: String,
+        _plan_storage_path: String,
+        _symbol_manager: Arc<SymbolManager>,
+        _previous_plan_exchange_id: String,
+        _step_index: usize,
+        _message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        Ok(self)
+    }
+
     /// going to work on plan generation
-    /// TODO(skcd): This should also perform the edits properly over here
     pub async fn perform_plan_generation(
         mut self,
         plan_service: PlanService,

@@ -100,6 +100,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::lsp::undo_changes::UndoChangesMadeDuringExchangeRequest;
 use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::{StepGeneratorRequest, StepSenderEvent};
 use crate::agentic::tool::plan::plan_step::PlanStep;
@@ -10360,5 +10361,29 @@ FILEPATH: {fs_file_path}
             // we have a tool output which has gone wrong
             None => Err(SymbolError::WrongToolOutput),
         }
+    }
+
+    pub async fn undo_changes_made_during_session(
+        &self,
+        session_id: String,
+        exchange_id: String,
+        step_index: Option<usize>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<bool, SymbolError> {
+        let tool_input =
+            ToolInput::UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRequest::new(
+                exchange_id,
+                session_id,
+                step_index,
+                message_properties.editor_url(),
+            ));
+        let response = self
+            .tools
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_undo_changes_made_during_session()
+            .ok_or(SymbolError::WrongToolOutput)?;
+        Ok(response.is_success())
     }
 }

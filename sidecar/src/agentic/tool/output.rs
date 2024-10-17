@@ -762,6 +762,15 @@ impl ToolOutput {
         }
     }
 
+    pub fn get_undo_changes_made_during_session(
+        self,
+    ) -> Option<UndoChangesMadeDuringExchangeRespnose> {
+        match self {
+            ToolOutput::UndoChangesMadeDuringSession(response) => Some(response),
+            _ => None,
+        }
+    }
+
     // pub fn plan_updater_output(self) -> Option<_> {
     //     match self {
     //         ToolOutput::PlanUpdater(response) => Some(response),

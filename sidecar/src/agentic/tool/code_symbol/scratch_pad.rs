@@ -622,6 +622,7 @@ impl Tool for ScratchPadAgentBroker {
                     scratch_pad_range.clone(),
                     fs_file_path.to_owned(),
                     exchange_id.to_owned(),
+                    None,
                 )
                 .set_apply_directly(),
             )
@@ -636,6 +637,7 @@ impl Tool for ScratchPadAgentBroker {
                     fs_file_path.to_owned(),
                     "```\n".to_owned(),
                     exchange_id.to_owned(),
+                    None,
                 )
                 .set_apply_directly(),
             )
@@ -657,6 +659,7 @@ impl Tool for ScratchPadAgentBroker {
                                         fs_file_path.to_owned(),
                                         delta.to_owned(),
                                         exchange_id.to_owned(),
+                                        None,
                                     ).set_apply_directly(),
                                 ).await;
                             }
@@ -677,6 +680,7 @@ impl Tool for ScratchPadAgentBroker {
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
                                 exchange_id.to_owned(),
+                                None,
                             ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
@@ -687,6 +691,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 exchange_id.to_owned(),
+                                None,
                             ).set_apply_directly()
                         ).await;
                     } else {
@@ -700,6 +705,7 @@ impl Tool for ScratchPadAgentBroker {
                                 fs_file_path.to_owned(),
                                 "\n```".to_owned(),
                                 exchange_id.to_owned(),
+                                None,
                             ).set_apply_directly()
                         ).await;
                         let _ = streamed_edit_client.send_edit_event(
@@ -710,6 +716,7 @@ impl Tool for ScratchPadAgentBroker {
                                 scratch_pad_range.clone(),
                                 fs_file_path.to_owned(),
                                 exchange_id.to_owned(),
+                                None,
                             ).set_apply_directly()
                         ).await;
                     }

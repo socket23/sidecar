@@ -842,7 +842,10 @@ impl ToolBroker {
 </response>
 
 This plan outlines the steps to create a new `StepGeneratorClient` tool, similar to the `ReasoningClient`. It includes creating the necessary structs, implementing the `Tool` trait, and updating the relevant enums and broker to include the new tool. You can follow these steps to implement the `StepGeneratorClient` in your project."#;
-        let mut plan_step_generator = PlanStepGenerator::new();
+        let session_id = "".to_owned();
+        let exchange_id = "".to_owned();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut plan_step_generator = PlanStepGenerator::new(session_id, exchange_id, sender, None);
         plan_step_generator.add_delta(input.to_owned()).await;
 
         // we should have 7 steps over here

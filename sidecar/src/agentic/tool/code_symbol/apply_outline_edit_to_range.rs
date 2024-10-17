@@ -257,6 +257,7 @@ impl Tool for ApplyOutlineEditsToRange {
                 fs_file_path.to_owned(),
                 session_id.to_owned(),
                 exchange_id.to_owned(),
+                None,
             ));
 
             loop {
@@ -276,6 +277,7 @@ impl Tool for ApplyOutlineEditsToRange {
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
                                         exchange_id.to_owned(),
+                                        None,
                                     ));
                                 }
                             }
@@ -294,6 +296,7 @@ impl Tool for ApplyOutlineEditsToRange {
                                 fs_file_path.to_owned(),
                                 session_id.to_owned(),
                                 exchange_id.to_owned(),
+                                None,
                             ));
                         } else {
                             // send over the original selection over here since we had an error
@@ -305,6 +308,7 @@ impl Tool for ApplyOutlineEditsToRange {
                                 fs_file_path.to_owned(),
                                 session_id.to_owned(),
                                 exchange_id.to_owned(),
+                                None,
                             ));
                         }
                         stream_result = Some(result);

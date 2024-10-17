@@ -228,6 +228,7 @@ impl UIEventWithID {
         fs_file_path: String,
         session_id: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -240,6 +241,7 @@ impl UIEventWithID {
                     fs_file_path,
                     session_id,
                     exchange_id,
+                    plan_step_id,
                 ),
             ),
         }
@@ -254,6 +256,7 @@ impl UIEventWithID {
         fs_file_path: String,
         session_id: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -265,6 +268,7 @@ impl UIEventWithID {
                 fs_file_path,
                 session_id,
                 exchange_id,
+                plan_step_id,
             )),
         }
     }
@@ -279,6 +283,7 @@ impl UIEventWithID {
         fs_file_path: String,
         session_id: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             request_id: request_id.to_owned(),
@@ -292,6 +297,7 @@ impl UIEventWithID {
                     delta,
                     session_id,
                     exchange_id,
+                    plan_step_id,
                 ),
             ),
         }
@@ -577,6 +583,7 @@ pub struct EditedCodeStreamingRequest {
     apply_directly: bool,
     // The exchange id this edit is part of
     exchange_id: String,
+    plan_step_id: Option<String>,
 }
 
 impl EditedCodeStreamingRequest {
@@ -586,6 +593,7 @@ impl EditedCodeStreamingRequest {
         range: Range,
         fs_file_path: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             edit_request_id,
@@ -596,6 +604,7 @@ impl EditedCodeStreamingRequest {
             event: EditedCodeStreamingEvent::Start,
             apply_directly: false,
             exchange_id,
+            plan_step_id,
         }
     }
 
@@ -606,6 +615,7 @@ impl EditedCodeStreamingRequest {
         fs_file_path: String,
         delta: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             edit_request_id,
@@ -616,6 +626,7 @@ impl EditedCodeStreamingRequest {
             event: EditedCodeStreamingEvent::Delta(delta),
             apply_directly: false,
             exchange_id,
+            plan_step_id,
         }
     }
 
@@ -625,6 +636,7 @@ impl EditedCodeStreamingRequest {
         range: Range,
         fs_file_path: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             edit_request_id,
@@ -635,6 +647,7 @@ impl EditedCodeStreamingRequest {
             event: EditedCodeStreamingEvent::End,
             apply_directly: false,
             exchange_id,
+            plan_step_id,
         }
     }
 
@@ -742,6 +755,7 @@ impl SymbolEventSubStepRequest {
         fs_file_path: String,
         session_id: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -755,6 +769,7 @@ impl SymbolEventSubStepRequest {
                     updated_code: None,
                     apply_directly: false,
                     exchange_id,
+                    plan_step_id,
                 },
             )),
         }
@@ -767,6 +782,7 @@ impl SymbolEventSubStepRequest {
         fs_file_path: String,
         session_id: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -780,6 +796,7 @@ impl SymbolEventSubStepRequest {
                     event: EditedCodeStreamingEvent::End,
                     apply_directly: false,
                     exchange_id,
+                    plan_step_id,
                 },
             )),
         }
@@ -809,6 +826,7 @@ impl SymbolEventSubStepRequest {
         delta: String,
         session_id: String,
         exchange_id: String,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             symbol_identifier,
@@ -822,6 +840,7 @@ impl SymbolEventSubStepRequest {
                     updated_code: None,
                     apply_directly: false,
                     exchange_id,
+                    plan_step_id,
                 },
             )),
         }

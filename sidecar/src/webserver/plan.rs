@@ -236,7 +236,7 @@ pub async fn execute_plan_until(
         }
         let context = plan_service.prepare_context(plan.steps(), checkpoint).await;
         let execution_result = plan_service
-            .execute_step(plan_step, context, message_properties.clone())
+            .execute_step(plan_step, idx, context, message_properties.clone())
             .await;
         if let Err(_) = execution_result {
             let _ = agent_sender.send(Ok(ConversationMessage::answer_update(

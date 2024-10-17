@@ -2288,6 +2288,7 @@ Please update this code to accommodate these changes. Consider:
                         true,
                         None,
                         vec![],
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -2308,6 +2309,7 @@ Please update this code to accommodate these changes. Consider:
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 SymbolIdentifier::with_file_path(
                     new_outline_node.name(),
@@ -2503,6 +2505,7 @@ Please update this code to accommodate these changes. Consider:
                         true,
                         None,
                         vec![],
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -2597,6 +2600,7 @@ Please update this code to accommodate these changes. Consider:
                                             true,
                                             None,
                                             vec![],
+                                            None,
                                         ),
                                         SymbolIdentifier::with_file_path(
                                             class_symbol_name,
@@ -2634,6 +2638,7 @@ Please update this code to accommodate these changes. Consider:
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 message_properties.clone(),
             )
@@ -2806,6 +2811,7 @@ Please update this code to accommodate these changes. Consider:
                         true,
                         None,
                         vec![],
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -2826,6 +2832,7 @@ Please update this code to accommodate these changes. Consider:
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -3005,6 +3012,7 @@ Please update this code to accommodate these changes. Consider:
                                                     true,
                                                     None,
                                                     vec![],
+                                                    None,
                                                 ),
                                                 SymbolIdentifier::with_file_path(
                                                     changed_outline_node.name(),
@@ -3055,6 +3063,7 @@ Please update this code to accommodate these changes. Consider:
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 message_properties.clone(),
             )
@@ -3126,6 +3135,7 @@ Please update this code to accommodate these changes. Consider:
                                     true,
                                     None,
                                     vec![],
+                                    None,
                                 ),
                                 SymbolIdentifier::with_file_path(
                                     class_implementation_name,
@@ -3264,6 +3274,7 @@ Please update this code to accommodate these changes. Consider:
                         true,
                         None,
                         vec![],
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -3350,6 +3361,7 @@ Please update this code to accommodate these changes. Consider:
                                         true,
                                         None,
                                         vec![],
+                                        None,
                                     ),
                                     SymbolIdentifier::with_file_path(
                                         class_implementation_name,
@@ -3491,6 +3503,7 @@ Please update this code to accommodate these changes. Consider:
                         true,
                         None,
                         vec![],
+                        None,
                     ),
                     message_properties.clone(),
                 )
@@ -3511,6 +3524,7 @@ Please update this code to accommodate these changes. Consider:
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 SymbolIdentifier::with_file_path(
                     outline_node_new_content.name(),
@@ -4596,6 +4610,7 @@ Make the necessary changes if required making sure that nothing breaks"#
             true, // disable any kind of followups or correctness check
             None,
             vec![],
+            None,
         );
 
         let event = SymbolEventMessage::message_with_properties(
@@ -4703,6 +4718,7 @@ Make the necessary changes if required making sure that nothing breaks"#
                 true,
                 None,
                 vec![],
+                None,
             );
 
             let event = SymbolEventMessage::message_with_properties(
@@ -5485,6 +5501,7 @@ FILEPATH: {fs_file_path}
             false,
             session_id,
             exchange_id,
+            sub_symbol.plan_step_id(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -6641,6 +6658,7 @@ FILEPATH: {fs_file_path}
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 message_properties.clone(),
             )
@@ -8098,6 +8116,7 @@ FILEPATH: {fs_file_path}
                                                     true, // should we disable followups and correctness check
                                                     None,
                                                     vec![],
+                                                    None,
                                                 ), original_content.to_owned(), current_content.to_owned()))
                                             }
                                         }
@@ -8139,6 +8158,7 @@ FILEPATH: {fs_file_path}
                                     true, // should we disable followups and correctness check
                                     None,
                                     vec![],
+                                    None,
                                 ), original_content.to_owned(), current_content.to_owned())])
                             } else {
                                 None
@@ -8360,6 +8380,7 @@ FILEPATH: {fs_file_path}
                         false, // disable followups - keep false to enable followups
                         Some(recent_diff_changes.clone()),
                         previous_user_queries.to_vec(),
+                        None,
                     )],
                     symbol_identifier.clone(),
                     vec![],
@@ -8408,6 +8429,7 @@ FILEPATH: {fs_file_path}
                                 true, // should we disable followups and correctness check
                                 None,
                                 vec![],
+                                None,
                             ))
                         } else {
                             None
@@ -8434,6 +8456,7 @@ FILEPATH: {fs_file_path}
                                         true, // should we disable followups and correctness check
                                         None,
                                         vec![],
+                                        None,
                                     ))
                                 } else {
                                     None
@@ -8750,6 +8773,7 @@ FILEPATH: {fs_file_path}
             true,
             session_id.to_owned(),
             exchange_id,
+            None,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();

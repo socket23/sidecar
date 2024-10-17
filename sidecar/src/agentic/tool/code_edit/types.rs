@@ -381,6 +381,7 @@ impl Tool for CodeEditingTool {
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
                                         exchange_id.to_owned(),
+                                        None,
                                     ));
                                 }
                                 Some(CodeBlockEditDelta::EditDelta(delta)) => {
@@ -393,6 +394,7 @@ impl Tool for CodeEditingTool {
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
                                         exchange_id.to_owned(),
+                                        None,
                                     ));
                                 }
                                 Some(CodeBlockEditDelta::EditEnd) => {
@@ -404,6 +406,7 @@ impl Tool for CodeEditingTool {
                                         fs_file_path.to_owned(),
                                         session_id.to_owned(),
                                         exchange_id.to_owned(),
+                                        None,
                                     ));
                                 }
                                 None => {

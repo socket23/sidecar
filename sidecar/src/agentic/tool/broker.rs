@@ -48,6 +48,7 @@ use super::{
         inlay_hints::InlayHints,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
+        undo_changes::UndoChangesMadeDuringExchange,
     },
     output::ToolOutput,
     plan::{
@@ -426,6 +427,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::NewExchangeDuringSession,
             Box::new(SessionExchangeClient::new()),
+        );
+        tools.insert(
+            ToolType::UndoChangesMadeDuringSession,
+            Box::new(UndoChangesMadeDuringExchange::new()),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

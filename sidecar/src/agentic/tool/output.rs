@@ -46,6 +46,7 @@ use super::{
         inlay_hints::InlayHintsResponse,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
+        undo_changes::UndoChangesMadeDuringExchangeRespnose,
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
@@ -189,9 +190,17 @@ pub enum ToolOutput {
     ContextDriveChatReply(SessionChatClientResponse),
     // creates a new exchange for the session
     NewExchangeDuringSession(SessionExchangeNewResponse),
+    // undo changes made during the session
+    UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRespnose),
 }
 
 impl ToolOutput {
+    pub fn undo_changes_made_during_session(
+        response: UndoChangesMadeDuringExchangeRespnose,
+    ) -> Self {
+        ToolOutput::UndoChangesMadeDuringSession(response)
+    }
+
     pub fn new_exchange_during_session(response: SessionExchangeNewResponse) -> Self {
         ToolOutput::NewExchangeDuringSession(response)
     }

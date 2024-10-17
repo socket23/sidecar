@@ -779,6 +779,7 @@ impl ScratchPadAgent {
                                 true, // we want to have code correctness
                                 None,
                                 previous_user_queries,
+                                None,
                             )],
                             symbol_identifier.clone(),
                             vec![],
@@ -853,6 +854,7 @@ impl ScratchPadAgent {
                 true,
                 Some(recent_edits.clone()),
                 vec![],
+                None,
             )],
             SymbolIdentifier::with_file_path(&fs_file_path, &fs_file_path),
             vec![],
@@ -1330,6 +1332,7 @@ Please help me out by making the necessary code edits"#
                     true,
                     None,
                     vec![],
+                    None,
                 ),
                 ToolProperties::new(),
             );

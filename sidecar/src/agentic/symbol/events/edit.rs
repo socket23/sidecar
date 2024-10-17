@@ -31,6 +31,8 @@ pub struct SymbolToEdit {
     diff_recent_changes: Option<DiffRecentChanges>,
     // any previous user queries which the user has done
     previous_user_queries: Vec<String>,
+    // the plan-step-id if present for this edit
+    plan_step_id: Option<String>,
 }
 
 impl SymbolToEdit {
@@ -49,6 +51,7 @@ impl SymbolToEdit {
         disable_followups_and_correctness: bool,
         diff_recent_changes: Option<DiffRecentChanges>,
         previous_user_queries: Vec<String>,
+        plan_step_id: Option<String>,
     ) -> Self {
         Self {
             symbol_name,
@@ -66,7 +69,12 @@ impl SymbolToEdit {
             apply_edits_directly: false,
             diff_recent_changes,
             previous_user_queries,
+            plan_step_id,
         }
+    }
+
+    pub fn plan_step_id(&self) -> Option<String> {
+        self.plan_step_id.clone()
     }
 
     pub fn apply_edits_directly(mut self) -> Self {

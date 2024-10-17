@@ -89,6 +89,7 @@ async fn main() {
                 false, // should we disable followups and correctness check
                 None,
                 vec![],
+                None,
             ),
             event_properties,
         )

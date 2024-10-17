@@ -360,7 +360,12 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
             "1" | "execute" => {
                 // using file as store for Plan
                 let _ = match plan_service
-                    .execute_step(step_to_execute, context, event_properties.clone())
+                    .execute_step(
+                        step_to_execute,
+                        checkpoint,
+                        context,
+                        event_properties.clone(),
+                    )
                     .await
                 {
                     Ok(_) => {

@@ -493,6 +493,7 @@ impl Session {
                     .await
             });
 
+            let mut steps_up_until_now = 0;
             while let Some(step_message) = stream_receiver.next().await {
                 match step_message {
                     StepSenderEvent::NewStep(step) => {
@@ -524,6 +525,7 @@ impl Session {
                                     true,
                                     None,
                                     vec![],
+                                    Some(steps_up_until_now.to_string()),
                                 ),
                                 ToolProperties::new(),
                             ),
@@ -533,6 +535,9 @@ impl Session {
                             tokio_util::sync::CancellationToken::new(),
                             message_properties.editor_url(),
                         ));
+
+                        // increment our count for the step over here
+                        steps_up_until_now = steps_up_until_now + 1;
 
                         // wait for the edits to finish over here
                         let _ = edit_done_receiver.await;

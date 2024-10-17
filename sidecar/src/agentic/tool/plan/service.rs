@@ -450,6 +450,7 @@ impl PlanService {
     pub async fn execute_step(
         &self,
         step: &PlanStep,
+        checkpoint: usize,
         context: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), PlanServiceError> {
@@ -484,6 +485,7 @@ impl PlanService {
                     true,
                     None,
                     vec![],
+                    Some(checkpoint.to_string()),
                 ),
                 ToolProperties::new(),
             ),

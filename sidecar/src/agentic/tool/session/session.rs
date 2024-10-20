@@ -445,15 +445,9 @@ impl Session {
         Ok(self)
     }
 
-    /// we want to perform the plan revert by first loading the plan using the exchange
-    /// id which we have and then creating the new plan by dropping the steps
-    ///
-    /// we have to carefully send the undo request as well to make sure that the
-    /// editor changes state
-    ///
-    /// when we generate the new plan we have to make sure that the edits are still
-    /// mapped to the previous plan or should they still belong to the same plan?
-    /// TODO(skcd): Debug this flow tomorrow, I do not think this is correct
+    /// We have to map the plan revert exchange-id over here to be similar to
+    /// the previous plan exchange-id, doing this will allow us to make sure
+    /// that we are able to keep track of the edits properly
     pub async fn perform_plan_revert(
         mut self,
         plan_service: PlanService,
@@ -477,13 +471,14 @@ impl Session {
             let _ = tool_box
                 .undo_changes_made_during_session(
                     self.session_id.to_owned(),
-                    exchange_id.to_owned(),
+                    previous_plan_exchange_id.to_owned(),
                     Some(step_index),
                     message_properties.clone(),
                 )
                 .await;
 
-            let reply = "Reverted the full plan".to_owned();
+            let reply =
+                "I have reverted the full plan, let me know how I can be of help?".to_owned();
             let _ = ui_sender.send(UIEventWithID::chat_event(
                 self.session_id.to_owned(),
                 exchange_id.to_owned(),
@@ -510,10 +505,11 @@ impl Session {
                 .steps()
                 .into_iter()
                 .enumerate()
+                .filter(|(idx, _)| *idx < step_index)
                 .for_each(|(idx, plan_step)| {
                     let _ = ui_sender.send(UIEventWithID::plan_complete_added(
                         self.session_id.to_owned(),
-                        exchange_id.to_owned(),
+                        previous_plan_exchange_id.to_owned(),
                         idx,
                         plan_step.files_to_edit().to_vec(),
                         plan_step.title().to_owned(),
@@ -525,7 +521,7 @@ impl Session {
             let _ = tool_box
                 .undo_changes_made_during_session(
                     self.session_id.to_owned(),
-                    exchange_id.to_owned(),
+                    previous_plan_exchange_id.to_owned(),
                     Some(step_index),
                     message_properties.clone(),
                 )

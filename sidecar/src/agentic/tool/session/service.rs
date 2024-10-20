@@ -339,6 +339,7 @@ impl SessionService {
             selection_variable.start_position,
             selection_variable.end_position,
         );
+        println!("session_service::selection_range::({:?})", &selection_range);
         let selection_fs_file_path = selection_variable.fs_file_path.to_owned();
         let file_content = self
             .tool_box

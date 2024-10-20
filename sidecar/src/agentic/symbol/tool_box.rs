@@ -2162,7 +2162,21 @@ We also believe this symbol needs to be probed because of:
                 if outline_nodes_with_distance.is_empty() {
                     Err(SymbolError::NoOutlineNodeSatisfyPosition)
                 } else {
-                    return Ok(outline_nodes_with_distance.remove(0).1.content().clone());
+                    let selected_outline_node = outline_nodes_with_distance.remove(0);
+                    if selected_outline_node.1.is_file() {
+                        // if our range is within the range of the outline node, that
+                        // means we are doing an anchored edit
+                        // File range: [S........................E]
+                        // Our range : [...........S...........E..]
+                        let outline_node_content = selected_outline_node.1.consume_content();
+                        if outline_node_content.range().contains_check_line(symbol_to_edit.range()) {
+                            Ok(outline_node_content.set_range(symbol_to_edit.range().clone()))
+                        } else {
+                            Ok(outline_node_content)
+                        }
+                    } else {
+                        return Ok(outline_nodes_with_distance.remove(0).1.content().clone());
+                    }
                 }
             }
         }

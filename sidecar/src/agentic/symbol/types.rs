@@ -1631,6 +1631,11 @@ Satisfy the requirement either by making edits or gathering the required informa
             symbol_to_edit.range().clone()
         };
 
+        println!(
+            "symbol::edit_code_full::symbol_range::({:?})",
+            &symbol_to_edit_range
+        );
+
         // check if we should continue editing here
         println!(
             "symbol::edit_code_full::should_edit::start({})",

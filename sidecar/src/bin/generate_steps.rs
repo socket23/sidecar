@@ -114,6 +114,7 @@ async fn main() {
     // toggle this to true to use o1-preview for planning
     let (ui_sender, _ui_receiver) = tokio::sync::mpsc::unbounded_channel();
     let is_deep_reasoning = false;
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
     let step_generator_request = StepGeneratorRequest::new(
         user_query.clone(),
         is_deep_reasoning,
@@ -122,6 +123,7 @@ async fn main() {
         request_id_str,
         ui_sender,
         None,
+        cancellation_token,
     )
     .with_user_context(&user_context);
 

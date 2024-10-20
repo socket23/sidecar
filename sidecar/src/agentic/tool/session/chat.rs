@@ -7,8 +7,13 @@ use crate::{
     agentic::{
         symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
         tool::{
-            errors::ToolError, helpers::diff_recent_changes::DiffRecentChanges, input::ToolInput,
-            output::ToolOutput, r#type::Tool,
+            errors::ToolError,
+            helpers::{
+                cancellation_future::run_with_cancellation, diff_recent_changes::DiffRecentChanges,
+            },
+            input::ToolInput,
+            output::ToolOutput,
+            r#type::Tool,
         },
     },
     repo::types::RepoRef,
@@ -61,6 +66,7 @@ pub struct SessionChatClientRequest {
     session_id: String,
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
+    cancellation_token: tokio_util::sync::CancellationToken,
 }
 
 impl SessionChatClientRequest {
@@ -73,6 +79,7 @@ impl SessionChatClientRequest {
         session_id: String,
         exchange_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
+        cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             diff_recent_edits,
@@ -83,6 +90,7 @@ impl SessionChatClientRequest {
             repo_ref,
             project_labels,
             ui_sender,
+            cancellation_token,
         }
     }
 }
@@ -211,6 +219,7 @@ Respect these rules at all times:
 impl Tool for SessionChatClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.is_session_context_driven_chat_reply()?;
+        let cancellation_token = context.cancellation_token.clone();
         let ui_sender = context.ui_sender.clone();
         let root_id = context.session_id.to_owned();
         let exchange_id = context.exchange_id.to_owned();
@@ -234,30 +243,35 @@ impl Tool for SessionChatClient {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let cloned_llm_client = self.llm_client.clone();
         let cloned_root_id = root_id.to_owned();
-        let llm_response = tokio::spawn(async move {
-            cloned_llm_client
-                .stream_completion(
-                    llm_properties.api_key().clone(),
-                    request,
-                    llm_properties.provider().clone(),
-                    vec![
-                        ("event_type".to_owned(), "session_chat".to_owned()),
-                        ("root_id".to_owned(), cloned_root_id),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    sender,
-                )
-                .await
-        });
+        let llm_response = run_with_cancellation(
+            cancellation_token,
+            tokio::spawn(async move {
+                cloned_llm_client
+                    .stream_completion(
+                        llm_properties.api_key().clone(),
+                        request,
+                        llm_properties.provider().clone(),
+                        vec![
+                            ("event_type".to_owned(), "session_chat".to_owned()),
+                            ("root_id".to_owned(), cloned_root_id),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await
+            }),
+        );
 
         // now poll from the receiver where we are getting deltas
         let polling_llm_response = tokio::spawn(async move {
             let ui_sender = ui_sender;
             let request_id = root_id;
             let exchange_id = exchange_id;
+            let mut answer_up_until_now = "".to_owned();
             let mut delta = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
             while let Some(stream_msg) = delta.next().await {
+                answer_up_until_now = stream_msg.answer_up_until_now().to_owned();
                 let _ = ui_sender.send(UIEventWithID::chat_event(
                     request_id.to_owned(),
                     exchange_id.to_owned(),
@@ -265,15 +279,17 @@ impl Tool for SessionChatClient {
                     stream_msg.delta().map(|delta| delta.to_owned()),
                 ));
             }
+            answer_up_until_now
         });
 
-        // now wait for the llm response to finsih
+        // now wait for the llm response to finsih, which will resolve even if the
+        // cancellation token is cancelled in between
         let response = llm_response.await;
         println!("session_chat_client::response::({:?})", &response);
         // wait for the delta streaming to finish
-        let _ = polling_llm_response.await;
-        match response {
-            Ok(Ok(response)) => Ok(ToolOutput::context_driven_chat_reply(
+        let answer_up_until_now = polling_llm_response.await;
+        match answer_up_until_now {
+            Ok(response) => Ok(ToolOutput::context_driven_chat_reply(
                 SessionChatClientResponse { reply: response },
             )),
             _ => Err(ToolError::RetriesExhausted),

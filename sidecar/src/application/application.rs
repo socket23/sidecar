@@ -24,6 +24,7 @@ use crate::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
+            session::service::SessionService,
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
@@ -73,6 +74,7 @@ pub struct Application {
     pub symbol_manager: Arc<SymbolManager>,
     pub tool_box: Arc<ToolBox>,
     pub anchored_request_tracker: Arc<AnchoredEditingTracker>,
+    pub session_service: Arc<SessionService>,
 }
 
 impl Application {
@@ -130,6 +132,10 @@ impl Application {
                 LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
             ),
         ));
+        let session_service = Arc::new(SessionService::new(
+            tool_box.clone(),
+            symbol_manager.clone(),
+        ));
 
         let anchored_request_tracker = Arc::new(AnchoredEditingTracker::new());
         Ok(Self {
@@ -164,6 +170,7 @@ impl Application {
             symbol_manager,
             tool_box,
             anchored_request_tracker,
+            session_service,
         })
     }
 

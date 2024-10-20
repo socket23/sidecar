@@ -30,7 +30,6 @@ use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
 use crate::agentic::tool::plan::plan::Plan;
 use crate::agentic::tool::plan::service::PlanService;
-use crate::agentic::tool::session::service::SessionService;
 use crate::agentic::tool::session::session::AideAgentMode;
 use crate::chunking::text_document::Range;
 use crate::repo::types::RepoRef;
@@ -49,7 +48,7 @@ pub struct ProbeRequestTracker {
     /// - Key: String representing the unique request ID.
     /// - Value: JoinHandle for the asynchronous task handling the request.
     pub running_requests:
-        Arc<Mutex<HashMap<String, (tokio_util::sync::CancellationToken, JoinHandle<()>)>>>,
+        Arc<Mutex<HashMap<String, (tokio_util::sync::CancellationToken, Option<JoinHandle<()>>)>>>,
 }
 
 impl ProbeRequestTracker {
@@ -66,7 +65,10 @@ impl ProbeRequestTracker {
         join_handle: JoinHandle<()>,
     ) {
         let mut running_requests = self.running_requests.lock().await;
-        running_requests.insert(request_id.to_owned(), (cancellation_token, join_handle));
+        running_requests.insert(
+            request_id.to_owned(),
+            (cancellation_token, Some(join_handle)),
+        );
     }
 
     async fn cancel_request(&self, request_id: &str) {
@@ -74,7 +76,9 @@ impl ProbeRequestTracker {
         if let Some((cancellation_token, response)) = running_requests.get_mut(request_id) {
             // we abort the running requests
             cancellation_token.cancel();
-            response.abort();
+            if let Some(response) = response {
+                response.abort();
+            }
         }
     }
 }
@@ -1237,8 +1241,9 @@ pub struct AgenticCancelRunningExchangeResponse {
 
 impl ApiResponse for AgenticCancelRunningExchangeResponse {}
 
+/// TODO(skcd): Figure out how to cancel a running request properly over here
 pub async fn cancel_running_exchange(
-    Extension(_app): Extension<Application>,
+    Extension(app): Extension<Application>,
     Json(AgenticCancelRunningExchange {
         exchange_id,
         session_id,
@@ -1248,6 +1253,17 @@ pub async fn cancel_running_exchange(
         "cancel_running_exchange::session_id({})::exchange_id({})",
         session_id, exchange_id
     );
+    let session_service = app.session_service.clone();
+    if let Some(cancellation_token) = session_service
+        .get_cancellation_token(&session_id, &exchange_id)
+        .await
+    {
+        println!(
+            "cancel_running_exchange::session_id({})::exchange_id({})::cancelled",
+            session_id, exchange_id
+        );
+        cancellation_token.cancel();
+    }
     Ok(json_result(AgenticCancelRunningExchangeResponse {
         success: true,
     }))
@@ -1307,9 +1323,9 @@ pub async fn agent_session_chat(
     let session_storage_path =
         check_session_storage_path(app.config.clone(), session_id.to_string()).await;
 
+    let session_service = app.session_service.clone();
     let cloned_session_id = session_id.to_string();
     let _ = tokio::spawn(async move {
-        let session_service = SessionService::new(app.tool_box.clone(), app.symbol_manager.clone());
         let _ = session_service
             .human_message(
                 cloned_session_id,
@@ -1413,8 +1429,8 @@ pub async fn agent_session_edit_anchored(
     .await;
 
     let cloned_session_id = session_id.to_string();
+    let session_service = app.session_service.clone();
     let _ = tokio::spawn(async move {
-        let session_service = SessionService::new(app.tool_box.clone(), app.symbol_manager.clone());
         let _ = session_service
             .code_edit_anchored(
                 cloned_session_id,
@@ -1520,8 +1536,8 @@ pub async fn agent_session_edit_agentic(
     .await;
 
     let cloned_session_id = session_id.to_string();
+    let session_service = app.session_service.clone();
     let _ = tokio::spawn(async move {
-        let session_service = SessionService::new(app.tool_box.clone(), app.symbol_manager.clone());
         let _ = session_service
             .code_edit_agentic(
                 cloned_session_id,
@@ -1632,8 +1648,8 @@ pub async fn agent_session_plan(
     let plan_storage_path = check_plan_storage_path(app.config.clone(), plan_id.to_owned()).await;
 
     let cloned_session_id = session_id.to_string();
+    let session_service = app.session_service.clone();
     let _ = tokio::spawn(async move {
-        let session_service = SessionService::new(app.tool_box.clone(), app.symbol_manager.clone());
         let _ = session_service
             .plan_generation(
                 cloned_session_id,

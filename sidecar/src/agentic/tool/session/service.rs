@@ -1,8 +1,9 @@
 //! Creates the service which handles saving the session and extending it
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncWriteExt, sync::Mutex};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     agentic::{
@@ -23,6 +24,7 @@ use super::session::{AideAgentMode, Session};
 pub struct SessionService {
     tool_box: Arc<ToolBox>,
     symbol_manager: Arc<SymbolManager>,
+    running_exchanges: Arc<Mutex<HashMap<String, CancellationToken>>>,
 }
 
 impl SessionService {
@@ -30,7 +32,31 @@ impl SessionService {
         Self {
             tool_box,
             symbol_manager,
+            running_exchanges: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    async fn track_exchange(
+        &self,
+        session_id: &str,
+        exchange_id: &str,
+        cancellation_token: CancellationToken,
+    ) {
+        let hash_id = format!("{}-{}", session_id, exchange_id);
+        let mut running_exchanges = self.running_exchanges.lock().await;
+        running_exchanges.insert(hash_id, cancellation_token);
+    }
+
+    pub async fn get_cancellation_token(
+        &self,
+        session_id: &str,
+        exchange_id: &str,
+    ) -> Option<CancellationToken> {
+        let hash_id = format!("{}-{}", session_id, exchange_id);
+        let running_exchanges = self.running_exchanges.lock().await;
+        running_exchanges
+            .get(&hash_id)
+            .map(|cancellation_token| cancellation_token.clone())
     }
 
     fn create_new_session(
@@ -53,7 +79,7 @@ impl SessionService {
         project_labels: Vec<String>,
         repo_ref: RepoRef,
         agent_mode: AideAgentMode,
-        message_properties: SymbolEventMessageProperties,
+        mut message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         println!("session_service::human_message::start");
         let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
@@ -65,7 +91,7 @@ impl SessionService {
             session
         } else {
             self.create_new_session(
-                session_id,
+                session_id.to_owned(),
                 project_labels.to_vec(),
                 repo_ref.clone(),
                 storage_path,
@@ -87,6 +113,18 @@ impl SessionService {
             "session_service::reply_to_last_exchange::exchanges({})",
             session.exchanges()
         );
+
+        let plan_exchange_id = self
+            .tool_box
+            .create_new_exchange(session_id.to_owned(), message_properties.clone())
+            .await?;
+
+        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())
+            .await;
+        message_properties = message_properties
+            .set_request_id(plan_exchange_id)
+            .set_cancellation_token(cancellation_token);
 
         // now react to the last message
         session = session
@@ -147,10 +185,15 @@ impl SessionService {
 
             let plan_exchange_id = self
                 .tool_box
-                .create_new_exchange(session_id, message_properties.clone())
+                .create_new_exchange(session_id.to_owned(), message_properties.clone())
                 .await?;
 
-            message_properties = message_properties.set_request_id(plan_exchange_id);
+            let cancellation_token = tokio_util::sync::CancellationToken::new();
+            self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())
+                .await;
+            message_properties = message_properties
+                .set_request_id(plan_exchange_id)
+                .set_cancellation_token(cancellation_token);
 
             session = session
                 .perform_plan_revert(
@@ -170,10 +213,15 @@ impl SessionService {
             // create a new exchange over here for the plan
             let plan_exchange_id = self
                 .tool_box
-                .create_new_exchange(session_id, message_properties.clone())
+                .create_new_exchange(session_id.to_owned(), message_properties.clone())
                 .await?;
 
-            message_properties = message_properties.set_request_id(plan_exchange_id);
+            let cancellation_token = tokio_util::sync::CancellationToken::new();
+            self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())
+                .await;
+            message_properties = message_properties
+                .set_request_id(plan_exchange_id)
+                .set_cancellation_token(cancellation_token);
 
             // now we can perform the plan generation over here
             session = session
@@ -229,10 +277,15 @@ impl SessionService {
 
         let edit_exchange_id = self
             .tool_box
-            .create_new_exchange(session_id, message_properties.clone())
+            .create_new_exchange(session_id.to_owned(), message_properties.clone())
             .await?;
 
-        message_properties = message_properties.set_request_id(edit_exchange_id);
+        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        self.track_exchange(&session_id, &edit_exchange_id, cancellation_token.clone())
+            .await;
+        message_properties = message_properties
+            .set_request_id(edit_exchange_id)
+            .set_cancellation_token(cancellation_token);
 
         session = session
             .perform_agentic_editing(scratch_pad_agent, root_directory, message_properties)
@@ -300,10 +353,15 @@ impl SessionService {
 
         let edit_exchange_id = self
             .tool_box
-            .create_new_exchange(session_id, message_properties.clone())
+            .create_new_exchange(session_id.to_owned(), message_properties.clone())
             .await?;
 
-        message_properties = message_properties.set_request_id(edit_exchange_id);
+        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        self.track_exchange(&session_id, &edit_exchange_id, cancellation_token.clone())
+            .await;
+        message_properties = message_properties
+            .set_request_id(edit_exchange_id)
+            .set_cancellation_token(cancellation_token);
 
         // add an exchange that we are going to perform anchored edits
         session = session.anchored_edit(

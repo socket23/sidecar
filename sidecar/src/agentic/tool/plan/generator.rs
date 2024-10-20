@@ -16,8 +16,9 @@ use crate::{
     agentic::{
         symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
         tool::{
-            errors::ToolError, input::ToolInput, lsp::file_diagnostics::DiagnosticMap,
-            output::ToolOutput, r#type::Tool,
+            errors::ToolError, helpers::cancellation_future::run_with_cancellation,
+            input::ToolInput, lsp::file_diagnostics::DiagnosticMap, output::ToolOutput,
+            r#type::Tool,
         },
     },
     user_context::types::UserContext,
@@ -48,6 +49,7 @@ pub struct StepGeneratorRequest {
     // the caller takes care of reacting to this stream if they are interested in
     // this
     stream_steps: Option<UnboundedSender<StepSenderEvent>>,
+    cancellation_token: tokio_util::sync::CancellationToken,
 }
 
 impl StepGeneratorRequest {
@@ -59,6 +61,7 @@ impl StepGeneratorRequest {
         exchange_id: String,
         ui_event: UnboundedSender<UIEventWithID>,
         stream_steps: Option<UnboundedSender<StepSenderEvent>>,
+        cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             user_query,
@@ -70,6 +73,7 @@ impl StepGeneratorRequest {
             exchange_id,
             ui_event,
             stream_steps,
+            cancellation_token,
         }
     }
 
@@ -311,6 +315,7 @@ impl Tool for StepGeneratorClient {
 
         let _editor_url = context.editor_url.to_owned();
         let session_id = context.root_request_id.to_owned();
+        let cancellation_token = context.cancellation_token.clone();
         let exchange_id = context.exchange_id.to_owned();
         let ui_sender = context.ui_event.clone();
         let root_id = context.root_request_id.to_owned();
@@ -351,22 +356,25 @@ impl Tool for StepGeneratorClient {
 
         // we have to poll both the futures in parallel and stream it back to the
         // editor so we can get it as quickly as possible
-        let llm_response = tokio::spawn(async move {
-            cloned_llm_client
-                .stream_completion(
-                    llm_properties.api_key().clone(),
-                    request,
-                    llm_properties.provider().clone(),
-                    vec![
-                        ("root_id".to_owned(), root_id),
-                        ("event_type".to_owned(), "generate_steps".to_owned()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    sender,
-                )
-                .await
-        });
+        let llm_response = run_with_cancellation(
+            cancellation_token,
+            tokio::spawn(async move {
+                cloned_llm_client
+                    .stream_completion(
+                        llm_properties.api_key().clone(),
+                        request,
+                        llm_properties.provider().clone(),
+                        vec![
+                            ("root_id".to_owned(), root_id),
+                            ("event_type".to_owned(), "generate_steps".to_owned()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await
+            }),
+        );
 
         let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
         let mut plan_step_incremental_parser =
@@ -395,7 +403,7 @@ impl Tool for StepGeneratorClient {
         }
 
         match llm_response.await {
-            Ok(Ok(_)) => {
+            Some(Ok(Ok(_))) => {
                 let steps = plan_step_incremental_parser.generated_steps;
                 Ok(ToolOutput::StepGenerator(StepGeneratorResponse {
                     step: steps,

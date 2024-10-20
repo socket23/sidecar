@@ -376,18 +376,13 @@ impl Session {
             return Ok(self);
         }
         let last_exchange = last_exchange.expect("is_none to hold").clone();
-        let session_id = self.session_id.to_owned();
-        // - we have to grab a new exchange id over here before we start sending the reply over
-        let response_exchange_id = tool_box
-            .create_new_exchange(session_id, message_properties.clone())
-            .await?;
 
         // Now that we have a new response exchange id we want to start streaming the reply back
         // to the user
         let last_exchange_type = last_exchange.exchange_type;
         match last_exchange_type {
             ExchangeType::HumanChat(_) => {
-                self.human_chat_message_reply(response_exchange_id, tool_box, message_properties)
+                self.human_chat_message_reply(tool_box, message_properties)
                     .await
             }
             ExchangeType::AgentChat(_agent_message) => {
@@ -405,7 +400,6 @@ impl Session {
     /// Create the stream which will reply to the user
     async fn human_chat_message_reply(
         mut self,
-        exchange_id: String,
         tool_box: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Session, SymbolError> {
@@ -416,6 +410,8 @@ impl Session {
         for previous_message in self.exchanges.iter() {
             converted_messages.push(previous_message.to_conversation_message().await);
         }
+
+        let exchange_id = message_properties.request_id_str().to_owned();
 
         let tool_input = SessionChatClientRequest::new(
             tool_box
@@ -428,6 +424,7 @@ impl Session {
             self.session_id.to_owned(),
             exchange_id.to_owned(),
             message_properties.ui_sender(),
+            message_properties.cancellation_token(),
         );
         let chat_output = tool_box
             .tools()
@@ -643,7 +640,7 @@ impl Session {
                             message_properties.request_id().clone(),
                             message_properties.ui_sender().clone(),
                             edit_done_sender,
-                            tokio_util::sync::CancellationToken::new(),
+                            message_properties.cancellation_token(),
                             message_properties.editor_url(),
                         ));
 

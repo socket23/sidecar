@@ -60,6 +60,14 @@ impl SymbolEventMessageProperties {
         self
     }
 
+    pub fn set_cancellation_token(
+        mut self,
+        cancellation_token: tokio_util::sync::CancellationToken,
+    ) -> Self {
+        self.cancellation_token = cancellation_token;
+        self
+    }
+
     pub fn cancellation_token(&self) -> tokio_util::sync::CancellationToken {
         self.cancellation_token.clone()
     }

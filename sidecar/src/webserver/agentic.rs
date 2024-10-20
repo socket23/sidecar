@@ -1229,6 +1229,113 @@ pub async fn reasoning_thread_create(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticEditFeedbackExchange {
+    exchange_id: String,
+    session_id: String,
+    editor_url: String,
+    accepted: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticEditFeedbackExchangeResponse {
+    success: bool,
+}
+
+impl ApiResponse for AgenticEditFeedbackExchangeResponse {}
+
+pub async fn user_feedback_on_exchange(
+    Extension(app): Extension<Application>,
+    Json(AgenticEditFeedbackExchange {
+        exchange_id,
+        session_id,
+        editor_url,
+        accepted: _accepted,
+    }): Json<AgenticEditFeedbackExchange>,
+) -> Result<impl IntoResponse> {
+    // bring this back later
+    // give this as feedback to the agent to make sure that it can react to it (ideally)
+    // for now we are gonig to close the exchange if it was not closed already
+    let agent_mode = AideAgentMode::Chat;
+    println!("webserver::agent_session::chat::hit");
+    println!(
+        "webserver::agent_session::chat::session_id({})",
+        &session_id
+    );
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(exchange_id.to_owned(), session_id.to_string()),
+        sender.clone(),
+        editor_url,
+        cancellation_token.clone(),
+    );
+
+    let session_storage_path =
+        check_session_storage_path(app.config.clone(), session_id.to_string()).await;
+
+    let session_service = app.session_service.clone();
+    let cloned_session_id = session_id.to_string();
+    // let _ = tokio::spawn(async move {
+    //     let _ = session_service
+    //         .human_message(
+    //             cloned_session_id,
+    //             session_storage_path,
+    //             exchange_id,
+    //             query,
+    //             user_context,
+    //             project_labels,
+    //             repo_ref,
+    //             agent_mode,
+    //             message_properties,
+    //         )
+    //         .await;
+    // });
+
+    // TODO(skcd): Over here depending on the exchange reply mode we want to send over the
+    // response using ui_sender with the correct exchange_id and the thread_id
+    // do we go for a global ui_sender which is being sent to a sink which sends over the data
+    // to the editor via http or streaming or whatever (keep an active conneciton always?)
+    // how do we notify when the streaming is really completed
+
+    let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    let cloned_session_id = session_id.to_string();
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": cloned_session_id,
+                "started": true,
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = ui_event_stream.map(|ui_event: UIEventWithID| {
+        sse::Event::default()
+            .json_data(ui_event)
+            .map_err(anyhow::Error::new)
+    });
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+
+    // this will never get sent cause the sender is never dropped in a way, it will be
+    // dropped once we have completed the tokio::spawn above
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": session_id.to_string(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticCancelRunningExchange {
     exchange_id: String,
     session_id: String,

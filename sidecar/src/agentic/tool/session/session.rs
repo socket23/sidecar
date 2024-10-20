@@ -49,6 +49,26 @@ pub enum AideEditMode {
     Agentic = 2,
 }
 
+/// The exchange can be in one of the states
+///
+/// Its either that the edits made were accepted or rejected
+/// it could also have been cancelled by the user
+/// Default when its created is in running state
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ExchangeState {
+    Accepted,
+    Rejected,
+    Cancelled,
+    Running,
+    UserMessage,
+}
+
+impl Default for ExchangeState {
+    fn default() -> Self {
+        ExchangeState::Running
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ExchangeType {
     HumanChat(ExchangeTypeHuman),
@@ -121,6 +141,8 @@ impl ExchangeTypeHuman {
 pub struct Exchange {
     exchange_id: String,
     exchange_type: ExchangeType,
+    #[serde(default)]
+    exchange_state: ExchangeState,
 }
 
 impl Exchange {
@@ -139,6 +161,7 @@ impl Exchange {
                 project_labels,
                 repo_ref,
             )),
+            exchange_state: ExchangeState::UserMessage,
         }
     }
 
@@ -149,6 +172,7 @@ impl Exchange {
                 query,
                 user_context,
             }),
+            exchange_state: ExchangeState::UserMessage,
         }
     }
 
@@ -168,6 +192,7 @@ impl Exchange {
                 user_context,
                 exchange_type: AideEditMode::Agentic,
             }),
+            exchange_state: ExchangeState::UserMessage,
         }
     }
 
@@ -191,6 +216,7 @@ impl Exchange {
                 user_context,
                 exchange_type: AideEditMode::Anchored,
             }),
+            exchange_state: ExchangeState::UserMessage,
         }
     }
 
@@ -198,6 +224,7 @@ impl Exchange {
         Self {
             exchange_id,
             exchange_type: ExchangeType::AgentChat(message),
+            exchange_state: ExchangeState::Running,
         }
     }
 
@@ -569,6 +596,7 @@ impl Session {
                     query,
                     user_context,
                 }),
+            exchange_state: _,
         }) = last_exchange
         {
             // since we are going to be streaming the steps over here as we also
@@ -713,6 +741,7 @@ impl Session {
                     user_context,
                     ..
                 }),
+            exchange_state: _,
         }) = last_exchange
         {
             let edits_performed = scratch_pad_agent
@@ -785,6 +814,7 @@ impl Session {
                     user_context,
                     ..
                 }),
+            exchange_state: _,
         }) = last_exchange
         {
             let edits_performed = scratch_pad_agent

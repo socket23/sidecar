@@ -1249,7 +1249,7 @@ pub async fn user_feedback_on_exchange(
         exchange_id,
         session_id,
         editor_url,
-        accepted: _accepted,
+        accepted,
     }): Json<AgenticEditFeedbackExchange>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1274,7 +1274,16 @@ pub async fn user_feedback_on_exchange(
         check_session_storage_path(app.config.clone(), session_id.to_string()).await;
 
     let session_service = app.session_service.clone();
-    let cloned_session_id = session_id.to_string();
+    let _ = tokio::spawn(async move {
+        let _ = session_service
+            .feedback_for_exchange(
+                &exchange_id,
+                accepted,
+                session_storage_path,
+                message_properties,
+            )
+            .await;
+    });
     // let _ = tokio::spawn(async move {
     //     let _ = session_service
     //         .human_message(

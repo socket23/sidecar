@@ -228,6 +228,15 @@ impl Exchange {
         }
     }
 
+    fn set_completion_status(mut self, accetped: bool) -> Self {
+        if accetped {
+            self.exchange_state = ExchangeState::Accepted;
+        } else {
+            self.exchange_state = ExchangeState::Rejected;
+        }
+        self
+    }
+
     /// Convert the exchange to a session chat message so we can send it over
     /// for inference
     ///
@@ -362,6 +371,38 @@ impl Session {
 
     fn last_exchange(&self) -> Option<&Exchange> {
         self.exchanges.last()
+    }
+
+    pub async fn react_to_feedback(
+        mut self,
+        exchange_id: &str,
+        accepted: bool,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        // Here first we make sure that an exchange of the form exists
+        // if it does we mark that exchange as closed and also update its state
+        self.exchanges = self
+            .exchanges
+            .into_iter()
+            .map(|exchange| {
+                if &exchange.exchange_id == exchange_id {
+                    // we have an exchange over here matching our id so update its state
+                    // to what it is
+                    exchange.set_completion_status(accepted)
+                } else {
+                    exchange
+                }
+            })
+            .collect();
+
+        // now close the exchange
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::finished_exchange(
+                self.session_id.to_owned(),
+                message_properties.request_id_str().to_owned(),
+            ));
+        Ok(self)
     }
 
     /// This reacts to the last message and generates the reply for the user to handle

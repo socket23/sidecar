@@ -385,6 +385,29 @@ impl SessionService {
         Ok(())
     }
 
+    /// Provied feedback to the exchange
+    ///
+    /// We can react to this later on and send out either another exchange or something else
+    /// but for now we are just reacting to it on our side so we know
+    pub async fn feedback_for_exchange(
+        &self,
+        exchange_id: &str,
+        accepted: bool,
+        storage_path: String,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        let session_maybe = self.load_from_storage(storage_path.to_owned()).await;
+        if session_maybe.is_err() {
+            return Ok(());
+        }
+        let mut session = session_maybe.expect("is_err to hold above");
+        session = session
+            .react_to_feedback(exchange_id, accepted, message_properties)
+            .await?;
+        self.save_to_storage(&session).await?;
+        Ok(())
+    }
+
     async fn load_from_storage(&self, storage_path: String) -> Result<Session, SymbolError> {
         let content = tokio::fs::read_to_string(storage_path)
             .await

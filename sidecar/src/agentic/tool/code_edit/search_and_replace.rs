@@ -783,6 +783,7 @@ impl Tool for SearchAndReplaceEditing {
         search_and_replace_accumulator.end_streaming().await;
         // we stop polling from the events stream once we are done with the llm response and the loop has finished
         let _ = join_handle.await;
+        println!("tool::search_and_replace_editing::finished");
         match llm_response.await {
             Ok(Ok(response)) => Ok(ToolOutput::search_and_replace_editing(
                 SearchAndReplaceEditingResponse::new(

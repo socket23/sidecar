@@ -410,6 +410,27 @@ impl SessionService {
         Ok(())
     }
 
+    /// Returns if the exchange was really cancelled
+    pub async fn set_exchange_as_cancelled(
+        &self,
+        storage_path: String,
+        exchange_id: String,
+    ) -> Result<bool, SymbolError> {
+        let mut session = self.load_from_storage(storage_path).await?;
+
+        let send_cancellation_signal = session.has_running_code_edits(&exchange_id);
+
+        let session = if send_cancellation_signal {
+            session = session.set_exchange_as_cancelled(&exchange_id);
+            session
+        } else {
+            session
+        };
+
+        self.save_to_storage(&session).await?;
+        Ok(send_cancellation_signal)
+    }
+
     async fn load_from_storage(&self, storage_path: String) -> Result<Session, SymbolError> {
         let content = tokio::fs::read_to_string(storage_path)
             .await

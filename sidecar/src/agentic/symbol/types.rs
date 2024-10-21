@@ -2083,21 +2083,15 @@ Satisfy the requirement either by making edits or gathering the required informa
                             "symbol::types::symbol_event::edit::edit_implementations({})",
                             symbol.symbol_name()
                         );
-                        let response = run_with_cancellation(
-                            cancellation_token,
-                            symbol.edit_implementations(
+                        let response = symbol
+                            .edit_implementations(
                                 edit_request,
                                 message_properties.clone(),
                                 tool_properties.clone(),
-                            ),
-                        )
-                        .await;
-                        if let Some(Ok(response)) = response {
+                            )
+                            .await;
+                        if let Ok(response) = response {
                             let _ = response_sender.send(response);
-                        } else if let None = response {
-                            let _ = response_sender.send(SymbolEventResponse::TaskDone(
-                                "edit cancellation triggered".to_owned(),
-                            ));
                         } else {
                             let _ = response_sender
                                 .send(SymbolEventResponse::TaskDone("edit failed".to_owned()));

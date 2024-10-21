@@ -1378,6 +1378,7 @@ pub async fn cancel_running_exchange(
             session_id, exchange_id
         );
         cancellation_token.cancel();
+        // we should also notify the editor that we have cancelled the request
     }
     Ok(json_result(AgenticCancelRunningExchangeResponse {
         success: true,

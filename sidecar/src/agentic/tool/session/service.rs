@@ -352,6 +352,7 @@ impl SessionService {
             .content_in_range(&selection_range)
             .unwrap_or(selection_variable.content.to_owned());
 
+        session = session.accept_open_exchanges_if_any(message_properties.clone());
         let edit_exchange_id = self
             .tool_box
             .create_new_exchange(session_id.to_owned(), message_properties.clone())

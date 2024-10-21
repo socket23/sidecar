@@ -897,11 +897,11 @@ impl Session {
                 message.to_owned(),
             ));
 
-            // now close the exchange
+            // Also tell the exchange that we are in review mode now
             let _ = message_properties
                 .ui_sender()
-                .send(UIEventWithID::finished_exchange(
-                    self.session_id.to_owned(),
+                .send(UIEventWithID::edits_in_review(
+                    message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
                 ));
             println!("session::finished_agentic_editing_exchange");

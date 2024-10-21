@@ -18,7 +18,9 @@ use crate::{
         },
         tool::{
             errors::ToolError,
-            helpers::diff_recent_changes::DiffRecentChanges,
+            helpers::{
+                cancellation_future::run_with_cancellation, diff_recent_changes::DiffRecentChanges,
+            },
             input::ToolInput,
             lsp::{diagnostics::DiagnosticWithSnippet, open_file::OpenFileRequest},
             output::ToolOutput,
@@ -92,6 +94,8 @@ pub struct SearchAndReplaceEditingRequest {
     exchange_id: String,
     // The plan step id if avaiable on the edit request
     plan_step_id: Option<String>,
+    // cancellation token
+    cancellation_token: tokio_util::sync::CancellationToken,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -119,6 +123,7 @@ impl SearchAndReplaceEditingRequest {
         session_id: String,
         exchange_id: String,
         plan_step_id: Option<String>,
+        cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             fs_file_path,
@@ -142,6 +147,7 @@ impl SearchAndReplaceEditingRequest {
             session_id,
             exchange_id,
             plan_step_id,
+            cancellation_token,
         }
     }
 }
@@ -525,6 +531,7 @@ impl Tool for SearchAndReplaceEditing {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_search_and_replace_editing()?;
         let is_warmup = context.is_warmup;
+        let cancellation_token = context.cancellation_token.clone();
         let whole_file_context = context.complete_file.to_owned();
         let start_line = 0;
         let symbol_identifier = context.symbol_identifier.clone();
@@ -762,8 +769,12 @@ impl Tool for SearchAndReplaceEditing {
         // and then return the answer while waiting on the future to finish
 
         // start consuming from the stream
+        // Note: The cancellation token here is so polluted, we could do this way better
+        // instead of making sure that each future is run with cancellation
         let mut delta_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-        while let Some(stream_msg) = delta_stream.next().await {
+        while let Some(Some(stream_msg)) =
+            run_with_cancellation(cancellation_token.clone(), delta_stream.next()).await
+        {
             let delta = stream_msg.delta();
             if let Some(delta) = delta {
                 stream_answer.push_str(&delta);
@@ -785,10 +796,10 @@ impl Tool for SearchAndReplaceEditing {
         search_and_replace_accumulator.process_answer().await;
         search_and_replace_accumulator.end_streaming().await;
         // we stop polling from the events stream once we are done with the llm response and the loop has finished
-        let _ = join_handle.await;
+        let _ = run_with_cancellation(cancellation_token.clone(), join_handle).await;
         println!("tool::search_and_replace_editing::finished");
-        match llm_response.await {
-            Ok(Ok(response)) => Ok(ToolOutput::search_and_replace_editing(
+        match run_with_cancellation(cancellation_token.clone(), llm_response).await {
+            Some(Ok(Ok(response))) => Ok(ToolOutput::search_and_replace_editing(
                 SearchAndReplaceEditingResponse::new(
                     search_and_replace_accumulator.code_lines.join("\n"),
                     response,

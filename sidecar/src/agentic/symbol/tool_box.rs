@@ -5517,6 +5517,7 @@ FILEPATH: {fs_file_path}
             session_id,
             exchange_id,
             sub_symbol.plan_step_id(),
+            message_properties.cancellation_token(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -8789,6 +8790,7 @@ FILEPATH: {fs_file_path}
             session_id.to_owned(),
             exchange_id,
             None,
+            message_properties.cancellation_token(),
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();

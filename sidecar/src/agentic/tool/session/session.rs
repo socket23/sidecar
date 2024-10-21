@@ -237,6 +237,12 @@ impl Exchange {
         self
     }
 
+    /// If the exchange has been left open and has not finished yet
+    fn is_open(&self) -> bool {
+        matches!(self.exchange_state, ExchangeState::Running)
+            && matches!(self.exchange_type, ExchangeType::AgentChat(_))
+    }
+
     /// Convert the exchange to a session chat message so we can send it over
     /// for inference
     ///
@@ -529,6 +535,57 @@ impl Session {
             exchange_id,
         ));
         Ok(self)
+    }
+
+    /// We want to make sure that any open exchanges are accepted as we make
+    /// progress towards are current exchange
+    pub fn accept_open_exchanges_if_any(
+        mut self,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Self {
+        let exchanges_to_close = self
+            .exchanges
+            .iter()
+            .filter_map(|exchange| {
+                if exchange.is_open() {
+                    Some(exchange.exchange_id.to_owned())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        exchanges_to_close.into_iter().for_each(|exchange_id| {
+            // mark the exchange as accepted
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::edits_accepted(
+                    self.session_id.to_owned(),
+                    exchange_id.to_owned(),
+                ));
+            // mark the exchange as closed
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::finished_exchange(
+                    self.session_id.to_owned(),
+                    exchange_id,
+                ));
+        });
+
+        // now update all our exchanges to accepted
+        self.exchanges = self
+            .exchanges
+            .into_iter()
+            .map(|exchange| {
+                if exchange.is_open() {
+                    exchange.set_completion_status(true)
+                } else {
+                    exchange
+                }
+            })
+            .collect();
+
+        self
     }
 
     /// We have to map the plan revert exchange-id over here to be similar to
@@ -825,14 +882,14 @@ impl Session {
             };
 
             // Send a reply on the exchange
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::chat_event(
-                    message_properties.root_request_id().to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                    message.to_owned(),
-                    Some(message.to_owned()),
-                ));
+            // let _ = message_properties
+            //     .ui_sender()
+            //     .send(UIEventWithID::chat_event(
+            //         message_properties.root_request_id().to_owned(),
+            //         message_properties.request_id_str().to_owned(),
+            //         message.to_owned(),
+            //         Some(message.to_owned()),
+            //     ));
 
             // Add to the exchange
             self.exchanges.push(Exchange::agent_reply(

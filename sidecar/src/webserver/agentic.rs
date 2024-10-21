@@ -1369,20 +1369,78 @@ pub async fn cancel_running_exchange(
         session_id, exchange_id
     );
     let session_service = app.session_service.clone();
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
     if let Some(cancellation_token) = session_service
         .get_cancellation_token(&session_id, &exchange_id)
         .await
     {
         println!(
             "cancel_running_exchange::session_id({})::exchange_id({})::cancelled",
-            session_id, exchange_id
+            session_id,
+            exchange_id.to_owned()
         );
         cancellation_token.cancel();
         // we should also notify the editor that we have cancelled the request
+        // bring this back later
+        println!("webserver::agent_session::plan::hit");
+        println!(
+            "webserver::agent_session::plan::session_id({})",
+            &session_id
+        );
+        let session_storage_path =
+            check_session_storage_path(app.config.clone(), session_id.to_string()).await;
+
+        let send_cancellation_signal = session_service
+            .set_exchange_as_cancelled(session_storage_path, exchange_id.to_owned())
+            .await
+            .unwrap_or_default();
+
+        // we have to send the event only for edits not for everything
+        if send_cancellation_signal {
+            let _ = sender.send(UIEventWithID::edits_cancelled_in_exchange(
+                session_id.to_owned(),
+                exchange_id,
+            ));
+        }
     }
-    Ok(json_result(AgenticCancelRunningExchangeResponse {
-        success: true,
-    }))
+
+    // send over the events on the stream
+    let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    let cloned_session_id = session_id.to_string();
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": cloned_session_id,
+                "started": true,
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = ui_event_stream.map(|ui_event: UIEventWithID| {
+        sse::Event::default()
+            .json_data(ui_event)
+            .map_err(anyhow::Error::new)
+    });
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+
+    // this will never get sent cause the sender is never dropped in a way, it will be
+    // dropped once we have completed the tokio::spawn above
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": session_id.to_string(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
 }
 
 /// We keep track of the thread-id over here

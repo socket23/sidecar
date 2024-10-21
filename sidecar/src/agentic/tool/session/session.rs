@@ -243,6 +243,25 @@ impl Exchange {
             && matches!(self.exchange_type, ExchangeType::AgentChat(_))
     }
 
+    /// Check if this is agent reply
+    fn is_agent_work(&self) -> bool {
+        matches!(self.exchange_type, ExchangeType::AgentChat(_))
+    }
+
+    fn is_still_running(&self) -> bool {
+        matches!(self.exchange_state, ExchangeState::Running)
+    }
+
+    /// Assume that we will implement this later but we still have code edits
+    /// everywhere
+    fn has_code_edits(&self) -> bool {
+        true
+    }
+
+    fn set_exchange_as_cancelled(&mut self) {
+        self.exchange_state = ExchangeState::Cancelled;
+    }
+
     /// Convert the exchange to a session chat message so we can send it over
     /// for inference
     ///
@@ -310,6 +329,18 @@ impl Session {
 
     pub fn exchanges(&self) -> usize {
         self.exchanges.len()
+    }
+
+    fn find_exchange_by_id(&self, exchange_id: &str) -> Option<&Exchange> {
+        self.exchanges
+            .iter()
+            .find(|exchange| &exchange.exchange_id == exchange_id)
+    }
+
+    fn find_exchange_by_id_mut(&mut self, exchange_id: &str) -> Option<&mut Exchange> {
+        self.exchanges
+            .iter_mut()
+            .find(|exchange| &exchange.exchange_id == exchange_id)
     }
 
     pub fn plan(
@@ -986,5 +1017,25 @@ impl Session {
             ));
         }
         Ok(self)
+    }
+
+    pub fn has_running_code_edits(&self, exchange_id: &str) -> bool {
+        let found_exchange = self.find_exchange_by_id(exchange_id);
+        match found_exchange {
+            Some(exchange) => {
+                exchange.is_agent_work() && exchange.is_still_running() && exchange.has_code_edits()
+            }
+            None => false,
+        }
+    }
+
+    pub fn set_exchange_as_cancelled(mut self, exchange_id: &str) -> Self {
+        if self.has_running_code_edits(exchange_id) {
+            let found_exchange = self.find_exchange_by_id_mut(exchange_id);
+            if let Some(exchange) = found_exchange {
+                exchange.set_exchange_as_cancelled();
+            }
+        }
+        self
     }
 }

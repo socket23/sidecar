@@ -462,6 +462,46 @@ impl UIEventWithID {
             })),
         }
     }
+
+    pub fn edits_started_in_exchnage(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::Loading),
+            )),
+        }
+    }
+
+    pub fn edits_cancelled_in_exchange(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::Cancelled),
+            )),
+        }
+    }
+
+    pub fn edits_accepted(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::MarkedComplete),
+            )),
+        }
+    }
+
+    pub fn edits_in_review(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::InReview),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1020,6 +1060,20 @@ impl ChatMessageEvent {
 #[derive(Debug, serde::Serialize)]
 pub enum ExchangeMessageEvent {
     FinishedExchange(FinishedExchangeEvent),
+    EditsExchangeState(EditsExchangeStateEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum EditsStateEvent {
+    Loading,
+    InReview,
+    MarkedComplete,
+    Cancelled,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum EditsExchangeStateEvent {
+    EditsState(EditsStateEvent),
 }
 
 #[derive(Debug, serde::Serialize)]

@@ -395,6 +395,24 @@ impl Session {
             })
             .collect();
 
+        // give feedback to the editor that our state has chagned
+        if accepted {
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::edits_accepted(
+                    self.session_id.to_owned(),
+                    exchange_id.to_owned(),
+                ));
+        } else {
+            let _ =
+                message_properties
+                    .ui_sender()
+                    .send(UIEventWithID::edits_cancelled_in_exchange(
+                        self.session_id.to_owned(),
+                        exchange_id.to_owned(),
+                    ));
+        }
+
         // now close the exchange
         let _ = message_properties
             .ui_sender()
@@ -858,6 +876,13 @@ impl Session {
             exchange_state: _,
         }) = last_exchange
         {
+            // send a message that we are starting with the edits over here
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::edits_started_in_exchnage(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
             let edits_performed = scratch_pad_agent
                 .anchor_editing_on_range(
                     range.clone(),
@@ -889,19 +914,19 @@ impl Session {
                     Some(message.to_owned()),
                 ));
 
+            // Also tell the exchange that we are in review mode now
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::edits_in_review(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+
             // Add to the exchange
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 message.to_owned(),
             ));
-
-            // now close the exchange
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::finished_exchange(
-                    self.session_id.to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                ));
         }
         Ok(self)
     }

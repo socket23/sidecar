@@ -1255,7 +1255,6 @@ pub async fn user_feedback_on_exchange(
     // bring this back later
     // give this as feedback to the agent to make sure that it can react to it (ideally)
     // for now we are gonig to close the exchange if it was not closed already
-    let agent_mode = AideAgentMode::Chat;
     println!("webserver::agent_session::chat::hit");
     println!(
         "webserver::agent_session::chat::session_id({})",

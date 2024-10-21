@@ -275,6 +275,7 @@ impl SessionService {
         // add an exchange that we are going to perform anchored edits
         session = session.agentic_edit(exchange_id, edit_request, user_context, codebase_search);
 
+        session = session.accept_open_exchanges_if_any(message_properties.clone());
         let edit_exchange_id = self
             .tool_box
             .create_new_exchange(session_id.to_owned(), message_properties.clone())

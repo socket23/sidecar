@@ -176,6 +176,8 @@ impl StreamedEditingForEditor {
 pub struct SearchAndReplaceEditing {
     llm_client: Arc<LLMBroker>,
     lsp_open_file: Arc<Box<dyn Tool + Send + Sync>>,
+    // contains a unique-id to go along with the semaphore over here when making
+    // the edits
     file_locker: Arc<Mutex<HashMap<String, (String, Arc<Semaphore>)>>>,
     _fail_over_llm: LLMProperties,
 }
@@ -638,6 +640,7 @@ impl Tool for SearchAndReplaceEditing {
                 // so we end up releasing very quickly
                 match edits_response {
                     Some(EditDelta::EditLockAcquire(sender)) => {
+                        println!("tool::search_and_replace_accumulator::waiting_on_lock");
                         edit_lock = Some(
                             file_lock
                                 .clone()

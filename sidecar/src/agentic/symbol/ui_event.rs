@@ -359,20 +359,28 @@ impl UIEventWithID {
         }
     }
 
-    pub fn agentic_top_level_thinking(request_id: String, thinking: &str) -> Self {
+    pub fn agentic_top_level_thinking(
+        request_id: String,
+        exchange_id: String,
+        thinking: &str,
+    ) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            exchange_id: request_id.to_owned(),
+            exchange_id,
             event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticTopLevelThinking(
                 thinking.to_owned(),
             )),
         }
     }
 
-    pub fn agentic_symbol_level_thinking(request_id: String, event: StepListItem) -> Self {
+    pub fn agentic_symbol_level_thinking(
+        request_id: String,
+        exchange_id: String,
+        event: StepListItem,
+    ) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            exchange_id: request_id.to_owned(),
+            exchange_id,
             event: UIEvent::FrameworkEvent(FrameworkEvent::AgenticSymbolLevelThinking(event)),
         }
     }

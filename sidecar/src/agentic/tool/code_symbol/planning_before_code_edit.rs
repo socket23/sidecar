@@ -39,13 +39,15 @@ fn unescape_xml(s: String) -> String {
         .to_string()
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct PlanningBeforeCodeEditRequest {
     user_query: String,
     files_with_content: HashMap<String, String>,
     original_plan: String,
     llm_properties: LLMProperties,
     root_request_id: String,
+    _exchange_id: String,
+    _cancellation_token: tokio_util::sync::CancellationToken,
 }
 
 impl PlanningBeforeCodeEditRequest {
@@ -55,6 +57,8 @@ impl PlanningBeforeCodeEditRequest {
         original_plan: String,
         llm_properties: LLMProperties,
         root_request_id: String,
+        exchange_id: String,
+        cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
             user_query,
@@ -62,6 +66,8 @@ impl PlanningBeforeCodeEditRequest {
             original_plan,
             llm_properties,
             root_request_id,
+            _exchange_id: exchange_id,
+            _cancellation_token: cancellation_token,
         }
     }
 }

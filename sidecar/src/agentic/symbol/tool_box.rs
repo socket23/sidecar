@@ -7046,6 +7046,8 @@ FILEPATH: {fs_file_path}
             original_plan,
             llm_properties,
             message_properties.root_request_id().to_owned(),
+            message_properties.request_id_str().to_owned(),
+            message_properties.cancellation_token(),
         ));
         let final_plan_list = self
             .tools

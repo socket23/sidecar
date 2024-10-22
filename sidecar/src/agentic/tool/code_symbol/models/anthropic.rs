@@ -5354,6 +5354,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
         let provider = code_symbols.llm_provider();
         let model = code_symbols.model().clone();
         let root_request_id = code_symbols.root_request_id().to_owned();
+        let exchange_id = code_symbols.exchange_id();
         let ui_sender = code_symbols.message_properties().ui_sender();
         let cancellation_token = code_symbols.message_properties().cancellation_token();
         let system_message = LLMClientMessage::system(self.system_message_context_wide());
@@ -5389,6 +5390,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
             let cloned_llm_client = self.llm_client.clone();
             let cloned_root_request_id = root_request_id.clone();
             let cloned_root_request_id_2 = root_request_id.clone();
+            let cloned_exchange_id = exchange_id.clone();
             let cloned_ui_sender = ui_sender.clone();
             let cloned_cancellation_token = cancellation_token.clone();
             let cloned_cancellation_token_2 = cancellation_token.clone();
@@ -5438,6 +5440,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
 
                                     let ui_event = UIEventWithID::agentic_top_level_thinking(
                                         cloned_root_request_id_2.to_owned(),
+                                        cloned_exchange_id.to_owned(),
                                         &content,
                                     );
                                     let _ = cloned_ui_sender.send(ui_event);
@@ -5453,6 +5456,7 @@ impl CodeSymbolImportant for AnthropicCodeSymbolImportant {
                                     Some(step_list_item) => {
                                         let ui_event = UIEventWithID::agentic_symbol_level_thinking(
                                             cloned_root_request_id_2.to_owned(),
+                                            cloned_exchange_id.to_owned(),
                                             step_list_item,
                                         );
                                         let _ = cloned_ui_sender.send(ui_event);

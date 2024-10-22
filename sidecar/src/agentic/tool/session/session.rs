@@ -965,6 +965,9 @@ impl Session {
         }) = last_exchange
         {
             // send a message that we are starting with the edits over here
+            // we want to make a note of the exchange that we are working on it
+            // once we have the eidts, then we also have to make sure that we track
+            // that we are working on some exchange
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::edits_started_in_exchnage(

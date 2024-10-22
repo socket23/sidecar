@@ -792,8 +792,18 @@ impl Tool for SearchAndReplaceEditing {
             }
         }
 
+        println!(
+            "tool::search_and_replace_editing::finsihed_delta_streaming::time_now({:?})",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis())
+        );
         // force the flush to happen over here
-        search_and_replace_accumulator.process_answer().await;
+        let _ = run_with_cancellation(
+            cancellation_token.clone(),
+            search_and_replace_accumulator.process_answer(),
+        )
+        .await;
         search_and_replace_accumulator.end_streaming().await;
         // we stop polling from the events stream once we are done with the llm response and the loop has finished
         let _ = run_with_cancellation(cancellation_token.clone(), join_handle).await;

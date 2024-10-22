@@ -510,6 +510,26 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn start_plan_generation(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::Loading),
+            )),
+        }
+    }
+
+    pub fn plan_in_review(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::InReview),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1069,6 +1089,7 @@ impl ChatMessageEvent {
 pub enum ExchangeMessageEvent {
     FinishedExchange(FinishedExchangeEvent),
     EditsExchangeState(EditsExchangeStateEvent),
+    PlansExchangeState(EditsExchangeStateEvent),
 }
 
 #[derive(Debug, serde::Serialize)]

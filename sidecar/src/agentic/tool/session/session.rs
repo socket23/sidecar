@@ -754,6 +754,16 @@ impl Session {
             let mut stream_receiver =
                 tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
 
+            let exchange_id = message_properties.request_id_str().to_owned();
+            let session_id = self.session_id.to_owned();
+
+            // send a message over here talking about the start of the plan
+            let ui_sender = message_properties.ui_sender();
+            let _ = ui_sender.send(UIEventWithID::start_plan_generation(
+                exchange_id.to_owned(),
+                session_id.to_owned(),
+            ));
+
             // now we want to poll from the receiver over here and start reacting to
             // the events
             let cloned_message_properties = message_properties.clone();
@@ -774,9 +784,30 @@ impl Session {
 
             let mut steps_up_until_now = 0;
             while let Some(step_message) = stream_receiver.next().await {
+                let exchange_id = exchange_id.to_owned();
+                if steps_up_until_now == 0 {
+                    // Did we start generating the plan, send a message over
+                    let _ = message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::plan_in_review(
+                            exchange_id.to_owned(),
+                            session_id.to_owned(),
+                        ));
+                }
                 match step_message {
                     StepSenderEvent::NewStep(step) => {
                         println!("session::perform_plan_generation::new_step_found");
+                        // send a message over here about the step we are on
+                        let _ =
+                            message_properties
+                                .ui_sender()
+                                .send(UIEventWithID::plan_title_added(
+                                    self.session_id.to_owned(),
+                                    exchange_id,
+                                    steps_up_until_now,
+                                    vec![],
+                                    step.title.to_owned(),
+                                ));
                         let instruction = step.description();
                         let file_to_edit = step.file_to_edit();
                         if file_to_edit.is_none() {

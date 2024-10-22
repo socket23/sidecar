@@ -416,9 +416,19 @@ impl SessionService {
         storage_path: String,
         exchange_id: String,
     ) -> Result<bool, SymbolError> {
-        let mut session = self.load_from_storage(storage_path).await?;
+        let mut session = self.load_from_storage(storage_path).await.map_err(|e| {
+            println!(
+                "session_service::set_exchange_as_cancelled::exchange_id({})::error({:?})",
+                &exchange_id, e
+            );
+            e
+        })?;
 
         let send_cancellation_signal = session.has_running_code_edits(&exchange_id);
+        println!(
+            "session_service::exchange_id({})::should_cancel::({})",
+            &exchange_id, send_cancellation_signal
+        );
 
         let session = if send_cancellation_signal {
             session = session.set_exchange_as_cancelled(&exchange_id);
@@ -432,12 +442,13 @@ impl SessionService {
     }
 
     async fn load_from_storage(&self, storage_path: String) -> Result<Session, SymbolError> {
-        let content = tokio::fs::read_to_string(storage_path)
+        let content = tokio::fs::read_to_string(storage_path.to_owned())
             .await
             .map_err(|e| SymbolError::IOError(e))?;
 
-        let session: Session =
-            serde_json::from_str(&content).expect("converting to session from json is okay");
+        let session: Session = serde_json::from_str(&content).expect(&format!(
+            "converting to session from json is okay: {storage_path}"
+        ));
         Ok(session)
     }
 

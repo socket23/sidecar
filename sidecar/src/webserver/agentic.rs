@@ -1382,10 +1382,16 @@ pub async fn cancel_running_exchange(
         cancellation_token.cancel();
         // we should also notify the editor that we have cancelled the request
         // bring this back later
-        println!("webserver::agent_session::plan::hit");
+        println!("webserver::agent_session::cancel_running_exchange::hit");
         println!(
-            "webserver::agent_session::plan::session_id({})",
+            "webserver::agent_session::cancel_running_exchange::session_id({})",
             &session_id
+        );
+        // give ourselves some time to cleanup before we start working on the cancellation
+        let _ = tokio::time::sleep(Duration::from_millis(100)).await;
+        println!(
+            "webserver::agent_session::loading_from_storage::({})",
+            &exchange_id
         );
         let session_storage_path =
             check_session_storage_path(app.config.clone(), session_id.to_string()).await;

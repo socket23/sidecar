@@ -234,6 +234,10 @@ impl CodeSymbolImportantWideSearch {
         &self.root_request_id
     }
 
+    pub fn exchange_id(&self) -> String {
+        self.message_properties.request_id_str().to_owned()
+    }
+
     pub fn set_file_extension_fitler(mut self, file_extension: String) -> Self {
         self.file_extension_filters.insert(file_extension);
         self

@@ -2170,8 +2170,10 @@ We also believe this symbol needs to be probed because of:
                         // Our range : [...........S...........E..]
                         let outline_node_content = selected_outline_node.1.consume_content();
                         if outline_node_content.range().contains_check_line(symbol_to_edit.range()) {
+                            println!("selection_range_selected::{:?}", &symbol_to_edit.range());
                             Ok(outline_node_content.set_range(symbol_to_edit.range().clone()))
                         } else {
+                            println!("selection_range_selected_not_selected::{:?})", &outline_node_content.range());
                             Ok(outline_node_content)
                         }
                     } else {
@@ -5491,6 +5493,7 @@ FILEPATH: {fs_file_path}
 
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
+        println!("code_editing_with_search_and_replace::session_id({})::exchange_id({})", &session_id, &exchange_id);
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
@@ -6702,6 +6705,7 @@ FILEPATH: {fs_file_path}
         let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::open_file_event(
+                message_properties.root_request_id().to_owned(),
                 message_properties.request_id_str().to_owned(),
                 fs_file_path,
             ));

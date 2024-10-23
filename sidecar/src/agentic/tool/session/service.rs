@@ -222,13 +222,13 @@ impl SessionService {
             message_properties = message_properties
                 .set_request_id(plan_exchange_id)
                 .set_cancellation_token(cancellation_token);
-
             // now we can perform the plan generation over here
             session = session
                 .perform_plan_generation(
                     plan_service,
                     plan_id,
                     plan_storage_path,
+                    self.tool_box.clone(),
                     self.symbol_manager.clone(),
                     message_properties,
                 )

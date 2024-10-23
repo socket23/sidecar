@@ -732,6 +732,7 @@ impl Session {
         plan_service: PlanService,
         plan_id: String,
         plan_storage_path: String,
+        tool_box: Arc<ToolBox>,
         symbol_manager: Arc<SymbolManager>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
@@ -760,8 +761,8 @@ impl Session {
             // send a message over here talking about the start of the plan
             let ui_sender = message_properties.ui_sender();
             let _ = ui_sender.send(UIEventWithID::start_plan_generation(
-                exchange_id.to_owned(),
                 session_id.to_owned(),
+                exchange_id.to_owned(),
             ));
 
             // now we want to poll from the receiver over here and start reacting to
@@ -790,8 +791,8 @@ impl Session {
                     let _ = message_properties
                         .ui_sender()
                         .send(UIEventWithID::plan_in_review(
-                            exchange_id.to_owned(),
                             session_id.to_owned(),
+                            exchange_id.to_owned(),
                         ));
                 }
                 match step_message {
@@ -814,6 +815,9 @@ impl Session {
                             continue;
                         }
                         let file_to_edit = file_to_edit.expect("is_none to hold");
+                        let file_open_response = tool_box
+                            .file_open(file_to_edit.to_owned(), message_properties.clone())
+                            .await?;
                         let hub_sender = symbol_manager.hub_sender();
                         let (edit_done_sender, edit_done_receiver) =
                             tokio::sync::oneshot::channel();
@@ -822,7 +826,7 @@ impl Session {
                                 SymbolIdentifier::with_file_path(&file_to_edit, &file_to_edit),
                                 SymbolToEdit::new(
                                     file_to_edit.to_owned(),
-                                    Range::default(),
+                                    file_open_response.full_range(),
                                     file_to_edit.to_owned(),
                                     vec![instruction.to_owned()],
                                     false,
@@ -887,10 +891,10 @@ impl Session {
                 message.to_owned(),
             ));
 
-            // now close the exchange
+            // wait for the review on the plan now
             let _ = message_properties
                 .ui_sender()
-                .send(UIEventWithID::finished_exchange(
+                .send(UIEventWithID::finished_plan_generation(
                     self.session_id.to_owned(),
                     message_properties.request_id_str().to_owned(),
                 ));

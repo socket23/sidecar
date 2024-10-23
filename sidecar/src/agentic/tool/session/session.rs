@@ -918,7 +918,7 @@ impl Session {
 
     /// we are going to perform the agentic editing
     pub async fn perform_agentic_editing(
-        mut self,
+        self,
         scratch_pad_agent: ScratchPadAgent,
         root_directory: String,
         message_properties: SymbolEventMessageProperties,
@@ -951,30 +951,10 @@ impl Session {
                     message_properties.clone(),
                 )
                 .await;
-            println!("session::perform_agentic_editing::finsihed_editing");
-            let message = match edits_performed {
-                Ok(_) => {
-                    // add a message to the same exchange that we are done
-                    "Finished editing".to_owned()
-                }
-                Err(_) => "Failed to edit".to_owned(),
+            match edits_performed {
+                Ok(_) => println!("session::perform_agentic_editing::finished_editing"),
+                Err(_) => println!("Failed to edit"),
             };
-
-            // Send a reply on the exchange
-            // let _ = message_properties
-            //     .ui_sender()
-            //     .send(UIEventWithID::chat_event(
-            //         message_properties.root_request_id().to_owned(),
-            //         message_properties.request_id_str().to_owned(),
-            //         message.to_owned(),
-            //         Some(message.to_owned()),
-            //     ));
-
-            // Add to the exchange
-            self.exchanges.push(Exchange::agent_reply(
-                message_properties.request_id_str().to_owned(),
-                message.to_owned(),
-            ));
 
             // Also tell the exchange that we are in review mode now
             let _ = message_properties
@@ -990,7 +970,7 @@ impl Session {
 
     /// We perform the anchored edit over here
     pub async fn perform_anchored_edit(
-        mut self,
+        self,
         scratch_pad_agent: ScratchPadAgent,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
@@ -1035,23 +1015,11 @@ impl Session {
                     message_properties.clone(),
                 )
                 .await;
-            let message = match edits_performed {
-                Ok(_) => {
-                    // add a message to the same exchange that we are done
-                    "Finished editing".to_owned()
-                }
-                Err(_) => "Failed to edit".to_owned(),
+            match edits_performed {
+                Ok(_) => println!("session::perform_agentic_editing::finished_editing"),
+                Err(_) => println!("Failed to edit"),
             };
 
-            // Send a reply on the exchange
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::chat_event(
-                    message_properties.root_request_id().to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                    message.to_owned(),
-                    Some(message.to_owned()),
-                ));
 
             // Also tell the exchange that we are in review mode now
             let _ = message_properties
@@ -1060,12 +1028,6 @@ impl Session {
                     message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
                 ));
-
-            // Add to the exchange
-            self.exchanges.push(Exchange::agent_reply(
-                message_properties.request_id_str().to_owned(),
-                message.to_owned(),
-            ));
         }
         Ok(self)
     }

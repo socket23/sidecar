@@ -307,6 +307,7 @@ impl UIEventWithID {
         request_id: String,
         symbol_identifier: SymbolIdentifier,
         thinking: String,
+        delta: Option<String>,
         edit_request_id: String,
         exchange_id: String,
     ) -> Self {
@@ -316,6 +317,7 @@ impl UIEventWithID {
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::thinking_for_edit(
                 symbol_identifier,
                 thinking,
+                delta,
                 edit_request_id,
             )),
         }
@@ -778,6 +780,7 @@ pub enum SymbolEventEditRequest {
 pub struct ThinkingForEditRequest {
     edit_request_id: String,
     thinking: String,
+    delta: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -908,6 +911,7 @@ impl SymbolEventSubStepRequest {
     pub fn thinking_for_edit(
         symbol_identifier: SymbolIdentifier,
         thinking: String,
+        delta: Option<String>,
         edit_request_id: String,
     ) -> Self {
         Self {
@@ -916,6 +920,7 @@ impl SymbolEventSubStepRequest {
                 ThinkingForEditRequest {
                     edit_request_id,
                     thinking,
+                    delta,
                 },
             )),
         }

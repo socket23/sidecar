@@ -790,7 +790,8 @@ impl Tool for SearchAndReplaceEditing {
                 let _ = ui_sender.send(UIEventWithID::send_thinking_for_edit(
                     root_request_id.to_owned(),
                     symbol_identifier.clone(),
-                    search_and_replace_accumulator.answer_to_show.to_owned(),
+                    stream_msg.answer_up_until_now().to_owned(),
+                    stream_msg.delta().map(|delta| delta.to_owned()),
                     edit_request_id.to_owned(),
                     exchange_id.to_owned(),
                 ));

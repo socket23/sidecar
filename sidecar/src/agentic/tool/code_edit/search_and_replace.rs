@@ -234,7 +234,7 @@ All changes to files must use the *SEARCH/REPLACE block* format.
 
 Every *SEARCH/REPLACE block* must use this format:
 1. The file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
-2. The opening fence and code language, eg: ```python
+2. The opening fence and code language, eg: ```python or ```rust or ```typescript (depending on the language of the code)
 3. The start of search block: <<<<<<< SEARCH
 4. A contiguous chunk of lines to search for in the existing source code
 5. The dividing line: =======
@@ -377,7 +377,7 @@ All changes to files must use the *SEARCH/REPLACE block* format.
 
 Every *SEARCH/REPLACE block* must use this format:
 1. The file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
-2. The opening fence and code language, eg: ```python
+2. The opening fence and code language, eg: ```python or ```rust or ```typescript (depending on the language of the code)
 3. The start of search block: <<<<<<< SEARCH
 4. A contiguous chunk of lines to search for in the existing source code
 5. The dividing line: =======

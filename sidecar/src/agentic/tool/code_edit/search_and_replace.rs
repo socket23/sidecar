@@ -621,6 +621,10 @@ impl Tool for SearchAndReplaceEditing {
         let cloned_edit_request_id = edit_request_id.to_owned();
         let cloned_plan_step_id = plan_step_id.clone();
         let cloned_exchange_id = exchange_id.to_owned();
+        println!(
+            "cloned_exchange_id::({})::request_id({})",
+            &cloned_exchange_id, &cloned_root_request_id
+        );
         let cloned_lsp_open_file = self.lsp_open_file.clone();
         let cloned_fs_file_path = fs_file_path.to_owned();
         let cloned_editor_url = editor_url.to_owned();
@@ -788,6 +792,7 @@ impl Tool for SearchAndReplaceEditing {
                     symbol_identifier.clone(),
                     search_and_replace_accumulator.answer_to_show.to_owned(),
                     edit_request_id.to_owned(),
+                    exchange_id.to_owned(),
                 ));
             }
         }

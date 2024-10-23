@@ -378,7 +378,7 @@ impl PlanService {
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Plan, PlanServiceError> {
         println!("plan::service::deep_reasoning::({})", is_deep_reasoning);
-        if is_deep_reasoning {
+        if true {
             println!("gathering::deep_context");
             user_context = self
                 .tool_box

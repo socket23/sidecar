@@ -208,10 +208,10 @@ impl UIEventWithID {
     }
 
     /// sends a open file request
-    pub fn open_file_event(request_id: String, fs_file_path: String) -> Self {
+    pub fn open_file_event(request_id: String, exchange_id: String, fs_file_path: String) -> Self {
         Self {
             request_id: request_id.to_owned(),
-            exchange_id: request_id.to_owned(),
+            exchange_id: exchange_id,
             event: UIEvent::FrameworkEvent(FrameworkEvent::OpenFile(OpenFileRequest {
                 fs_file_path,
                 request_id,
@@ -308,10 +308,11 @@ impl UIEventWithID {
         symbol_identifier: SymbolIdentifier,
         thinking: String,
         edit_request_id: String,
+        exchange_id: String,
     ) -> Self {
         Self {
-            request_id: request_id.to_owned(),
-            exchange_id: request_id.to_owned(),
+            request_id: request_id,
+            exchange_id: exchange_id,
             event: UIEvent::SymbolEventSubStep(SymbolEventSubStepRequest::thinking_for_edit(
                 symbol_identifier,
                 thinking,
@@ -425,6 +426,17 @@ impl UIEventWithID {
             exchange_id: exchange_id.to_owned(),
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::FinishedExchange(
                 FinishedExchangeEvent::new(exchange_id, request_id),
+            )),
+        }
+    }
+
+    /// Finished plan generation
+    pub fn finished_plan_generation(request_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::InReview),
             )),
         }
     }

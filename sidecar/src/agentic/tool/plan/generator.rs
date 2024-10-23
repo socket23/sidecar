@@ -26,10 +26,92 @@ use crate::{
 
 use super::plan_step::PlanStep;
 
+pub struct StepTitleFound {
+    step_index: usize,
+    session_id: String,
+    exchange_id: String,
+    title: String,
+}
+
+impl StepTitleFound {
+    fn new(step_index: usize, title: String, session_id: String, exchange_id: String) -> Self {
+        Self {
+            step_index,
+            session_id,
+            exchange_id,
+            title,
+        }
+    }
+
+    pub fn step_index(&self) -> usize {
+        self.step_index
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    pub fn exchange_id(&self) -> &str {
+        &self.exchange_id
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+}
+
+pub struct StepDescriptionUpdate {
+    delta: Option<String>,
+    description_up_until_now: String,
+    session_id: String,
+    exchange_id: String,
+    index: usize,
+}
+
+impl StepDescriptionUpdate {
+    fn new(
+        delta: Option<String>,
+        description_up_until_now: String,
+        session_id: String,
+        exchange_id: String,
+        index: usize,
+    ) -> Self {
+        Self {
+            delta,
+            description_up_until_now,
+            session_id,
+            exchange_id,
+            index,
+        }
+    }
+
+    pub fn delta(&self) -> Option<String> {
+        self.delta.clone()
+    }
+
+    pub fn description_up_until_now(&self) -> &str {
+        &self.description_up_until_now
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    pub fn exchange_id(&self) -> &str {
+        &self.exchange_id
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
+}
+
 /// Exposes 2 kinds of events one which notifies that a new step has been
 /// added and another which is the case when the steps are done
 pub enum StepSenderEvent {
     NewStep(Step),
+    NewStepTitle(StepTitleFound),
+    NewStepDescription(StepDescriptionUpdate),
     Done,
 }
 
@@ -439,6 +521,7 @@ struct PlanStepGenerator {
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     stream_steps: Option<UnboundedSender<StepSenderEvent>>,
+    step_index: usize,
 }
 
 impl PlanStepGenerator {
@@ -460,6 +543,7 @@ impl PlanStepGenerator {
             exchange_id,
             ui_sender,
             stream_steps,
+            step_index: 0,
         }
     }
 
@@ -475,7 +559,6 @@ impl PlanStepGenerator {
                     title,
                     description,
                 };
-                println!("generating_steps");
                 // send over the ui event here for the step
                 let _ = self.ui_sender.send(UIEventWithID::plan_complete_added(
                     self.session_id.to_owned(),
@@ -539,6 +622,9 @@ impl PlanStepGenerator {
                         // over here we should have a plan at this point which we can
                         // send back, for now we can start by logging this properly
                         self.generate_step_if_possible();
+
+                        // increment our counter for the step index and move our state forward
+                        self.step_index = self.step_index + 1;
                         self.step_block_status = StepBlockStatus::NoBlock;
                     }
                 }
@@ -552,6 +638,19 @@ impl PlanStepGenerator {
                 }
                 StepBlockStatus::StepTitle => {
                     if answer_line_at_index == "</title>" {
+                        // send the title if we do have it for the plan step
+                        if let Some(step_sender) = self.stream_steps.as_ref() {
+                            if let Some(title) = self.current_title.as_ref() {
+                                let _ = step_sender.send(StepSenderEvent::NewStepTitle(
+                                    StepTitleFound::new(
+                                        self.step_index,
+                                        title.to_owned(),
+                                        self.session_id.to_owned(),
+                                        self.exchange_id.to_owned(),
+                                    ),
+                                ));
+                            }
+                        }
                         self.step_block_status = StepBlockStatus::StepStart;
                     } else {
                         match self.current_title.clone() {
@@ -575,6 +674,20 @@ impl PlanStepGenerator {
                             }
                             None => {
                                 self.current_description = Some(answer_line_at_index.to_owned());
+                            }
+                        }
+                        // send over the description and the delta over here
+                        if let Some(step_sender) = self.stream_steps.as_ref() {
+                            if let Some(description) = self.current_description.as_ref() {
+                                let _ = step_sender.send(StepSenderEvent::NewStepDescription(
+                                    StepDescriptionUpdate::new(
+                                        Some(answer_line_at_index.to_owned()),
+                                        description.to_owned(),
+                                        self.session_id.to_owned(),
+                                        self.exchange_id.to_owned(),
+                                        self.step_index,
+                                    ),
+                                ));
                             }
                         }
                     }

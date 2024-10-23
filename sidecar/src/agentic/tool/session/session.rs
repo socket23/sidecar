@@ -799,16 +799,6 @@ impl Session {
                     StepSenderEvent::NewStep(step) => {
                         println!("session::perform_plan_generation::new_step_found");
                         // send a message over here about the step we are on
-                        let _ =
-                            message_properties
-                                .ui_sender()
-                                .send(UIEventWithID::plan_title_added(
-                                    self.session_id.to_owned(),
-                                    exchange_id,
-                                    steps_up_until_now,
-                                    vec![],
-                                    step.title.to_owned(),
-                                ));
                         let instruction = step.description();
                         let file_to_edit = step.file_to_edit();
                         if file_to_edit.is_none() {
@@ -855,6 +845,29 @@ impl Session {
 
                         // wait for the edits to finish over here
                         let _ = edit_done_receiver.await;
+                    }
+                    StepSenderEvent::NewStepTitle(title_found) => {
+                        let _ =
+                            message_properties
+                                .ui_sender()
+                                .send(UIEventWithID::plan_title_added(
+                                    self.session_id.to_owned(),
+                                    exchange_id,
+                                    title_found.step_index(),
+                                    vec![],
+                                    title_found.title().to_owned(),
+                                ));
+                    }
+                    StepSenderEvent::NewStepDescription(description_update) => {
+                        let _ = message_properties.ui_sender().send(
+                            UIEventWithID::plan_description_updated(
+                                self.session_id.to_owned(),
+                                exchange_id,
+                                description_update.index(),
+                                description_update.delta(),
+                                description_update.description_up_until_now().to_owned(),
+                            ),
+                        );
                     }
                     StepSenderEvent::Done => {
                         break;

@@ -441,6 +441,29 @@ impl UIEventWithID {
         }
     }
 
+    pub fn plan_description_updated(
+        session_id: String,
+        exchange_id: String,
+        index: usize,
+        delta: Option<String>,
+        description_up_until_now: String,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::PlanEvent(PlanMessageEvent::PlanStepDescriptionUpdate(
+                PlanStepDescriptionUpdateEvent {
+                    session_id,
+                    exchange_id,
+                    files_to_edit: vec![],
+                    delta,
+                    description_up_until_now,
+                    index,
+                },
+            )),
+        }
+    }
+
     pub fn plan_title_added(
         session_id: String,
         exchange_id: String,
@@ -1136,6 +1159,17 @@ impl FinishedExchangeEvent {
 pub enum PlanMessageEvent {
     PlanStepCompleteAdded(PlanStepAddEvent),
     PlanStepTitleAdded(PlanStepTitleEvent),
+    PlanStepDescriptionUpdate(PlanStepDescriptionUpdateEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct PlanStepDescriptionUpdateEvent {
+    session_id: String,
+    exchange_id: String,
+    files_to_edit: Vec<String>,
+    delta: Option<String>,
+    description_up_until_now: String,
+    index: usize,
 }
 
 #[derive(Debug, serde::Serialize)]

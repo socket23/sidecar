@@ -257,7 +257,7 @@ impl StepGeneratorResponse {
 pub struct Step {
     pub files_to_edit: FilesToEdit,
     pub title: String,
-    pub description: String,
+    pub changes: String,
 }
 
 impl Step {
@@ -266,7 +266,7 @@ impl Step {
             Uuid::new_v4().to_string(),
             self.files_to_edit.file,
             self.title,
-            self.description,
+            self.changes,
             UserContext::new(vec![], vec![], None, vec![]),
         )
     }
@@ -276,7 +276,7 @@ impl Step {
     }
 
     pub fn description(&self) -> &str {
-        &self.description
+        &self.changes
     }
 }
 
@@ -310,10 +310,10 @@ impl StepGeneratorClient {
 <title>
 Represent Execution State if Necessary
 </title>
-<description>
+<changes>
 If you need to track whether a step is paused, pending, or completed, you can introduce an ExecutionState enum:
 
-```rs
+```rust
 pub struct PlanStep {{
     // ... existing fields ...
     execution_state: ExecutionState,
@@ -324,7 +324,7 @@ Reasons for this approach:
 State Management: Clearly represents the current state of the step's execution.
 Extensibility: Allows for additional states in the future if needed (e.g., Failed, Skipped).
 Separation of Concerns: Keeps execution state separate from other data, making the code cleaner and more maintainable.
-</description>
+</changes>
 </step>
 </steps>
 </response>"#
@@ -358,9 +358,9 @@ For example, if you have to import a helper function and use it in the code, it 
 <title>
 {{The title for the change you are about to make}}
 </title>
-<description>
-{{The description of the change you are about to make}}
-</description>
+<changes>
+{{The changes you want to make along with your thoughts the code here should be interleaved with // ... rest of the code only containing the necessary changes in total}}
+</changes>
 </step>
 </steps>
 </response>
@@ -557,7 +557,7 @@ impl PlanStepGenerator {
                         file: self.current_files_to_edit.to_vec(),
                     },
                     title,
-                    description,
+                    changes: description,
                 };
                 // send over the ui event here for the step
                 let _ = self.ui_sender.send(UIEventWithID::plan_complete_added(
@@ -566,7 +566,7 @@ impl PlanStepGenerator {
                     self.generated_steps.len(),
                     step.files_to_edit.file.to_vec(),
                     step.title.to_owned(),
-                    step.description.to_owned(),
+                    step.changes.to_owned(),
                 ));
                 if let Some(step_sender) = self.stream_steps.clone() {
                     let _ = step_sender.send(StepSenderEvent::NewStep(step.clone()));
@@ -616,7 +616,7 @@ impl PlanStepGenerator {
                         self.step_block_status = StepBlockStatus::StepFile;
                     } else if answer_line_at_index == "<title>" {
                         self.step_block_status = StepBlockStatus::StepTitle;
-                    } else if answer_line_at_index == "<description>" {
+                    } else if answer_line_at_index == "<changes>" {
                         self.step_block_status = StepBlockStatus::StepDescription;
                     } else if answer_line_at_index == "</step>" {
                         // over here we should have a plan at this point which we can
@@ -664,7 +664,7 @@ impl PlanStepGenerator {
                     }
                 }
                 StepBlockStatus::StepDescription => {
-                    if answer_line_at_index == "</description>" {
+                    if answer_line_at_index == "</changes>" {
                         self.step_block_status = StepBlockStatus::StepStart;
                     } else {
                         match self.current_description.clone() {
@@ -722,7 +722,7 @@ mod tests {
 <title>
 Create StepGeneratorClient struct and implement basic methods
 </title>
-<description>
+<changes>
 Create a new file `generator.rs` in the `plan` directory. Define the `StepGeneratorClient` struct and implement basic methods:
 
 ```rust
@@ -745,7 +745,7 @@ impl StepGeneratorClient {
     }
 }
 ```
-</description>
+</changes>
 </step>
 
 <step>
@@ -757,7 +757,7 @@ impl StepGeneratorClient {
 <title>
 Define StepGeneratorRequest and StepGeneratorResponse structs
 </title>
-<description>
+<changes>
 Add the following structs to `generator.rs`:
 
 ```rust
@@ -790,7 +790,7 @@ impl StepGeneratorRequest {
     }
 }
 ```
-</description>
+</changes>
 </step>
 
 <step>
@@ -802,7 +802,7 @@ impl StepGeneratorRequest {
 <title>
 Implement the Tool trait for StepGeneratorClient
 </title>
-<description>
+<changes>
 Implement the `Tool` trait for `StepGeneratorClient`:
 
 ```rust
@@ -823,7 +823,7 @@ impl Tool for StepGeneratorClient {
     }
 }
 ```
-</description>
+</changes>
 </step>
 
 <step>
@@ -835,7 +835,7 @@ impl Tool for StepGeneratorClient {
 <title>
 Update ToolInput enum to include StepGenerator
 </title>
-<description>
+<changes>
 Add a new variant to the `ToolInput` enum in `input.rs`:
 
 ```rust
@@ -856,7 +856,7 @@ impl ToolInput {
     }
 }
 ```
-</description>
+</changes>
 </step>
 
 <step>
@@ -868,7 +868,7 @@ impl ToolInput {
 <title>
 Update ToolOutput enum to include StepGenerator
 </title>
-<description>
+<changes>
 Add a new variant to the `ToolOutput` enum in `output.rs`:
 
 ```rust
@@ -892,7 +892,7 @@ impl ToolOutput {
     }
 }
 ```
-</description>
+</changes>
 </step>
 
 <step>
@@ -904,7 +904,7 @@ impl ToolOutput {
 <title>
 Update ToolType enum to include StepGenerator
 </title>
-<description>
+<changes>
 Add a new variant to the `ToolType` enum in `type.rs`:
 
 ```rust
@@ -922,7 +922,7 @@ impl std::fmt::Display for ToolType {
     }
 }
 ```
-</description>
+</changes>
 </step>
 
 <step>
@@ -934,7 +934,7 @@ impl std::fmt::Display for ToolType {
 <title>
 Update ToolBroker to include StepGeneratorClient
 </title>
-<description>
+<changes>
 Update the `ToolBroker::new` method in `broker.rs` to include the `StepGeneratorClient`:
 
 ```rust
@@ -957,7 +957,7 @@ impl ToolBroker {
     }
 }
 ```
-</description>
+</changes>
 </step>
 </steps>
 </response>

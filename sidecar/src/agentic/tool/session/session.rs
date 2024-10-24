@@ -24,7 +24,10 @@ use crate::{
         },
         tool::{
             input::ToolInput,
-            plan::{generator::StepSenderEvent, service::PlanService},
+            plan::{
+                generator::{Step, StepSenderEvent},
+                service::PlanService,
+            },
             r#type::Tool,
         },
     },
@@ -726,7 +729,6 @@ impl Session {
         Ok(self)
     }
 
-    /// going to work on plan generation
     pub async fn perform_plan_generation(
         mut self,
         plan_service: PlanService,
@@ -747,26 +749,19 @@ impl Session {
             exchange_state: _,
         }) = last_exchange
         {
-            // since we are going to be streaming the steps over here as we also
-            // have to very quickly start editing the files as the steps are coming
-            // in, in a very optimistic way
             let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
             let mut stream_receiver =
                 tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
 
             let exchange_id = message_properties.request_id_str().to_owned();
             let session_id = self.session_id.to_owned();
 
-            // send a message over here talking about the start of the plan
             let ui_sender = message_properties.ui_sender();
             let _ = ui_sender.send(UIEventWithID::start_plan_generation(
                 session_id.to_owned(),
                 exchange_id.to_owned(),
             ));
 
-            // now we want to poll from the receiver over here and start reacting to
-            // the events
             let cloned_message_properties = message_properties.clone();
             let cloned_plan_service = plan_service.clone();
             let plan = tokio::spawn(async move {
@@ -775,7 +770,7 @@ impl Session {
                         plan_id,
                         query.to_owned(),
                         user_context.clone(),
-                        false, // deep reasoning toggle, set to false right now by default
+                        false,
                         plan_storage_path,
                         Some(sender),
                         cloned_message_properties.clone(),
@@ -783,32 +778,26 @@ impl Session {
                     .await
             });
 
-            let mut steps_up_until_now = 0;
-            while let Some(step_message) = stream_receiver.next().await {
-                let exchange_id = exchange_id.to_owned();
-                if steps_up_until_now == 0 {
-                    // Did we start generating the plan, send a message over
-                    let _ = message_properties
-                        .ui_sender()
-                        .send(UIEventWithID::plan_in_review(
-                            session_id.to_owned(),
-                            exchange_id.to_owned(),
-                        ));
-                }
-                match step_message {
-                    StepSenderEvent::NewStep(step) => {
-                        println!("session::perform_plan_generation::new_step_found");
-                        // send a message over here about the step we are on
-                        let instruction = step.description();
-                        let file_to_edit = step.file_to_edit();
-                        if file_to_edit.is_none() {
-                            continue;
-                        }
-                        let file_to_edit = file_to_edit.expect("is_none to hold");
-                        let file_open_response = tool_box
-                            .file_open(file_to_edit.to_owned(), message_properties.clone())
+            // Create a channel for edits
+            let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::channel::<Step>(1);
+
+            // Clone necessary variables for the edit task
+            let symbol_manager_clone = symbol_manager.clone();
+            let tool_box_clone = tool_box.clone();
+            let message_properties_clone = message_properties.clone();
+
+            // Spawn the edit task
+            let edit_task = tokio::spawn(async move {
+                let mut steps_up_until_now = 0;
+                while let Some(step) = edits_receiver.recv().await {
+                    steps_up_until_now += 1;
+                    println!("session::perform_plan_generation::new_step_found");
+                    let instruction = step.description();
+                    if let Some(file_to_edit) = step.file_to_edit() {
+                        let file_open_response = tool_box_clone
+                            .file_open(file_to_edit.to_owned(), message_properties_clone.clone())
                             .await?;
-                        let hub_sender = symbol_manager.hub_sender();
+                        let hub_sender = symbol_manager_clone.hub_sender();
                         let (edit_done_sender, edit_done_receiver) =
                             tokio::sync::oneshot::channel();
                         let _ = hub_sender.send(SymbolEventMessage::new(
@@ -833,18 +822,34 @@ impl Session {
                                 ),
                                 ToolProperties::new(),
                             ),
-                            message_properties.request_id().clone(),
-                            message_properties.ui_sender().clone(),
+                            message_properties_clone.request_id().clone(),
+                            message_properties_clone.ui_sender().clone(),
                             edit_done_sender,
-                            message_properties.cancellation_token(),
-                            message_properties.editor_url(),
+                            message_properties_clone.cancellation_token(),
+                            message_properties_clone.editor_url(),
                         ));
-
-                        // increment our count for the step over here
-                        steps_up_until_now = steps_up_until_now + 1;
-
-                        // wait for the edits to finish over here
                         let _ = edit_done_receiver.await;
+                    }
+                }
+                Ok::<(), SymbolError>(())
+            });
+
+            let mut first_step_processed = false;
+
+            while let Some(step_message) = stream_receiver.next().await {
+                if !first_step_processed {
+                    first_step_processed = true;
+                    let _ = message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::plan_in_review(
+                            session_id.to_owned(),
+                            exchange_id.to_owned(),
+                        ));
+                }
+
+                match step_message {
+                    StepSenderEvent::NewStep(step) => {
+                        let _ = edits_sender.send(step).await;
                     }
                     StepSenderEvent::NewStepTitle(title_found) => {
                         let _ =
@@ -852,7 +857,7 @@ impl Session {
                                 .ui_sender()
                                 .send(UIEventWithID::plan_title_added(
                                     self.session_id.to_owned(),
-                                    exchange_id,
+                                    exchange_id.clone(),
                                     title_found.step_index(),
                                     vec![],
                                     title_found.title().to_owned(),
@@ -862,7 +867,7 @@ impl Session {
                         let _ = message_properties.ui_sender().send(
                             UIEventWithID::plan_description_updated(
                                 self.session_id.to_owned(),
-                                exchange_id,
+                                exchange_id.clone(),
                                 description_update.index(),
                                 description_update.delta(),
                                 description_update.description_up_until_now().to_owned(),
@@ -874,12 +879,15 @@ impl Session {
                     }
                 }
             }
-            // close the receiver stream since we are no longer interested in any
-            // of the events after getting a done event
+
+            // Close the edits sender and await the edit task
+            edits_sender.closed().await;
+            let _ = edit_task.await;
+
             stream_receiver.close();
-            // we will start polling from the receiver soon
+
             println!("session::perform_plan_generation::finished_plan_generation");
-            // we have to also start working on top of the plan after this
+
             let message = match plan.await {
                 Ok(Ok(plan)) => {
                     let _ = plan_service.mark_plan_completed(plan).await;
@@ -888,7 +896,6 @@ impl Session {
                 _ => "Failed to generate plan".to_owned(),
             };
 
-            // send a reply on the exchange
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::chat_event(
@@ -898,13 +905,11 @@ impl Session {
                     Some(message.to_owned()),
                 ));
 
-            // Add to the exchange
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 message.to_owned(),
             ));
 
-            // wait for the review on the plan now
             let _ = message_properties
                 .ui_sender()
                 .send(UIEventWithID::finished_plan_generation(
@@ -1019,7 +1024,6 @@ impl Session {
                 Ok(_) => println!("session::perform_agentic_editing::finished_editing"),
                 Err(_) => println!("Failed to edit"),
             };
-
 
             // Also tell the exchange that we are in review mode now
             let _ = message_properties

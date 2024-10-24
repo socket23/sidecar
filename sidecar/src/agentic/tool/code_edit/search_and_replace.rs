@@ -223,18 +223,25 @@ If the request is ambiguous, ask questions.
 Always reply to the user in the same language they are using.
 
 Once you understand the request you MUST:
-1. Decide if you need to propose *SEARCH/REPLACE* edits to any files that haven't been added to the chat. You can create new files without asking. But if you need to propose edits to existing files not already added to the chat, you *MUST* tell the user their full path names and ask them to *add the files to the chat*. End your reply and wait for their approval. You can keep asking if you then decide you need to edit more files.
-2. Describe each change with a *SEARCH/REPLACE block* per the examples below. All changes to files must use this *SEARCH/REPLACE block* format. ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
-3. If you do not need to make changes based on the user query, do not edit the code or generate any *SEARCH/REPLACE block*, leave the code as is.
-4. Do not leave comments describing why a change should not be done or describing the functionality of the code, only use comments if the code has been functionally modified to do something else.
 
-All changes to files must use the *SEARCH/REPLACE block* format.
+1. Decide if you need to propose *SEARCH/REPLACE* edits to any files that haven't been added to the chat. You can create new files without asking!
+
+But if you need to propose edits to existing files not already added to the chat, you *MUST* tell the user their full path names and ask them to *add the files to the chat*.
+End your reply and wait for their approval.
+You can keep asking if you then decide you need to edit more files.
+
+2. Think step-by-step and explain the needed changes in a few short sentences.
+
+3. Describe each change with a *SEARCH/REPLACE block* per the examples below.
+
+All changes to files must use this *SEARCH/REPLACE block* format.
+ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!
 
 # *SEARCH/REPLACE block* Rules:
 
 Every *SEARCH/REPLACE block* must use this format:
-1. The file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
-2. The opening fence and code language, eg: ```python or ```rust or ```typescript (depending on the language of the code)
+1. The *FULL* file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
+2. The opening fence and code language, eg: ```python or ```rust or ```ts (depending on the language of the code)
 3. The start of search block: <<<<<<< SEARCH
 4. A contiguous chunk of lines to search for in the existing source code
 5. The dividing line: =======
@@ -242,11 +249,14 @@ Every *SEARCH/REPLACE block* must use this format:
 7. The end of the replace block: >>>>>>> REPLACE
 8. The closing fence: ```
 
-Every *SEARCH* section must *EXACTLY MATCH* the existing source code, character for character, including all comments, docstrings, etc.
+Use the *FULL* file path, as shown to you by the user.
 
+Every *SEARCH* section must *EXACTLY MATCH* the existing file content, character for character, including all comments, docstrings, etc.
+If the file contains code or other data wrapped/escaped in json/xml/quotes or other containers, you need to propose edits to the literal contents of the file, including the container markup.
 
-*SEARCH/REPLACE* blocks will replace *all* matching occurrences.
-Include enough lines to make the SEARCH blocks uniquely match the lines to change.
+*SEARCH/REPLACE* blocks will *only* replace the first match occurrence.
+Including multiple unique *SEARCH/REPLACE* blocks if needed.
+Include enough lines in each SEARCH section to uniquely match each set of lines that need to change.
 
 Keep *SEARCH/REPLACE* blocks concise.
 Break large *SEARCH/REPLACE* blocks into a series of smaller blocks that each change a small portion of the file.
@@ -257,15 +267,12 @@ Only create *SEARCH/REPLACE* blocks for files that the user has added to the cha
 
 To move code within a file, use 2 *SEARCH/REPLACE* blocks: 1 to delete it from its current location, 1 to insert it in the new location.
 
+Pay attention to which filenames the user wants you to edit, especially if they are asking you to create a new file.
+
 If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
 - A new file path, including dir name if needed
 - An empty `SEARCH` section
-- The new file's contents in the `REPLACE` section
-
-You are diligent and tireless!
-You NEVER leave comments describing code without implementing it!
-You always COMPLETELY IMPLEMENT the needed code!
-ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#).to_owned()
+- The new file's contents in the `REPLACE` section"#).to_owned()
     }
 
     fn extra_data(&self, extra_data: &str) -> String {
@@ -376,8 +383,8 @@ All changes to files must use the *SEARCH/REPLACE block* format.
 # *SEARCH/REPLACE block* Rules:
 
 Every *SEARCH/REPLACE block* must use this format:
-1. The file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
-2. The opening fence and code language, eg: ```python or ```rust or ```typescript (depending on the language of the code)
+1. The *FULL* file path alone on a line, verbatim. No bold asterisks, no quotes around it, no escaping of characters, etc.
+2. The opening fence and code language, eg: ```python or ```rust or ```ts (depending on the language of the code)
 3. The start of search block: <<<<<<< SEARCH
 4. A contiguous chunk of lines to search for in the existing source code
 5. The dividing line: =======
@@ -385,11 +392,14 @@ Every *SEARCH/REPLACE block* must use this format:
 7. The end of the replace block: >>>>>>> REPLACE
 8. The closing fence: ```
 
-Every *SEARCH* section must *EXACTLY MATCH* the existing source code, character for character, including all comments, docstrings, etc.
+Use the *FULL* file path, as shown to you by the user.
 
+Every *SEARCH* section must *EXACTLY MATCH* the existing file content, character for character, including all comments, docstrings, etc.
+If the file contains code or other data wrapped/escaped in json/xml/quotes or other containers, you need to propose edits to the literal contents of the file, including the container markup.
 
-*SEARCH/REPLACE* blocks will replace *all* matching occurrences.
-Include enough lines to make the SEARCH blocks uniquely match the lines to change.
+*SEARCH/REPLACE* blocks will *only* replace the first match occurrence.
+Including multiple unique *SEARCH/REPLACE* blocks if needed.
+Include enough lines in each SEARCH section to uniquely match each set of lines that need to change.
 
 Keep *SEARCH/REPLACE* blocks concise.
 Break large *SEARCH/REPLACE* blocks into a series of smaller blocks that each change a small portion of the file.
@@ -400,15 +410,12 @@ Only create *SEARCH/REPLACE* blocks for files that the user has added to the cha
 
 To move code within a file, use 2 *SEARCH/REPLACE* blocks: 1 to delete it from its current location, 1 to insert it in the new location.
 
+Pay attention to which filenames the user wants you to edit, especially if they are asking you to create a new file.
+
 If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
 - A new file path, including dir name if needed
 - An empty `SEARCH` section
-- The new file's contents in the `REPLACE` section
-
-You are diligent and tireless!
-You NEVER leave comments describing code without implementing it!
-You always COMPLETELY IMPLEMENT the needed code!
-ONLY EVER RETURN CODE IN A *SEARCH/REPLACE BLOCK*!"#
+- The new file's contents in the `REPLACE` section"#
             ))
             // double enforce the fact that we need replies in search and replace fashion
             // or we can also do many more few-shot requests
@@ -484,7 +491,13 @@ Think carefully since this is a long file where you have to make the changes"#
         vec![
             LLMClientMessage::user(r#"Change get_factorial() to use math.factorial"#.to_owned()),
             LLMClientMessage::assistant(
-                r#"Here are the *SEARCH/REPLACE* blocks:
+                r#"To make this change we need to modify `mathweb/flask/app.py` to:
+
+1. Import the math package.
+2. Remove the existing factorial() function.
+3. Update get_factorial() to call math.factorial instead.
+
+Here are the *SEARCH/REPLACE* blocks:
 
 mathweb/flask/app.py
 ```python
@@ -517,6 +530,39 @@ mathweb/flask/app.py
     return str(factorial(n))
 =======
     return str(math.factorial(n))
+>>>>>>> REPLACE
+```"#
+                    .to_owned(),
+            ),
+            LLMClientMessage::user(r#"Refactor hello() into its own file."#.to_owned()),
+            LLMClientMessage::assistant(
+                r#"To make this change we need to modify `main.py` and make a new file `hello.py`:
+
+1. Make a new hello.py file with hello() in it.
+2. Remove hello() from main.py and replace it with an import.
+
+Here are the *SEARCH/REPLACE* blocks:
+
+hello.py
+```python
+<<<<<<< SEARCH
+=======
+def hello():
+    "print a greeting"
+
+    print("hello")
+>>>>>>> REPLACE
+```
+
+main.py
+```python
+<<<<<<< SEARCH
+def hello():
+    "print a greeting"
+
+    print("hello")
+=======
+from hello import hello
 >>>>>>> REPLACE
 ```"#
                     .to_owned(),

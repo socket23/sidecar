@@ -1396,6 +1396,10 @@ pub async fn cancel_running_exchange(
         let session_storage_path =
             check_session_storage_path(app.config.clone(), session_id.to_string()).await;
 
+        // we can either set the signal over here as cancelled (in which case the exchange
+        // finished without destroying the world) or we we have to let the user
+        // know that there are some edits associated with the current run and the user
+        // should see the approve and reject flow
         let send_cancellation_signal = session_service
             .set_exchange_as_cancelled(session_storage_path, exchange_id.to_owned())
             .await
@@ -1405,9 +1409,14 @@ pub async fn cancel_running_exchange(
         if send_cancellation_signal {
             let _ = sender.send(UIEventWithID::edits_cancelled_in_exchange(
                 session_id.to_owned(),
-                exchange_id,
+                exchange_id.to_owned(),
             ));
         }
+
+        let _ = sender.send(UIEventWithID::request_cancelled(
+            session_id.to_owned(),
+            exchange_id,
+        ));
     }
 
     // send over the events on the stream

@@ -975,11 +975,11 @@ impl Session {
 
     /// We perform the anchored edit over here
     pub async fn perform_anchored_edit(
-        self,
+        mut self,
         scratch_pad_agent: ScratchPadAgent,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
-        let last_exchange = self.last_exchange();
+        let last_exchange = self.last_exchange().cloned();
         if let Some(Exchange {
             exchange_id: _,
             exchange_type:
@@ -1004,6 +1004,12 @@ impl Session {
                     message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
                 ));
+
+            // we want to set our state over here that we have started working on it
+            self.exchanges.push(Exchange::agent_reply(
+                message_properties.request_id_str().to_owned(),
+                "thinking".to_owned(),
+            ));
             // send a message that we are starting with the edits over here
             // we want to make a note of the exchange that we are working on it
             // once we have the eidts, then we also have to make sure that we track

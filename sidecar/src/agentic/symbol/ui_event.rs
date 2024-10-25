@@ -508,6 +508,36 @@ impl UIEventWithID {
         }
     }
 
+    pub fn inference_started(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::ExecutionState(
+                ExecutionExchangeStateEvent::Inference,
+            )),
+        }
+    }
+
+    pub fn request_review(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::ExecutionState(
+                ExecutionExchangeStateEvent::InReview,
+            )),
+        }
+    }
+
+    pub fn request_cancelled(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::ExecutionState(
+                ExecutionExchangeStateEvent::Cancelled,
+            )),
+        }
+    }
+
     pub fn edits_started_in_exchnage(session_id: String, exchange_id: String) -> Self {
         Self {
             request_id: session_id,
@@ -1130,6 +1160,14 @@ pub enum ExchangeMessageEvent {
     FinishedExchange(FinishedExchangeEvent),
     EditsExchangeState(EditsExchangeStateEvent),
     PlansExchangeState(EditsExchangeStateEvent),
+    ExecutionState(ExecutionExchangeStateEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum ExecutionExchangeStateEvent {
+    Inference,
+    InReview,
+    Cancelled,
 }
 
 #[derive(Debug, serde::Serialize)]

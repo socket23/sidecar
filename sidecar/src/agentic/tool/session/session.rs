@@ -997,6 +997,13 @@ impl Session {
             exchange_state: _,
         }) = last_exchange
         {
+            // send a message over that the inference will start in a bit
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::inference_started(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
             // send a message that we are starting with the edits over here
             // we want to make a note of the exchange that we are working on it
             // once we have the eidts, then we also have to make sure that we track
@@ -1024,6 +1031,14 @@ impl Session {
                 Ok(_) => println!("session::perform_agentic_editing::finished_editing"),
                 Err(_) => println!("Failed to edit"),
             };
+
+            // send a message over here static that we can ask the user for review
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::request_review(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
 
             // Also tell the exchange that we are in review mode now
             let _ = message_properties

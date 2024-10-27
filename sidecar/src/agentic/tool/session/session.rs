@@ -790,6 +790,7 @@ impl Session {
             let edit_task = tokio::spawn(async move {
                 let mut steps_up_until_now = 0;
                 while let Some(step) = edits_receiver.recv().await {
+                    let previous_steps_up_until_now = steps_up_until_now;
                     steps_up_until_now += 1;
                     println!("session::perform_plan_generation::new_step_found");
                     let instruction = step.description();
@@ -818,7 +819,7 @@ impl Session {
                                     true,
                                     None,
                                     vec![],
-                                    Some(steps_up_until_now.to_string()),
+                                    Some(previous_steps_up_until_now.to_string()),
                                 ),
                                 ToolProperties::new(),
                             ),

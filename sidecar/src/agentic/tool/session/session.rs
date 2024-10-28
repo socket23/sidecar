@@ -75,7 +75,7 @@ impl Default for ExchangeState {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ExchangeType {
     HumanChat(ExchangeTypeHuman),
-    AgentChat(String),
+    AgentChat(ExchangeTypeAgent),
     // what do we store over here for the anchored edit, it can't just be the
     // user query? we probably have to store the snippet we were trying to edit
     // as well
@@ -122,6 +122,22 @@ pub struct ExchangeTypeHuman {
     user_context: UserContext,
     project_labels: Vec<String>,
     repo_ref: RepoRef,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeTypeAgent {
+    reply: String,
+    agent_mode: AideAgentMode,
+}
+
+impl ExchangeTypeAgent {
+    pub fn new(reply: String, agent_mode: AideAgentMode) -> Self {
+        Self { reply, agent_mode }
+    }
+
+    pub fn reply(&self) -> &str {
+        &self.reply
+    }
 }
 
 impl ExchangeTypeHuman {
@@ -223,10 +239,10 @@ impl Exchange {
         }
     }
 
-    fn agent_reply(exchange_id: String, message: String) -> Self {
+    fn agent_reply(exchange_id: String, message: String, agent_mode: AideAgentMode) -> Self {
         Self {
             exchange_id,
-            exchange_type: ExchangeType::AgentChat(message),
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::new(message, agent_mode)),
             exchange_state: ExchangeState::Running,
         }
     }
@@ -289,7 +305,7 @@ impl Exchange {
                 ))
             }
             ExchangeType::AgentChat(ref chat_message) => {
-                SessionChatMessage::assistant(chat_message.to_string())
+                SessionChatMessage::assistant(chat_message.reply().to_owned())
             }
             ExchangeType::Plan(_plan) => {
                 todo!("plan branch not impmlemented yet")
@@ -435,22 +451,51 @@ impl Session {
             })
             .collect();
 
+        let exchange_to_react = self
+            .exchanges
+            .iter()
+            .find(|exchange| &exchange.exchange_id == exchange_id)
+            .map(|exchange| match &exchange.exchange_type {
+                ExchangeType::AgentChat(agentic_chat) => Some(agentic_chat.agent_mode.clone()),
+                _ => None,
+            })
+            .flatten();
+
         // give feedback to the editor that our state has changed
         if accepted {
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::edits_accepted(
-                    self.session_id.to_owned(),
-                    exchange_id.to_owned(),
-                ));
-        } else {
-            let _ =
-                message_properties
+            if matches!(exchange_to_react, Some(AideAgentMode::Plan)) {
+                let _ = message_properties
                     .ui_sender()
-                    .send(UIEventWithID::edits_cancelled_in_exchange(
+                    .send(UIEventWithID::plan_as_finished(
                         self.session_id.to_owned(),
                         exchange_id.to_owned(),
                     ));
+            }
+            if matches!(exchange_to_react, Some(AideAgentMode::Edit)) {
+                let _ = message_properties
+                    .ui_sender()
+                    .send(UIEventWithID::edits_accepted(
+                        self.session_id.to_owned(),
+                        exchange_id.to_owned(),
+                    ));
+            }
+        } else {
+            if matches!(exchange_to_react, Some(AideAgentMode::Plan)) {
+                let _ = message_properties
+                    .ui_sender()
+                    .send(UIEventWithID::plan_as_cancelled(
+                        self.session_id.to_owned(),
+                        exchange_id.to_owned(),
+                    ));
+            }
+            if matches!(exchange_to_react, Some(AideAgentMode::Edit)) {
+                let _ = message_properties.ui_sender().send(
+                    UIEventWithID::edits_cancelled_in_exchange(
+                        self.session_id.to_owned(),
+                        exchange_id.to_owned(),
+                    ),
+                );
+            }
         }
 
         // now close the exchange
@@ -560,8 +605,11 @@ impl Session {
             .context_drive_chat_reply()
             .ok_or(SymbolError::WrongToolOutput)?
             .reply();
-        self.exchanges
-            .push(Exchange::agent_reply(exchange_id.to_owned(), chat_output));
+        self.exchanges.push(Exchange::agent_reply(
+            exchange_id.to_owned(),
+            chat_output,
+            AideAgentMode::Chat,
+        ));
         let ui_sender = message_properties.ui_sender();
         // finsihed the exchange here since we have replied already
         let _ = ui_sender.send(UIEventWithID::finished_exchange(
@@ -667,6 +715,7 @@ impl Session {
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 reply,
+                AideAgentMode::Plan,
             ));
 
             // now close the exchange
@@ -717,6 +766,7 @@ impl Session {
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 "I have reverted the changes made by the plan".to_owned(),
+                AideAgentMode::Plan,
             ));
 
             // now close the exchange
@@ -927,6 +977,7 @@ impl Session {
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 message.to_owned(),
+                AideAgentMode::Plan,
             ));
 
             let _ = message_properties
@@ -1028,6 +1079,7 @@ impl Session {
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 "thinking".to_owned(),
+                AideAgentMode::Edit,
             ));
             // send a message that we are starting with the edits over here
             // we want to make a note of the exchange that we are working on it

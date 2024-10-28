@@ -597,6 +597,26 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn plan_as_finished(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::MarkedComplete),
+            )),
+        }
+    }
+
+    pub fn plan_as_cancelled(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
+                EditsExchangeStateEvent::EditsState(EditsStateEvent::Cancelled),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]

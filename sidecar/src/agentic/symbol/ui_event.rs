@@ -538,7 +538,7 @@ impl UIEventWithID {
         }
     }
 
-    pub fn edits_started_in_exchnage(session_id: String, exchange_id: String) -> Self {
+    pub fn edits_started_in_exchange(session_id: String, exchange_id: String) -> Self {
         Self {
             request_id: session_id,
             exchange_id,

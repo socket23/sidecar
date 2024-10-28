@@ -427,10 +427,11 @@ impl Tool for OutlineNodesUsingEditorClient {
             .send()
             .await
             .map_err(|_e| ToolError::ErrorCommunicatingWithEditor)?;
-        let response: OutlineNodesUsingEditorResponse = response.json().await.map_err(|e| {
-            eprintln!("{:?}", e);
-            ToolError::SerdeConversionFailed
-        })?;
+        let response: OutlineNodesUsingEditorResponse =
+            dbg!(response.json().await).map_err(|e| {
+                eprintln!("{:?}", e);
+                ToolError::SerdeConversionFailed
+            })?;
 
         Ok(ToolOutput::outline_nodes_using_editor(response))
     }

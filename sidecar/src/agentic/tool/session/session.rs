@@ -756,6 +756,14 @@ impl Session {
             let exchange_id = message_properties.request_id_str().to_owned();
             let session_id = self.session_id.to_owned();
 
+            // send a message over here that inference has started on the plan
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::inference_started(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+
             let ui_sender = message_properties.ui_sender();
             let _ = ui_sender.send(UIEventWithID::start_plan_generation(
                 session_id.to_owned(),
@@ -846,6 +854,14 @@ impl Session {
                             session_id.to_owned(),
                             exchange_id.to_owned(),
                         ));
+                    // send a message over here that the request is in review now
+                    // since we generated something for the plan
+                    let _ = message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::request_review(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                        ));
                 }
 
                 match step_message {
@@ -883,6 +899,7 @@ impl Session {
 
             // Close the edits sender and await the edit task
             edits_sender.closed().await;
+
             let _ = edit_task.await;
 
             stream_receiver.close();
@@ -1017,7 +1034,7 @@ impl Session {
             // that we are working on some exchange
             let _ = message_properties
                 .ui_sender()
-                .send(UIEventWithID::edits_started_in_exchnage(
+                .send(UIEventWithID::edits_started_in_exchange(
                     message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
                 ));

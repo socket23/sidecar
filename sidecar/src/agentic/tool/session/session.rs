@@ -435,7 +435,7 @@ impl Session {
             })
             .collect();
 
-        // give feedback to the editor that our state has chagned
+        // give feedback to the editor that our state has changed
         if accepted {
             let _ = message_properties
                 .ui_sender()
@@ -854,14 +854,6 @@ impl Session {
                             session_id.to_owned(),
                             exchange_id.to_owned(),
                         ));
-                    // send a message over here that the request is in review now
-                    // since we generated something for the plan
-                    let _ = message_properties
-                        .ui_sender()
-                        .send(UIEventWithID::request_review(
-                            message_properties.root_request_id().to_owned(),
-                            message_properties.request_id_str().to_owned(),
-                        ));
                 }
 
                 match step_message {
@@ -903,6 +895,15 @@ impl Session {
             let _ = edit_task.await;
 
             stream_receiver.close();
+
+            // send a message over here that the request is in review now
+            // since we generated something for the plan
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::request_review(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
 
             println!("session::perform_plan_generation::finished_plan_generation");
 

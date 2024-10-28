@@ -1255,9 +1255,9 @@ pub async fn user_feedback_on_exchange(
     // bring this back later
     // give this as feedback to the agent to make sure that it can react to it (ideally)
     // for now we are gonig to close the exchange if it was not closed already
-    println!("webserver::agent_session::chat::hit");
+    println!("webserver::agent_session::feedback_on_exchange::hit");
     println!(
-        "webserver::agent_session::chat::session_id({})",
+        "webserver::agent_session::feedback_on_exchange::session_id({})",
         &session_id
     );
     let cancellation_token = tokio_util::sync::CancellationToken::new();
@@ -1283,21 +1283,6 @@ pub async fn user_feedback_on_exchange(
             )
             .await;
     });
-    // let _ = tokio::spawn(async move {
-    //     let _ = session_service
-    //         .human_message(
-    //             cloned_session_id,
-    //             session_storage_path,
-    //             exchange_id,
-    //             query,
-    //             user_context,
-    //             project_labels,
-    //             repo_ref,
-    //             agent_mode,
-    //             message_properties,
-    //         )
-    //         .await;
-    // });
 
     // TODO(skcd): Over here depending on the exchange reply mode we want to send over the
     // response using ui_sender with the correct exchange_id and the thread_id

@@ -339,11 +339,19 @@ If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
     }
 
     fn selection_to_edit(&self, selection_to_edit: &str) -> String {
-        format!(
-            r#"<code_to_edit_selection>
+        if selection_to_edit.is_empty() {
+            format!(
+                r#"<code_to_edit_selection>
+{{empty file}}
+</code_to_edit_selection>"#
+            )
+        } else {
+            format!(
+                r#"<code_to_edit_selection>
 {selection_to_edit}
 </code_to_edit_selection>"#
-        )
+            )
+        }
     }
 
     /// The user message structure looks like this:

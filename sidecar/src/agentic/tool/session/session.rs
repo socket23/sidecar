@@ -837,7 +837,7 @@ impl Session {
             });
 
             // Create a channel for edits
-            let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::channel::<Step>(1);
+            let (edits_sender, mut edits_receiver) = tokio::sync::mpsc::channel::<Option<Step>>(1);
 
             // Clone necessary variables for the edit task
             let symbol_manager_clone = symbol_manager.clone();
@@ -850,6 +850,10 @@ impl Session {
                 while let Some(step) = edits_receiver.recv().await {
                     let previous_steps_up_until_now = steps_up_until_now;
                     steps_up_until_now += 1;
+                    if step.is_none() {
+                        break;
+                    }
+                    let step = step.expect("is_none to hold");
                     println!("session::perform_plan_generation::new_step_found");
                     let instruction = step.description();
                     if let Some(file_to_edit) = step.file_to_edit() {
@@ -908,7 +912,7 @@ impl Session {
 
                 match step_message {
                     StepSenderEvent::NewStep(step) => {
-                        let _ = edits_sender.send(step).await;
+                        let _ = edits_sender.send(Some(step)).await;
                     }
                     StepSenderEvent::NewStepTitle(title_found) => {
                         let _ =
@@ -934,16 +938,20 @@ impl Session {
                         );
                     }
                     StepSenderEvent::Done => {
+                        let _ = edits_sender.send(None).await;
                         break;
                     }
                 }
             }
 
             // Close the edits sender and await the edit task
-            edits_sender.closed().await;
+            // println!("session::perform_plan_generation::edits_sender::closed");
+            // edits_sender.closed().await;
 
+            println!("session::perform_plan_generation::edit_task::closed");
             let _ = edit_task.await;
 
+            println!("session::perform_plan_generation::stream_receiver::closed");
             stream_receiver.close();
 
             // send a message over here that the request is in review now

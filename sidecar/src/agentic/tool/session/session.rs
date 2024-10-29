@@ -125,18 +125,57 @@ pub struct ExchangeTypeHuman {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ExchangeTypeAgent {
+pub struct ExchangeReplyAgentPlan {
+    plan_steps: Vec<Step>,
+    plan_discarded: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeReplyAgentChat {
     reply: String,
-    agent_mode: AideAgentMode,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeReplyAgentEdit {
+    edits_made_diff: String,
+    accepted: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ExchangeReplyAgent {
+    Plan(ExchangeReplyAgentPlan),
+    Chat(ExchangeReplyAgentChat),
+    Edit(ExchangeReplyAgentEdit),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeTypeAgent {
+    reply: ExchangeReplyAgent,
 }
 
 impl ExchangeTypeAgent {
-    pub fn new(reply: String, agent_mode: AideAgentMode) -> Self {
-        Self { reply, agent_mode }
+    fn chat_reply(reply: String) -> Self {
+        Self {
+            reply: ExchangeReplyAgent::Chat(ExchangeReplyAgentChat { reply }),
+        }
     }
 
-    pub fn reply(&self) -> &str {
-        &self.reply
+    fn plan_reply(steps: Vec<Step>) -> Self {
+        Self {
+            reply: ExchangeReplyAgent::Plan(ExchangeReplyAgentPlan {
+                plan_steps: steps,
+                plan_discarded: false,
+            }),
+        }
+    }
+
+    fn edits_reply(edits_made: String) -> Self {
+        Self {
+            reply: ExchangeReplyAgent::Edit(ExchangeReplyAgentEdit {
+                edits_made_diff: edits_made,
+                accepted: false,
+            }),
+        }
     }
 }
 
@@ -239,10 +278,26 @@ impl Exchange {
         }
     }
 
-    fn agent_reply(exchange_id: String, message: String, agent_mode: AideAgentMode) -> Self {
+    fn agent_chat_reply(exchange_id: String, message: String) -> Self {
         Self {
             exchange_id,
-            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::new(message, agent_mode)),
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::chat_reply(message)),
+            exchange_state: ExchangeState::Running,
+        }
+    }
+
+    fn agent_plan_reply(exchange_id: String, steps: Vec<Step>) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::plan_reply(steps)),
+            exchange_state: ExchangeState::Running,
+        }
+    }
+
+    fn agent_edits_reply(exchange_id: String, edits_response: String) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::edits_reply(edits_response)),
             exchange_state: ExchangeState::Running,
         }
     }
@@ -294,7 +349,65 @@ impl Exchange {
                 SessionChatMessage::user(prompt)
             }
             ExchangeType::AgentChat(ref chat_message) => {
-                SessionChatMessage::assistant(chat_message.reply().to_owned())
+                // This completely breaks we have to figure out how to covert
+                // the various types of exchanges to a string here for passing
+                // around as context
+                let reply = chat_message.reply.clone();
+                match reply {
+                    ExchangeReplyAgent::Chat(chat_reply) => {
+                        SessionChatMessage::assistant(chat_reply.reply.to_owned())
+                    }
+                    ExchangeReplyAgent::Edit(edit_reply) => {
+                        if edit_reply.accepted {
+                            SessionChatMessage::assistant(edit_reply.edits_made_diff.to_owned())
+                        } else {
+                            let edits_made = edit_reply.edits_made_diff.to_owned();
+                            SessionChatMessage::assistant(format!(
+                                r#"I made the following edits and the user REJECTED them
+{edits_made}"#
+                            ))
+                        }
+                    }
+                    ExchangeReplyAgent::Plan(plan_reply) => {
+                        if plan_reply.plan_discarded {
+                            SessionChatMessage::assistant(
+                                "The Plan I came up with was REJECTED by the user".to_owned(),
+                            )
+                        } else {
+                            let plan_steps = plan_reply
+                                .plan_steps
+                                .into_iter()
+                                .map(|step| {
+                                    let step_title = step.title.to_owned();
+                                    let step_description = step.description();
+                                    let files_to_edit = step
+                                        .file_to_edit()
+                                        .unwrap_or("File to edit not present".to_owned());
+                                    format!(
+                                        r#"<step>
+<files_to_edit>
+<file>
+{files_to_edit}
+</file>
+</files_to_edit>
+<title>
+{step_title}
+</title>
+<changes>
+{step_description}
+</changes>
+</step>"#
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            SessionChatMessage::assistant(format!(
+                                "I came up with the plan below and the user was happy
+{plan_steps}"
+                            ))
+                        }
+                    }
+                }
             }
             ExchangeType::Plan(ref plan) => {
                 let user_query = &plan.query;
@@ -466,9 +579,14 @@ impl Session {
     pub async fn react_to_feedback(
         mut self,
         exchange_id: &str,
+        step_index: Option<usize>,
         accepted: bool,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
+        // We have to do a couple of things here, since for plans we might have partial
+        // acceptance
+        // - find the step list of the plan until which we have accepted the changes
+        // - if its an anchored edit then mark it completely accepted or rejected
         // Here first we make sure that an exchange of the form exists
         // if it does we mark that exchange as closed and also update its state
         self.exchanges = self
@@ -476,9 +594,42 @@ impl Session {
             .into_iter()
             .map(|exchange| {
                 if &exchange.exchange_id == exchange_id {
-                    // we have an exchange over here matching our id so update its state
-                    // to what it is
-                    exchange.set_completion_status(accepted)
+                    // we have an exchange over here matching our id
+                    // now we need to carefully understand if its a plan or if its an edit
+                    // if its a plan we should accept it until that step and discard all the steps
+                    // post that index
+                    match exchange.exchange_type {
+                        ExchangeType::AgentChat(agent_exchange) => {
+                            let exchange_reply = match agent_exchange.reply {
+                                ExchangeReplyAgent::Plan(mut plan_step) => {
+                                    if let Some(step_index) = step_index {
+                                        // now here only keep the steps until the index we are interested in
+                                        if step_index == 0 {
+                                            plan_step.plan_discarded = true;
+                                        } else {
+                                            plan_step.plan_steps.truncate(step_index + 1);
+                                        }
+                                    }
+                                    ExchangeReplyAgent::Plan(plan_step)
+                                }
+                                ExchangeReplyAgent::Edit(mut edit_step) => {
+                                    edit_step.accepted = accepted;
+                                    ExchangeReplyAgent::Edit(edit_step)
+                                }
+                                ExchangeReplyAgent::Chat(chat_step) => {
+                                    ExchangeReplyAgent::Chat(chat_step)
+                                }
+                            };
+                            Exchange {
+                                exchange_id: exchange_id.to_owned(),
+                                exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent {
+                                    reply: exchange_reply,
+                                }),
+                                exchange_state: exchange.exchange_state,
+                            }
+                        }
+                        _ => exchange,
+                    }
                 } else {
                     exchange
                 }
@@ -490,7 +641,11 @@ impl Session {
             .iter()
             .find(|exchange| &exchange.exchange_id == exchange_id)
             .map(|exchange| match &exchange.exchange_type {
-                ExchangeType::AgentChat(agentic_chat) => Some(agentic_chat.agent_mode.clone()),
+                ExchangeType::AgentChat(agentic_chat) => match agentic_chat.reply {
+                    ExchangeReplyAgent::Chat(_) => None,
+                    ExchangeReplyAgent::Edit(_) => Some(AideAgentMode::Edit),
+                    ExchangeReplyAgent::Plan(_) => Some(AideAgentMode::Plan),
+                },
                 _ => None,
             })
             .flatten();
@@ -622,7 +777,7 @@ impl Session {
             tool_box
                 .recently_edited_files(Default::default(), message_properties.clone())
                 .await?,
-            UserContext::new(vec![], vec![], None, vec![]),
+            self.global_running_user_context.clone(),
             converted_messages,
             self.repo_ref.clone(),
             self.project_labels.to_vec(),
@@ -639,10 +794,9 @@ impl Session {
             .context_drive_chat_reply()
             .ok_or(SymbolError::WrongToolOutput)?
             .reply();
-        self.exchanges.push(Exchange::agent_reply(
+        self.exchanges.push(Exchange::agent_chat_reply(
             exchange_id.to_owned(),
             chat_output,
-            AideAgentMode::Chat,
         ));
         let ui_sender = message_properties.ui_sender();
         // finsihed the exchange here since we have replied already
@@ -708,7 +862,7 @@ impl Session {
     /// the previous plan exchange-id, doing this will allow us to make sure
     /// that we are able to keep track of the edits properly
     pub async fn perform_plan_revert(
-        mut self,
+        self,
         plan_service: PlanService,
         previous_plan_exchange_id: String,
         step_index: usize,
@@ -746,11 +900,12 @@ impl Session {
             ));
 
             // update our exchanges and add what we did
-            self.exchanges.push(Exchange::agent_reply(
-                message_properties.request_id_str().to_owned(),
-                reply,
-                AideAgentMode::Plan,
-            ));
+            // TODO(skcd): Not sure what to do over here
+            // self.exchanges.push(Exchange::agent_reply(
+            //     message_properties.request_id_str().to_owned(),
+            //     reply,
+            //     AideAgentMode::Plan,
+            // ));
 
             // now close the exchange
             let _ = ui_sender.send(UIEventWithID::finished_exchange(
@@ -797,11 +952,12 @@ impl Session {
             ));
 
             // update our exchanges and add what we did
-            self.exchanges.push(Exchange::agent_reply(
-                message_properties.request_id_str().to_owned(),
-                "I have reverted the changes made by the plan".to_owned(),
-                AideAgentMode::Plan,
-            ));
+            // TODO(skcd): Not sure what to do over here
+            // self.exchanges.push(Exchange::agent_reply(
+            //     message_properties.request_id_str().to_owned(),
+            //     "I have reverted the changes made by the plan".to_owned(),
+            //     AideAgentMode::Plan,
+            // ));
 
             // now close the exchange
             let _ = ui_sender.send(UIEventWithID::finished_exchange(
@@ -863,7 +1019,7 @@ impl Session {
             let cloned_message_properties = message_properties.clone();
             let cloned_plan_service = plan_service.clone();
             let global_running_context = self.global_running_user_context.clone();
-            let plan = tokio::spawn(async move {
+            let _plan = tokio::spawn(async move {
                 cloned_plan_service
                     .create_plan(
                         plan_id,
@@ -941,6 +1097,7 @@ impl Session {
             });
 
             let mut first_step_processed = false;
+            let mut generated_steps = vec![];
 
             while let Some(step_message) = stream_receiver.next().await {
                 if !first_step_processed {
@@ -955,6 +1112,7 @@ impl Session {
 
                 match step_message {
                     StepSenderEvent::NewStep(step) => {
+                        generated_steps.push(step.clone());
                         let _ = edits_sender.send(Some(step)).await;
                     }
                     StepSenderEvent::NewStepTitle(title_found) => {
@@ -1008,18 +1166,9 @@ impl Session {
 
             println!("session::perform_plan_generation::finished_plan_generation");
 
-            let message = match plan.await {
-                Ok(Ok(plan)) => {
-                    let _ = plan_service.mark_plan_completed(plan).await;
-                    "Generated plan".to_owned()
-                }
-                _ => "Failed to generate plan".to_owned(),
-            };
-
-            self.exchanges.push(Exchange::agent_reply(
+            self.exchanges.push(Exchange::agent_plan_reply(
                 message_properties.request_id_str().to_owned(),
-                message.to_owned(),
-                AideAgentMode::Plan,
+                generated_steps,
             ));
 
             let _ = message_properties
@@ -1121,11 +1270,13 @@ impl Session {
                 ));
 
             // we want to set our state over here that we have started working on it
-            self.exchanges.push(Exchange::agent_reply(
-                message_properties.request_id_str().to_owned(),
-                "thinking".to_owned(),
-                AideAgentMode::Edit,
-            ));
+            // We want to get the changes which have been performed here for the anchored
+            // edit especially on the location we are interested in and not anywhere else
+            // self.exchanges.push(Exchange::agent_reply(
+            //     message_properties.request_id_str().to_owned(),
+            //     "thinking".to_owned(),
+            //     AideAgentMode::Edit,
+            // ));
             // send a message that we are starting with the edits over here
             // we want to make a note of the exchange that we are working on it
             // once we have the eidts, then we also have to make sure that we track
@@ -1150,10 +1301,19 @@ impl Session {
                     message_properties.clone(),
                 )
                 .await;
+
             match edits_performed {
-                Ok(_) => println!("session::perform_agentic_editing::finished_editing"),
-                Err(_) => println!("Failed to edit"),
-            };
+                Ok(edits_performed) => {
+                    self.exchanges.push(Exchange::agent_edits_reply(
+                        message_properties.request_id_str().to_owned(),
+                        edits_performed,
+                    ));
+                }
+                Err(_) => self.exchanges.push(Exchange::agent_edits_reply(
+                    message_properties.request_id_str().to_owned(),
+                    "Failed to edit selection properly".to_owned(),
+                )),
+            }
 
             // send a message over here static that we can ask the user for review
             let _ = message_properties

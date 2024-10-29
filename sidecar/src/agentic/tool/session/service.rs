@@ -401,6 +401,7 @@ impl SessionService {
     pub async fn feedback_for_exchange(
         &self,
         exchange_id: &str,
+        step_index: Option<usize>,
         accepted: bool,
         storage_path: String,
         message_properties: SymbolEventMessageProperties,
@@ -411,7 +412,7 @@ impl SessionService {
         }
         let mut session = session_maybe.expect("is_err to hold above");
         session = session
-            .react_to_feedback(exchange_id, accepted, message_properties)
+            .react_to_feedback(exchange_id, step_index, accepted, message_properties)
             .await?;
         self.save_to_storage(&session).await?;
         Ok(())

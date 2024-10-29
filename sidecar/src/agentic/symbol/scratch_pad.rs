@@ -829,7 +829,7 @@ impl ScratchPadAgent {
         converted_messages: Vec<SessionChatMessage>,
         user_context_str: String,
         message_properties: SymbolEventMessageProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<String, SymbolError> {
         println!("scratch_pad_agent::anchor_editing_on_range::start");
         // We want to send the content of the files which we have seen before as they
         // are, this makes sure that we always get the latest git-diff, in case of reverts
@@ -877,8 +877,8 @@ impl ScratchPadAgent {
             sender,
         );
         let _ = symbol_event_sender.send(event);
-        let _ = receiver.await;
-        Ok(())
+        let response = receiver.await.map_err(|e| SymbolError::RecvError(e))?;
+        Ok(response.to_string())
     }
 
     async fn human_message_anchor(

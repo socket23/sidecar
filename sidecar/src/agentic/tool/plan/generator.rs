@@ -260,7 +260,7 @@ impl StepGeneratorResponse {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, serde::Serialize)]
 pub struct Step {
     pub files_to_edit: FilesToEdit,
     pub title: String,
@@ -287,7 +287,7 @@ impl Step {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, serde::Serialize)]
 pub struct FilesToEdit {
     pub file: Vec<String>,
 }

@@ -1232,6 +1232,7 @@ pub async fn reasoning_thread_create(
 pub struct AgenticEditFeedbackExchange {
     exchange_id: String,
     session_id: String,
+    step_index: Option<usize>,
     editor_url: String,
     accepted: bool,
 }
@@ -1248,6 +1249,7 @@ pub async fn user_feedback_on_exchange(
     Json(AgenticEditFeedbackExchange {
         exchange_id,
         session_id,
+        step_index,
         editor_url,
         accepted,
     }): Json<AgenticEditFeedbackExchange>,
@@ -1277,6 +1279,7 @@ pub async fn user_feedback_on_exchange(
         let _ = session_service
             .feedback_for_exchange(
                 &exchange_id,
+                step_index,
                 accepted,
                 session_storage_path,
                 message_properties,

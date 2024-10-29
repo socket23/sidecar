@@ -19,7 +19,10 @@ use crate::{
             tool_properties::ToolProperties,
             types::SymbolEventRequest,
         },
-        tool::{errors::ToolError, lsp::file_diagnostics::DiagnosticMap},
+        tool::{
+            errors::ToolError, lsp::file_diagnostics::DiagnosticMap,
+            session::chat::SessionChatMessage,
+        },
     },
     chunking::text_document::Range,
     user_context::types::UserContext,
@@ -372,6 +375,7 @@ impl PlanService {
         plan_id: String,
         query: String,
         mut user_context: UserContext,
+        previous_messages: Vec<SessionChatMessage>,
         is_deep_reasoning: bool,
         plan_storage_path: String,
         step_sender: Option<UnboundedSender<StepSenderEvent>>,
@@ -391,6 +395,7 @@ impl PlanService {
             .generate_plan(
                 &query,
                 &user_context,
+                previous_messages,
                 is_deep_reasoning,
                 step_sender,
                 message_properties,

@@ -299,6 +299,7 @@ pub async fn create_plan(
             plan_id_str,
             user_query,
             user_context,
+            vec![],
             is_deep_reasoning,
             plan_storage_path.to_owned(),
             None,

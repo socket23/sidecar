@@ -48,11 +48,19 @@ impl SessionChatMessage {
         }
     }
 
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     pub fn user(message: String) -> Self {
         Self {
             message,
             role: SessionChatRole::User,
         }
+    }
+
+    pub fn role(&self) -> &SessionChatRole {
+        &self.role
     }
 }
 

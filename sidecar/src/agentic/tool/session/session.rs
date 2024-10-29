@@ -290,28 +290,47 @@ impl Exchange {
         match &self.exchange_type {
             ExchangeType::HumanChat(ref chat_message) => {
                 // TODO(skcd): Figure out caching etc later on
-                let user_context = chat_message
-                    .user_context
-                    .clone()
-                    .to_xml(Default::default())
-                    .await
-                    .unwrap_or_default();
                 let prompt = chat_message.query.to_owned();
-                SessionChatMessage::user(format!(
-                    r#"<attached_context>
-{user_context}
-</attached_context>
-{prompt}"#
-                ))
+                SessionChatMessage::user(prompt)
             }
             ExchangeType::AgentChat(ref chat_message) => {
                 SessionChatMessage::assistant(chat_message.reply().to_owned())
             }
-            ExchangeType::Plan(_plan) => {
-                todo!("plan branch not impmlemented yet")
+            ExchangeType::Plan(ref plan) => {
+                let user_query = &plan.query;
+                SessionChatMessage::user(format!(
+                    r#"I want a plan of edits to help solve this:
+{user_query}"#
+                ))
             }
-            ExchangeType::Edit(_anchored_edit) => {
-                todo!("anchored_edit branch not implemented yet")
+            ExchangeType::Edit(ref anchored_edit) => {
+                let edit_information = &anchored_edit.information;
+                let user_query = match edit_information {
+                    ExchangeEditInformation::Agentic(agentic_edit) => {
+                        let query = agentic_edit.query.to_owned();
+                        format!(
+                            r#"I want you to perform edits for my query:
+<query>
+{query}
+</query>"#
+                        );
+                        query
+                    }
+                    ExchangeEditInformation::Anchored(anchored_edit) => {
+                        let fs_file_path = anchored_edit.fs_file_path.to_owned();
+                        let start_line = anchored_edit.range.start_line();
+                        let end_line = anchored_edit.range.end_line();
+                        let location = format!(r#"{fs_file_path}-{start_line}:{end_line}"#);
+                        let query = anchored_edit.query.to_owned();
+                        format!(
+                            r#"I want to perform edits at {location}
+<query>
+{query}
+</query>"#
+                        )
+                    }
+                };
+                SessionChatMessage::user(user_query)
             }
         }
     }
@@ -814,6 +833,12 @@ impl Session {
             exchange_state: _,
         }) = last_exchange
         {
+            // take everything until the exchange id of the message we are supposed to
+            // reply to
+            let mut converted_messages = vec![];
+            for previous_message in self.exchanges.iter() {
+                converted_messages.push(previous_message.to_conversation_message().await);
+            }
             let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
             let mut stream_receiver =
                 tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
@@ -845,6 +870,7 @@ impl Session {
                         query.to_owned(),
                         // always send the global running context over here
                         global_running_context,
+                        converted_messages,
                         false,
                         plan_storage_path,
                         Some(sender),

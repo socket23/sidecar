@@ -105,6 +105,7 @@ use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::{StepGeneratorRequest, StepSenderEvent};
 use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
+use crate::agentic::tool::session::chat::SessionChatMessage;
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::session::exchange::SessionExchangeNewRequest;
@@ -9485,6 +9486,7 @@ FILEPATH: {fs_file_path}
         &self,
         user_query: &str,
         user_context: &UserContext,
+        previous_messages: Vec<SessionChatMessage>,
         is_deep_reasoning: bool,
         step_sender: Option<UnboundedSender<StepSenderEvent>>,
         message_properties: SymbolEventMessageProperties,
@@ -9492,6 +9494,7 @@ FILEPATH: {fs_file_path}
         let step_generator_request = StepGeneratorRequest::new(
             user_query.to_owned(),
             is_deep_reasoning,
+            previous_messages,
             message_properties.root_request_id().to_owned(),
             message_properties.editor_url(),
             message_properties.request_id_str().to_owned(),

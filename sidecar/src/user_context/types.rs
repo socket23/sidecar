@@ -466,6 +466,37 @@ impl UserContext {
         self.variables.extend(additional_variables);
         self
     }
+
+    /// Merges the user context on the variables but keeps the new one at a higher priority
+    /// which implies we look at this one more closely compared to the previous one
+    pub fn merge_user_context(self, mut new_user_context: UserContext) -> Self {
+        let variables_to_select = self
+            .variables
+            .into_iter()
+            .filter(|already_present_variable| {
+                // this is a negative filter, we do not want to repeate variables
+                // which are the same file path over here
+                !new_user_context.variables.iter().any(|new_variable| {
+                    // if both the variables are files and they are the same file
+                    // then dedup it over here, to the best of our ability
+                    if new_variable.is_file() && already_present_variable.is_file() {
+                        &new_variable.fs_file_path == &already_present_variable.fs_file_path
+                    } else if new_variable.is_code_symbol()
+                        && already_present_variable.is_code_symbol()
+                    {
+                        new_variable.name == already_present_variable.name
+                    } else if new_variable.is_selection() && already_present_variable.is_selection()
+                    {
+                        &new_variable.content == &already_present_variable.content
+                    } else {
+                        false
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        new_user_context.variables.extend(variables_to_select);
+        new_user_context
+    }
 }
 
 #[async_recursion]

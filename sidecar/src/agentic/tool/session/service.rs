@@ -65,8 +65,15 @@ impl SessionService {
         project_labels: Vec<String>,
         repo_ref: RepoRef,
         storage_path: String,
+        global_user_context: UserContext,
     ) -> Session {
-        Session::new(session_id, project_labels, repo_ref, storage_path)
+        Session::new(
+            session_id,
+            project_labels,
+            repo_ref,
+            storage_path,
+            global_user_context,
+        )
     }
 
     pub async fn human_message(
@@ -95,6 +102,7 @@ impl SessionService {
                 project_labels.to_vec(),
                 repo_ref.clone(),
                 storage_path,
+                user_context.clone(),
             )
         };
 
@@ -107,11 +115,6 @@ impl SessionService {
             user_context,
             project_labels,
             repo_ref,
-        );
-
-        println!(
-            "session_service::reply_to_last_exchange::exchanges({})",
-            session.exchanges()
         );
 
         let plan_exchange_id = self
@@ -168,12 +171,13 @@ impl SessionService {
                 project_labels.to_vec(),
                 repo_ref.clone(),
                 storage_path,
+                user_context.clone(),
             )
         };
 
         // here we first check if we are going to revert and if we are, then we need
         // to go back certain steps
-        if let Some((previous_exchange_id, step_index)) = plan_service.should_drop_plan(&query) {
+        if let Some((previous_exchange_id, step_index)) = plan_service.should_drop_plan() {
             println!(
                 "dropping_plan::exchange_id({})::step_index({:?})",
                 &previous_exchange_id, &step_index
@@ -270,6 +274,7 @@ impl SessionService {
                 project_labels.to_vec(),
                 repo_ref.clone(),
                 storage_path,
+                user_context.clone(),
             )
         };
 
@@ -326,6 +331,7 @@ impl SessionService {
                 project_labels.to_vec(),
                 repo_ref.clone(),
                 storage_path,
+                user_context.clone(),
             )
         };
 

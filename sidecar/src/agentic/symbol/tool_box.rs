@@ -5521,6 +5521,7 @@ FILEPATH: {fs_file_path}
             session_id,
             exchange_id,
             sub_symbol.plan_step_id(),
+            sub_symbol.previous_message(),
             message_properties.cancellation_token(),
         ));
         println!(
@@ -8797,6 +8798,7 @@ FILEPATH: {fs_file_path}
             session_id.to_owned(),
             exchange_id,
             None,
+            vec![],
             message_properties.cancellation_token(),
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);

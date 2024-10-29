@@ -28,13 +28,13 @@ use llm_client::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum SessionChatRole {
     User,
     Assistant,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SessionChatMessage {
     message: String,
     role: SessionChatRole,

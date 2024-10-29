@@ -25,6 +25,7 @@ use crate::{
             lsp::{diagnostics::DiagnosticWithSnippet, open_file::OpenFileRequest},
             output::ToolOutput,
             r#type::Tool,
+            session::chat::{SessionChatMessage, SessionChatRole},
         },
     },
     chunking::text_document::{Position, Range},
@@ -94,6 +95,8 @@ pub struct SearchAndReplaceEditingRequest {
     exchange_id: String,
     // The plan step id if avaiable on the edit request
     plan_step_id: Option<String>,
+    // The previous messages which were part of the session
+    previous_messages: Vec<SessionChatMessage>,
     // cancellation token
     cancellation_token: tokio_util::sync::CancellationToken,
 }
@@ -123,6 +126,7 @@ impl SearchAndReplaceEditingRequest {
         session_id: String,
         exchange_id: String,
         plan_step_id: Option<String>,
+        previous_messages: Vec<SessionChatMessage>,
         cancellation_token: tokio_util::sync::CancellationToken,
     ) -> Self {
         Self {
@@ -147,6 +151,7 @@ impl SearchAndReplaceEditingRequest {
             session_id,
             exchange_id,
             plan_step_id,
+            previous_messages,
             cancellation_token,
         }
     }
@@ -585,6 +590,7 @@ impl Tool for SearchAndReplaceEditing {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.should_search_and_replace_editing()?;
         let is_warmup = context.is_warmup;
+        let previous_messages = context.previous_messages.to_vec();
         let cancellation_token = context.cancellation_token.clone();
         let whole_file_context = context.complete_file.to_owned();
         let start_line = 0;
@@ -624,12 +630,24 @@ impl Tool for SearchAndReplaceEditing {
         let root_request_id = context.root_request_id.to_owned();
         let plan_step_id = context.plan_step_id.clone();
         let system_message = LLMClientMessage::system(self.system_message());
+        let previous_messages = previous_messages
+            .into_iter()
+            .map(|previous_message| match previous_message.role() {
+                SessionChatRole::User => {
+                    LLMClientMessage::user(previous_message.message().to_owned())
+                }
+                SessionChatRole::Assistant => {
+                    LLMClientMessage::assistant(previous_message.message().to_owned())
+                }
+            })
+            .collect::<Vec<_>>();
         let user_messages = self.user_messages(context);
         let example_messages = self.example_messages();
         let mut request = LLMClientCompletionRequest::new(
             llm_properties.llm().clone(),
             vec![system_message]
                 .into_iter()
+                .chain(previous_messages)
                 .chain(example_messages)
                 .chain(user_messages)
                 .collect(),

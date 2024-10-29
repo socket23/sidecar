@@ -30,7 +30,10 @@ use crate::{
             identifier::LLMProperties,
             ui_event::{InitialSearchSymbolInformation, UIEventWithID},
         },
-        tool::{helpers::diff_recent_changes::DiffFileContent, output::ToolOutput, r#type::Tool},
+        tool::{
+            helpers::diff_recent_changes::DiffFileContent, output::ToolOutput, r#type::Tool,
+            session::chat::SessionChatMessage,
+        },
     },
     chunking::{
         languages::TSLanguageParsing,
@@ -823,6 +826,7 @@ impl ScratchPadAgent {
         range: Range,
         fs_file_path: String,
         query: String,
+        converted_messages: Vec<SessionChatMessage>,
         user_context_str: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
@@ -855,7 +859,8 @@ impl ScratchPadAgent {
                 Some(recent_edits.clone()),
                 vec![],
                 None,
-            )],
+            )
+            .set_previous_messages(converted_messages)],
             SymbolIdentifier::with_file_path(&fs_file_path, &fs_file_path),
             vec![],
         );

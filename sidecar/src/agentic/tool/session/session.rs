@@ -1108,6 +1108,10 @@ impl Session {
             exchange_state: _,
         }) = last_exchange
         {
+            let mut converted_messages = vec![];
+            for previous_message in self.exchanges.iter() {
+                converted_messages.push(previous_message.to_conversation_message().await);
+            }
             // send a message over that the inference will start in a bit
             let _ = message_properties
                 .ui_sender()
@@ -1137,6 +1141,7 @@ impl Session {
                     range.clone(),
                     fs_file_path.to_owned(),
                     query.to_owned(),
+                    converted_messages,
                     self.global_running_user_context
                         .clone()
                         .to_xml(Default::default())

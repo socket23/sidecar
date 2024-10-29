@@ -1,6 +1,9 @@
 use crate::{
     agentic::{
-        symbol::identifier::SymbolIdentifier, tool::helpers::diff_recent_changes::DiffRecentChanges,
+        symbol::identifier::SymbolIdentifier,
+        tool::{
+            helpers::diff_recent_changes::DiffRecentChanges, session::chat::SessionChatMessage,
+        },
     },
     chunking::text_document::Range,
 };
@@ -14,6 +17,7 @@ pub struct SymbolToEdit {
     fs_file_path: String,
     symbol_name: String,
     instructions: Vec<String>,
+    previous_messages: Vec<SessionChatMessage>,
     is_new: bool,
     // If this is a full symbol edit instead of being sub-symbol level
     is_full_edit: bool, // todo(zi): remove this mfer, test case 2
@@ -59,6 +63,7 @@ impl SymbolToEdit {
             outline,
             fs_file_path,
             instructions,
+            previous_messages: vec![],
             is_new,
             is_full_edit,
             original_user_query,
@@ -150,6 +155,15 @@ impl SymbolToEdit {
         let mut clone = self.clone();
         clone.instructions = new_instructions.to_vec();
         clone
+    }
+
+    pub fn set_previous_messages(mut self, previous_messages: Vec<SessionChatMessage>) -> Self {
+        self.previous_messages = previous_messages;
+        self
+    }
+
+    pub fn previous_message(&self) -> Vec<SessionChatMessage> {
+        self.previous_messages.to_vec()
     }
 }
 

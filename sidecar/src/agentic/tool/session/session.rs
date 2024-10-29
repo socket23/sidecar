@@ -973,15 +973,6 @@ impl Session {
                 _ => "Failed to generate plan".to_owned(),
             };
 
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::chat_event(
-                    message_properties.root_request_id().to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                    message.to_owned(),
-                    Some(message.to_owned()),
-                ));
-
             self.exchanges.push(Exchange::agent_reply(
                 message_properties.request_id_str().to_owned(),
                 message.to_owned(),

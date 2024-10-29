@@ -16,9 +16,13 @@ use crate::{
     agentic::{
         symbol::{identifier::LLMProperties, ui_event::UIEventWithID},
         tool::{
-            errors::ToolError, helpers::cancellation_future::run_with_cancellation,
-            input::ToolInput, lsp::file_diagnostics::DiagnosticMap, output::ToolOutput,
+            errors::ToolError,
+            helpers::cancellation_future::run_with_cancellation,
+            input::ToolInput,
+            lsp::file_diagnostics::DiagnosticMap,
+            output::ToolOutput,
             r#type::Tool,
+            session::chat::{SessionChatMessage, SessionChatRole},
         },
     },
     user_context::types::UserContext,
@@ -119,6 +123,7 @@ pub enum StepSenderEvent {
 #[derive(Debug, Clone)]
 pub struct StepGeneratorRequest {
     user_query: String,
+    previous_messages: Vec<SessionChatMessage>,
     user_context: Option<UserContext>,
     is_deep_reasoning: bool,
     root_request_id: String,
@@ -138,6 +143,7 @@ impl StepGeneratorRequest {
     pub fn new(
         user_query: String,
         is_deep_reasoning: bool,
+        previous_messages: Vec<SessionChatMessage>,
         root_request_id: String,
         editor_url: String,
         exchange_id: String,
@@ -147,6 +153,7 @@ impl StepGeneratorRequest {
     ) -> Self {
         Self {
             user_query,
+            previous_messages,
             root_request_id,
             editor_url,
             is_deep_reasoning,
@@ -386,7 +393,37 @@ Each xml tag in the response should be in its own line and the content in the xm
             None => String::from("No context"),
         };
 
-        format!("Context:\n{}\n---\nRequest: {}", context_xml, user_query)
+        let reminder_for_format = r#"As as reminder your format for reply is strictly this:
+- Your response must strictly follow the following schema:
+<response>
+<steps>
+{{There can be as many steps as you need}}
+<step>
+<files_to_edit>
+<file>
+{{File you want to edit or CREATE a new file if required}}
+</file>
+</files_to_edit>
+<title>
+{{The title for the change you are about to make}}
+</title>
+<changes>
+{{The changes you want to make along with your thoughts the code here should be interleaved with // ... rest of the code only containing the necessary changes in total}}
+</changes>
+</step>
+</steps>
+</response>"#;
+
+        format!(
+            "Context:
+{context_xml}
+---
+Request:
+{user_query}
+---
+Reminder for format:
+{reminder_for_format}"
+        )
     }
 }
 
@@ -395,6 +432,7 @@ impl Tool for StepGeneratorClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = ToolInput::step_generator(input)?;
 
+        let previous_messages = context.previous_messages.to_vec();
         let _editor_url = context.editor_url.to_owned();
         let session_id = context.root_request_id.to_owned();
         let cancellation_token = context.cancellation_token.clone();
@@ -404,12 +442,21 @@ impl Tool for StepGeneratorClient {
         let is_deep_reasoning = context.is_deep_reasoning;
         let stream_steps = context.stream_steps.clone();
 
-        let messages = vec![
-            LLMClientMessage::system(Self::system_message()),
-            LLMClientMessage::user(
-                Self::user_message(context.user_query(), context.user_context()).await,
-            ),
-        ];
+        let mut messages = vec![LLMClientMessage::system(Self::system_message())];
+        // Add the previous running messages over here
+        messages.extend(previous_messages.into_iter().map(|previous_message| {
+            match previous_message.role() {
+                SessionChatRole::User => {
+                    LLMClientMessage::user(previous_message.message().to_owned())
+                }
+                SessionChatRole::Assistant => {
+                    LLMClientMessage::assistant(previous_message.message().to_owned())
+                }
+            }
+        }));
+        messages.push(LLMClientMessage::user(
+            Self::user_message(context.user_query(), context.user_context()).await,
+        ));
 
         let request = if is_deep_reasoning {
             LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)

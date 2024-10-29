@@ -118,6 +118,7 @@ async fn main() {
     let step_generator_request = StepGeneratorRequest::new(
         user_query.clone(),
         is_deep_reasoning,
+        vec![],
         request_id_str.to_owned(),
         editor_url,
         request_id_str,

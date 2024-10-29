@@ -302,6 +302,7 @@ overall, we need an endpoint that, when hit, fetchs all diagnostic messages pres
                 plan_id,
                 user_query,
                 user_context,
+                vec![],
                 is_deep_reasoning,
                 plan_storage_path
                     .to_str()

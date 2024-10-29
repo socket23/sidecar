@@ -576,6 +576,21 @@ impl Session {
         self.exchanges.last()
     }
 
+    pub async fn undo_including_exchange_id(
+        mut self,
+        exchange_id: &str,
+    ) -> Result<Self, SymbolError> {
+        // keep grabbing the exchanges until we hit the exchange_id we are interested in
+        // over  here, that become our new exchange
+        let new_exchanges = self
+            .exchanges
+            .into_iter()
+            .take_while(|exchange| &exchange.exchange_id != exchange_id)
+            .collect::<Vec<_>>();
+        self.exchanges = new_exchanges;
+        Ok(self)
+    }
+
     pub async fn react_to_feedback(
         mut self,
         exchange_id: &str,

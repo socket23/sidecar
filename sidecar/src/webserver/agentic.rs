@@ -1238,6 +1238,42 @@ pub struct AgenticEditFeedbackExchange {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticHandleSessionUndo {
+    session_id: String,
+    exchange_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgenticHandleSessionUndoResponse {
+    done: bool,
+}
+
+impl ApiResponse for AgenticHandleSessionUndoResponse {}
+
+pub async fn handle_session_undo(
+    Extension(app): Extension<Application>,
+    Json(AgenticHandleSessionUndo {
+        session_id,
+        exchange_id,
+    }): Json<AgenticHandleSessionUndo>,
+) -> Result<impl IntoResponse> {
+    println!("webserver::agent_session::handle_session_undo::hit");
+    println!(
+        "webserver::agent_session::handle_session_undo::session_id({})",
+        &session_id
+    );
+
+    let session_storage_path =
+        check_session_storage_path(app.config.clone(), session_id.to_string()).await;
+
+    let session_service = app.session_service.clone();
+    let _ = session_service
+        .handle_session_undo(&exchange_id, session_storage_path)
+        .await;
+    Ok(Json(AgenticHandleSessionUndoResponse { done: true }))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticEditFeedbackExchangeResponse {
     success: bool,
 }

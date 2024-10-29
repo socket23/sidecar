@@ -511,7 +511,7 @@ impl PlanService {
 
     /// Should drop the plan until a point
     /// We should have the step index and then the exchange id for the plan
-    pub fn should_drop_plan(&self, query: &str) -> Option<(String, usize)> {
+    pub fn should_drop_plan(&self) -> Option<(String, usize)> {
         None
         // the query for dropping should look exactly like this:
         // @drop plan_step_idx exchange_id

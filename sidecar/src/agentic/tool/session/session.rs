@@ -324,6 +324,7 @@ pub struct Session {
     repo_ref: RepoRef,
     exchanges: Vec<Exchange>,
     storage_path: String,
+    global_running_user_context: UserContext,
 }
 
 impl Session {
@@ -332,6 +333,7 @@ impl Session {
         project_labels: Vec<String>,
         repo_ref: RepoRef,
         storage_path: String,
+        global_running_user_context: UserContext,
     ) -> Self {
         Self {
             session_id,
@@ -339,6 +341,7 @@ impl Session {
             repo_ref,
             exchanges: vec![],
             storage_path,
+            global_running_user_context,
         }
     }
 
@@ -368,6 +371,9 @@ impl Session {
         query: String,
         user_context: UserContext,
     ) -> Session {
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context.clone());
         let exchange = Exchange::plan_request(exchange_id, query, user_context);
         self.exchanges.push(exchange);
         self
@@ -380,6 +386,9 @@ impl Session {
         user_context: UserContext,
         codebase_search: bool,
     ) -> Session {
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context.clone());
         let exchange = Exchange::agentic_edit(exchange_id, query, codebase_search, user_context);
         self.exchanges.push(exchange);
         self
@@ -394,6 +403,9 @@ impl Session {
         fs_file_path: String,
         file_content_in_selection: String,
     ) -> Session {
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context.clone());
         let exchange = Exchange::anchored_edit(
             exchange_id,
             query,
@@ -414,6 +426,9 @@ impl Session {
         project_labels: Vec<String>,
         repo_ref: RepoRef,
     ) -> Session {
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context.clone());
         let exchange = Exchange::human_chat(
             exchange_id,
             human_message,
@@ -794,7 +809,7 @@ impl Session {
             exchange_type:
                 ExchangeType::Plan(ExchangeTypePlan {
                     query,
-                    user_context,
+                    user_context: _,
                 }),
             exchange_state: _,
         }) = last_exchange
@@ -822,12 +837,14 @@ impl Session {
 
             let cloned_message_properties = message_properties.clone();
             let cloned_plan_service = plan_service.clone();
+            let global_running_context = self.global_running_user_context.clone();
             let plan = tokio::spawn(async move {
                 cloned_plan_service
                     .create_plan(
                         plan_id,
                         query.to_owned(),
-                        user_context.clone(),
+                        // always send the global running context over here
+                        global_running_context,
                         false,
                         plan_storage_path,
                         Some(sender),
@@ -1007,7 +1024,7 @@ impl Session {
                             query,
                             codebase_search,
                         }),
-                    user_context,
+                    user_context: _,
                     ..
                 }),
             exchange_state: _,
@@ -1019,7 +1036,7 @@ impl Session {
                         query.to_owned(),
                         root_directory,
                         *codebase_search,
-                        user_context.clone(),
+                        self.global_running_user_context.clone(),
                         false,
                     ),
                     message_properties.clone(),
@@ -1060,7 +1077,6 @@ impl Session {
                             range,
                             selection_context: _,
                         }),
-                    user_context,
                     ..
                 }),
             exchange_state: _,
@@ -1095,7 +1111,7 @@ impl Session {
                     range.clone(),
                     fs_file_path.to_owned(),
                     query.to_owned(),
-                    user_context
+                    self.global_running_user_context
                         .clone()
                         .to_xml(Default::default())
                         .await

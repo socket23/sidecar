@@ -56,11 +56,14 @@ async fn main() {
     let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    // fill this
+    let access_token = String::from("");
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
     let fs_file_path =
         "/Users/skcd/test_repo/sidecar/sidecar/src/agentic/tool/plan/plan_step.rs".to_owned();

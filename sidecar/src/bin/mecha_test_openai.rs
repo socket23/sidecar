@@ -76,11 +76,16 @@ async fn main() {
     ));
     let llm_properties = LLMProperties::new(LLMType::Gpt4O, LLMProvider::OpenAI, api_key.clone());
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    // fill this
+    let access_token = String::from("");
+
     let _event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
     let _symbol_manager = SymbolManager::new(
         tool_broker.clone(),

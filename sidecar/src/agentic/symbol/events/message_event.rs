@@ -18,6 +18,7 @@ pub struct SymbolEventMessageProperties {
     // with this cancellation token (this is not for the full session but the current
     // event which we are processing)
     cancellation_token: tokio_util::sync::CancellationToken,
+    access_token: String,
 }
 
 impl SymbolEventMessageProperties {
@@ -26,13 +27,19 @@ impl SymbolEventMessageProperties {
         ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
         editor_url: String,
         cancellation_token: tokio_util::sync::CancellationToken,
+        access_token: String,
     ) -> Self {
         Self {
             request_id,
             ui_sender,
             editor_url,
             cancellation_token,
+            access_token,
         }
+    }
+
+    pub fn access_token(&self) -> &str {
+        &self.access_token
     }
 
     pub fn editor_url(&self) -> String {
@@ -91,6 +98,7 @@ impl SymbolEventMessage {
         response_sender: tokio::sync::oneshot::Sender<SymbolEventResponse>,
         cancellation_token: tokio_util::sync::CancellationToken,
         editor_url: String,
+        access_token: String, // this is necessary if it expects to make any LLM calls (since now all will be routed through codestory provider)
     ) -> Self {
         Self {
             symbol_event_request,
@@ -99,9 +107,15 @@ impl SymbolEventMessage {
                 ui_sender,
                 editor_url,
                 cancellation_token,
+                access_token,
             ),
             response_sender,
         }
+    }
+
+    /// convenience
+    pub fn access_token(&self) -> &str {
+        &self.properties.access_token
     }
 
     pub fn get_properties(&self) -> &SymbolEventMessageProperties {

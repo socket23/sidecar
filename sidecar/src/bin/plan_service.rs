@@ -206,11 +206,15 @@ async fn main() {
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
+    // fill this
+    let access_token = String::from("");
+
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id_str.to_owned(), request_id_str.to_owned()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
 
     let symbol_manager = Arc::new(SymbolManager::new(

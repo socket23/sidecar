@@ -1104,6 +1104,7 @@ impl Session {
                             edit_done_sender,
                             message_properties_clone.cancellation_token(),
                             message_properties_clone.editor_url(),
+                            message_properties_clone.access_token().to_owned(),
                         ));
                         let _ = edit_done_receiver.await;
                     }

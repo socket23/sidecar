@@ -63,11 +63,14 @@ async fn main() {
     let lsp_range = Range::new(Position::new(51, 0, 0), Position::new(100, 0, 0));
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    // fill this
+    let access_token = String::from("");
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
     let response = tool_box
         .get_quick_fix_actions(&fs_file_path, &lsp_range, "".to_owned(), event_properties)

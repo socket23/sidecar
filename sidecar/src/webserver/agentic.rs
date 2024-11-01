@@ -333,6 +333,7 @@ pub struct ProbeRequest {
     user_context: UserContext,
     query: String,
     active_window_data: Option<ProbeRequestActiveWindow>,
+    access_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -366,6 +367,7 @@ pub async fn probe_request(
         mut user_context,
         query,
         active_window_data,
+        access_token,
     }): Json<ProbeRequest>,
 ) -> Result<impl IntoResponse> {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -388,6 +390,7 @@ pub async fn probe_request(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     let symbol_manager = app.symbol_manager.clone();
@@ -558,6 +561,7 @@ pub struct CodeSculptingWarmup {
     file_paths: Vec<String>,
     grab_import_nodes: bool,
     editor_url: String,
+    access_token: String,
 }
 
 /// Response structure for the code sculpting warmup operation.
@@ -574,6 +578,7 @@ pub async fn code_sculpting_warmup(
         file_paths,
         grab_import_nodes,
         editor_url,
+        access_token,
     }): Json<CodeSculptingWarmup>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_sculpting_warmup");
@@ -588,6 +593,7 @@ pub async fn code_sculpting_warmup(
         sender,
         editor_url,
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
     let files_already_in_cache;
     {
@@ -877,6 +883,7 @@ pub struct AgenticCodeEditing {
     enable_import_nodes: bool,
     // should we do deep reasoning
     deep_reasoning: bool,
+    access_token: String,
 }
 
 pub async fn code_editing(
@@ -892,6 +899,7 @@ pub async fn code_editing(
         anchor_editing,
         enable_import_nodes: _enable_import_nodes,
         deep_reasoning,
+        access_token,
     }): Json<AgenticCodeEditing>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::code_editing_start::request_id({})", &request_id);
@@ -918,6 +926,7 @@ pub async fn code_editing(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     println!(
@@ -1119,6 +1128,7 @@ pub async fn push_diagnostics(
 pub struct AgenticContextGathering {
     context_events: Vec<ContextGatheringEvent>,
     editor_url: String,
+    access_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1133,6 +1143,7 @@ pub async fn context_recording(
     Json(AgenticContextGathering {
         context_events,
         editor_url,
+        access_token,
     }): Json<AgenticContextGathering>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::endpoint::context_recording");
@@ -1148,6 +1159,7 @@ pub async fn context_recording(
         sender,
         editor_url,
         cancellation_token,
+        access_token,
     );
     let context_recording_to_prompt = app
         .tool_box
@@ -1168,6 +1180,7 @@ pub struct AgenticReasoningThreadCreationRequest {
     user_context: UserContext,
     #[serde(default)]
     is_deep_reasoning: bool,
+    access_token: String,
 }
 
 // this is PlanResponse on IDE. using pub here cuz lazy
@@ -1188,6 +1201,7 @@ pub async fn reasoning_thread_create(
         editor_url,
         user_context,
         is_deep_reasoning,
+        access_token,
     }): Json<AgenticReasoningThreadCreationRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agentic::reasoning_thread_create");
@@ -1211,6 +1225,7 @@ pub async fn reasoning_thread_create(
         plan_service,
         is_deep_reasoning,
         sender,
+        access_token,
     )
     .await;
     let response = match plan_output {
@@ -1235,6 +1250,7 @@ pub struct AgenticEditFeedbackExchange {
     step_index: Option<usize>,
     editor_url: String,
     accepted: bool,
+    access_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1288,6 +1304,7 @@ pub async fn user_feedback_on_exchange(
         step_index,
         editor_url,
         accepted,
+        access_token,
     }): Json<AgenticEditFeedbackExchange>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1305,6 +1322,7 @@ pub async fn user_feedback_on_exchange(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     let session_storage_path =
@@ -1497,6 +1515,7 @@ pub struct AgentSessionChatRequest {
     project_labels: Vec<String>,
     #[serde(default)]
     codebase_search: bool,
+    access_token: String,
 }
 
 /// Handles the agent session and either creates it or appends to it
@@ -1515,8 +1534,10 @@ pub async fn agent_session_chat(
         project_labels,
         root_directory: _root_directory,
         codebase_search: _codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!(&access_token);
     // bring this back later
     let agent_mode = AideAgentMode::Chat;
     println!("webserver::agent_session::chat::hit");
@@ -1531,6 +1552,7 @@ pub async fn agent_session_chat(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     let session_storage_path =
@@ -1611,6 +1633,7 @@ pub async fn agent_session_edit_anchored(
         project_labels,
         root_directory: _root_directory,
         codebase_search: _codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1627,6 +1650,7 @@ pub async fn agent_session_edit_anchored(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     let session_storage_path =
@@ -1718,6 +1742,7 @@ pub async fn agent_session_edit_agentic(
         project_labels,
         root_directory,
         codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1734,6 +1759,7 @@ pub async fn agent_session_edit_agentic(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     let session_storage_path =
@@ -1827,6 +1853,7 @@ pub async fn agent_session_plan(
         project_labels,
         root_directory,
         codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1843,6 +1870,7 @@ pub async fn agent_session_plan(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
+        access_token,
     );
 
     let session_storage_path =

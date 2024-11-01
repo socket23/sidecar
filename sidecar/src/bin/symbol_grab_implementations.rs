@@ -98,11 +98,14 @@ async fn main() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let (ui_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    // fill this
+    let access_token = String::from("");
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         ui_sender,
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
 
     let symbol_identifier =

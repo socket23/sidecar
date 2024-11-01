@@ -4304,6 +4304,7 @@ Please update this code to accommodate these changes. Consider:
                             sender,
                             message_properties.cancellation_token(),
                             message_properties.editor_url(),
+                            message_properties.access_token().to_owned(),
                         );
                         let _ = hub_sender.send(event);
                         // Figure out what to do with the receiver over here

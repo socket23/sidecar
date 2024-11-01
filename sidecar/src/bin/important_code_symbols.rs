@@ -66,11 +66,15 @@ async fn main() {
     let editor_url = "http://localhost:42425".to_owned();
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
+    // fill this
+    let access_token = String::from("");
+
     let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
 
     let code_wide_search = ToolInput::RequestImportantSymbolsCodeWide(

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys, OpenAIProvider},
+    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -137,6 +137,7 @@ pub struct StepGeneratorRequest {
     // this
     stream_steps: Option<UnboundedSender<StepSenderEvent>>,
     cancellation_token: tokio_util::sync::CancellationToken,
+    access_token: String,
 }
 
 impl StepGeneratorRequest {
@@ -150,6 +151,7 @@ impl StepGeneratorRequest {
         ui_event: UnboundedSender<UIEventWithID>,
         stream_steps: Option<UnboundedSender<StepSenderEvent>>,
         cancellation_token: tokio_util::sync::CancellationToken,
+        access_token: String,
     ) -> Self {
         Self {
             user_query,
@@ -163,11 +165,16 @@ impl StepGeneratorRequest {
             ui_event,
             stream_steps,
             cancellation_token,
+            access_token,
         }
     }
 
     pub fn user_query(&self) -> &str {
         &self.user_query
+    }
+
+    pub fn access_token(&self) -> &str {
+        &self.access_token
     }
 
     pub fn root_request_id(&self) -> &str {
@@ -464,17 +471,22 @@ impl Tool for StepGeneratorClient {
             LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
         };
 
+        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
+        let codestory_access_token = CodestoryAccessToken {
+            access_token: context.access_token.clone(),
+        };
+
         let llm_properties = if is_deep_reasoning {
             LLMProperties::new(
                 LLMType::O1Preview,
-                LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+                llm_provider,
+                LLMProviderAPIKeys::CodeStory(codestory_access_token),
             )
         } else {
             LLMProperties::new(
                 LLMType::ClaudeSonnet,
-                LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                llm_provider,
+                LLMProviderAPIKeys::CodeStory(codestory_access_token),
             )
         };
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();

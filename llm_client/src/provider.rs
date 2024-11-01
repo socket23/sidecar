@@ -80,7 +80,7 @@ pub enum LLMProviderAPIKeys {
     OpenAIAzureConfig(AzureConfig),
     LMStudio(LMStudioConfig),
     OpenAICompatible(OpenAICompatibleConfig),
-    CodeStory,
+    CodeStory(CodestoryAccessToken),
     Anthropic(AnthropicAPIKey),
     FireworksAI(FireworksAPIKey),
     GeminiPro(GeminiProAPIKey),
@@ -94,6 +94,10 @@ impl LLMProviderAPIKeys {
         matches!(self, LLMProviderAPIKeys::OpenAI(_))
     }
 
+    pub fn is_codestory(&self) -> bool {
+        matches!(self, LLMProviderAPIKeys::CodeStory(_))
+    }
+
     pub fn provider_type(&self) -> LLMProvider {
         match self {
             LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,
@@ -105,7 +109,7 @@ impl LLMProviderAPIKeys {
                 })
             }
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
-            LLMProviderAPIKeys::CodeStory => {
+            LLMProviderAPIKeys::CodeStory(_) => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
@@ -168,7 +172,14 @@ impl LLMProviderAPIKeys {
                     None
                 }
             }
-            LLMProvider::CodeStory(_) => Some(LLMProviderAPIKeys::CodeStory),
+            // big up codestory provider brrrr
+            LLMProvider::CodeStory(_) => {
+                if let LLMProviderAPIKeys::CodeStory(access_token) = self {
+                    Some(LLMProviderAPIKeys::CodeStory(access_token.clone()))
+                } else {
+                    None
+                }
+            }
             LLMProvider::OpenAICompatible => {
                 if let LLMProviderAPIKeys::OpenAICompatible(openai_compatible) = self {
                     Some(LLMProviderAPIKeys::OpenAICompatible(
@@ -308,6 +319,12 @@ pub struct AnthropicAPIKey {
     pub api_key: String,
 }
 
+// Named AccessToken for consistency with workOS / ide language
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct CodestoryAccessToken {
+    pub access_token: String,
+}
+
 impl AnthropicAPIKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }
@@ -379,12 +396,5 @@ mod tests {
         });
         let string_provider_keys = serde_json::to_string(&provider_keys).expect("to work");
         assert_eq!(string_provider_keys, "",);
-    }
-
-    #[test]
-    fn test_reading_from_string_for_provider_keys() {
-        let provider_keys = LLMProviderAPIKeys::CodeStory;
-        let string_provider_keys = serde_json::to_string(&provider_keys).expect("to work");
-        assert_eq!(string_provider_keys, "\"CodeStory\"");
     }
 }

@@ -6,7 +6,7 @@ use std::time::Instant;
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{
-    AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+    AnthropicAPIKey, CodeStoryLLMTypes, CodestoryAccessToken, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -5495,18 +5495,28 @@ FILEPATH: {fs_file_path}
 
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
+        let access_token = message_properties.access_token().to_owned();
         println!("code_editing_with_search_and_replace::session_id({})::exchange_id({})", &session_id, &exchange_id);
+
+        let codestory_access_token = CodestoryAccessToken {
+            access_token,
+        };
+        let llm_type = LLMType::ClaudeSonnet;
+        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
+
+        let llm_properties = LLMProperties::new(
+            llm_type,
+            llm_provider,
+            LLMProviderAPIKeys::CodeStory(codestory_access_token),
+        );
+
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
             in_range_selection,
             file_content.to_owned(),
             extra_context,
-            LLMProperties::new(
-                LLMType::ClaudeSonnet,
-                LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-            ),
+            llm_properties,
             symbols_to_edit,
             instruction,
             message_properties.root_request_id().to_owned(),
@@ -5524,6 +5534,7 @@ FILEPATH: {fs_file_path}
             sub_symbol.plan_step_id(),
             sub_symbol.previous_message(),
             message_properties.cancellation_token(),
+            message_properties.access_token().to_owned(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5620,6 +5631,7 @@ FILEPATH: {fs_file_path}
         });
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
+        let access_token = message_properties.access_token().to_owned();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5652,6 +5664,7 @@ FILEPATH: {fs_file_path}
             None,
             session_id.to_owned(),
             exchange_id.to_owned(),
+            access_token,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5748,6 +5761,8 @@ FILEPATH: {fs_file_path}
             .unwrap_or("".to_owned());
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
+        
+        let access_token = message_properties.access_token().to_owned();
         let new_symbols_edited = symbol_edited_list.map(|symbol_list| {
             symbol_list
                 .into_iter()
@@ -5794,6 +5809,7 @@ FILEPATH: {fs_file_path}
             user_provided_context,
             session_id,
             exchange_id,
+            access_token,
         ));
         self.tools
             .invoke(request)
@@ -8801,6 +8817,7 @@ FILEPATH: {fs_file_path}
             None,
             vec![],
             message_properties.cancellation_token(),
+            message_properties.access_token().to_owned(),
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();
@@ -9504,6 +9521,7 @@ FILEPATH: {fs_file_path}
             message_properties.ui_sender(),
             step_sender,
             message_properties.cancellation_token(),
+            message_properties.access_token().to_owned(),
         )
         .with_user_context(user_context);
         println!("tool_box::generate_plan::start");

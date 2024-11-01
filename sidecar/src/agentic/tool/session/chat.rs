@@ -24,7 +24,7 @@ use futures::StreamExt;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -75,6 +75,7 @@ pub struct SessionChatClientRequest {
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     cancellation_token: tokio_util::sync::CancellationToken,
+    access_token: String,
 }
 
 impl SessionChatClientRequest {
@@ -88,6 +89,7 @@ impl SessionChatClientRequest {
         exchange_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
         cancellation_token: tokio_util::sync::CancellationToken,
+        access_token: String,
     ) -> Self {
         Self {
             diff_recent_edits,
@@ -99,6 +101,7 @@ impl SessionChatClientRequest {
             project_labels,
             ui_sender,
             cancellation_token,
+            access_token,
         }
     }
 }
@@ -232,17 +235,27 @@ impl Tool for SessionChatClient {
         let root_id = context.session_id.to_owned();
         let exchange_id = context.exchange_id.to_owned();
         let system_message = LLMClientMessage::system(self.system_message(&context)).cache_point();
+
+        // so now chat will be routed through codestory provider
+        let codestory_access_token = CodestoryAccessToken {
+            access_token: context.access_token.clone(),
+        };
+
+        let llm_type = LLMType::ClaudeSonnet;
+        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
+
+        let llm_properties = LLMProperties::new(
+            llm_type,
+            llm_provider,
+            LLMProviderAPIKeys::CodeStory(codestory_access_token),
+        );
+
         let user_messages = self.user_message(context).await;
         let mut messages = vec![system_message];
         messages.extend(user_messages);
 
         println!("{:?}", &messages);
 
-        let llm_properties = LLMProperties::new(
-            LLMType::ClaudeSonnet,
-            LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-        );
         let request =
             LLMClientCompletionRequest::new(llm_properties.llm().clone(), messages, 0.2, None);
 

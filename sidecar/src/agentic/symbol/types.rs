@@ -1839,6 +1839,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                         self.symbol_name(),
                         sub_symbol_to_edit.symbol_name()
                     );
+                    // here
                     self.edit_code_full(
                         &sub_symbol_to_edit,
                         context_for_editing.clone(),
@@ -1867,6 +1868,7 @@ Satisfy the requirement either by making edits or gathering the required informa
                         )
                         .await?
                     } else {
+                        // here
                         self.edit_code(
                             &sub_symbol_to_edit,
                             context_for_editing.to_vec(),

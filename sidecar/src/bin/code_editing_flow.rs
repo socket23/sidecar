@@ -45,7 +45,7 @@ async fn main() {
     );
     println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
     let editor_url = "http://localhost:42425".to_owned();
-    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned()));
     let anthropic_llm_properties = LLMProperties::new(
         LLMType::ClaudeSonnet,
         LLMProvider::Anthropic,

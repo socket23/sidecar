@@ -99,6 +99,8 @@ pub struct SearchAndReplaceEditingRequest {
     previous_messages: Vec<SessionChatMessage>,
     // cancellation token
     cancellation_token: tokio_util::sync::CancellationToken,
+    // to authenticate a user session
+    access_token: String,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -128,6 +130,7 @@ impl SearchAndReplaceEditingRequest {
         plan_step_id: Option<String>,
         previous_messages: Vec<SessionChatMessage>,
         cancellation_token: tokio_util::sync::CancellationToken,
+        access_token: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -153,6 +156,7 @@ impl SearchAndReplaceEditingRequest {
             plan_step_id,
             previous_messages,
             cancellation_token,
+            access_token,
         }
     }
 }
@@ -627,6 +631,7 @@ impl Tool for SearchAndReplaceEditing {
         let exchange_id = context.exchange_id.to_owned();
         let session_id = context.session_id.to_owned();
         let llm_properties = context.llm_properties.clone();
+
         let root_request_id = context.root_request_id.to_owned();
         let plan_step_id = context.plan_step_id.clone();
         let system_message = LLMClientMessage::system(self.system_message());
@@ -644,7 +649,7 @@ impl Tool for SearchAndReplaceEditing {
         let user_messages = self.user_messages(context);
         let example_messages = self.example_messages();
         let mut request = LLMClientCompletionRequest::new(
-            llm_properties.llm().clone(),
+            llm_properties.llm().to_owned(),
             vec![system_message]
                 .into_iter()
                 .chain(previous_messages)
@@ -663,9 +668,9 @@ impl Tool for SearchAndReplaceEditing {
         let llm_response = tokio::spawn(async move {
             cloned_llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
+                    llm_properties.api_key().to_owned(),
                     request,
-                    llm_properties.provider().clone(),
+                    llm_properties.provider().to_owned(),
                     vec![
                         (
                             "event_type".to_owned(),

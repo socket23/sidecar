@@ -5,7 +5,7 @@ use llm_client::{
         codestory::CodeStoryClient,
         types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
     },
-    provider::LLMProviderAPIKeys,
+    provider::{CodestoryAccessToken, LLMProviderAPIKeys},
 };
 
 #[tokio::main]
@@ -22,8 +22,18 @@ async fn main() {
         None,
     )
     .set_max_tokens(2000);
+
+    // fill this
+    let codestory_access_token = "".to_owned();
+
     let response = codestory_client
-        .stream_completion(LLMProviderAPIKeys::CodeStory, request, sender)
+        .stream_completion(
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken {
+                access_token: codestory_access_token,
+            }),
+            request,
+            sender,
+        )
         .await;
     println!("{:?}", response);
 }
@@ -35,7 +45,7 @@ mod tests {
             codestory::CodeStoryClient,
             types::{LLMClient, LLMClientCompletionRequest, LLMClientMessage, LLMType},
         },
-        provider::LLMProviderAPIKeys,
+        provider::{CodestoryAccessToken, LLMProviderAPIKeys},
     };
 
     #[test]
@@ -75,9 +85,17 @@ mod tests {
         .set_max_tokens(2000);
 
         let runtime = tokio::runtime::Runtime::new().unwrap();
+        let codestory_access_token = "".to_owned();
+
         let response = runtime.block_on(async {
             codestory_client
-                .stream_completion(LLMProviderAPIKeys::CodeStory, request, sender)
+                .stream_completion(
+                    LLMProviderAPIKeys::CodeStory(CodestoryAccessToken {
+                        access_token: codestory_access_token,
+                    }),
+                    request,
+                    sender,
+                )
                 .await
         });
 

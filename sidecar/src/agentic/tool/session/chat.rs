@@ -241,6 +241,8 @@ impl Tool for SessionChatClient {
 
         println!("{:?}", &messages);
 
+        // so now chat will be routed through codestory provider
+
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,

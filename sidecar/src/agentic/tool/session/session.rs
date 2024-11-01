@@ -791,7 +791,6 @@ impl Session {
         let exchange_id = message_properties.request_id_str().to_owned();
         let access_token = message_properties.access_token().to_owned();
 
-        // ok, refactor starts here. Pass access token.
         let tool_input = SessionChatClientRequest::new(
             tool_box
                 .recently_edited_files(Default::default(), message_properties.clone())

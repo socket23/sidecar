@@ -124,7 +124,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
-            LLMProviderAPIKeys::CodeStory => {
+            LLMProviderAPIKeys::CodeStory(_) => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
@@ -155,7 +155,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
-            LLMProviderAPIKeys::CodeStory => {
+            LLMProviderAPIKeys::CodeStory(_) => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,
@@ -427,7 +427,7 @@ impl LLMBroker {
             LLMProviderAPIKeys::OpenAIAzureConfig(_) => LLMProvider::OpenAI,
             LLMProviderAPIKeys::TogetherAI(_) => LLMProvider::TogetherAI,
             LLMProviderAPIKeys::LMStudio(_) => LLMProvider::LMStudio,
-            LLMProviderAPIKeys::CodeStory => {
+            LLMProviderAPIKeys::CodeStory(_) => {
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
             }
             LLMProviderAPIKeys::OpenAICompatible(_) => LLMProvider::OpenAICompatible,

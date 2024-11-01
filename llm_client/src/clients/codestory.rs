@@ -166,6 +166,10 @@ impl CodeStoryClient {
         format!("{api_base}/chat-4-turbo")
     }
 
+    pub fn o1_preview_endpoint(&self, api_base: &str) -> String {
+        format!("{api_base}/chat-o1") // new endpoint on anton
+    }
+
     pub fn together_api_endpoint(&self, api_base: &str) -> String {
         format!("{api_base}/together-api")
     }
@@ -194,10 +198,11 @@ impl CodeStoryClient {
             LLMType::DeepSeekCoder33BInstruct => {
                 Ok("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
             }
-            LLMType::ClaudeSonnet => Ok("claude-3-sonnet-20240229".to_owned()),
+            LLMType::ClaudeSonnet => Ok("claude-3-5-sonnet-20241022".to_owned()), // updated to latest sonnet
             LLMType::ClaudeHaiku => Ok("claude-3-haiku-20240307".to_owned()),
             LLMType::GeminiPro => Ok("gemini-1.5-pro".to_owned()),
             LLMType::GeminiProFlash => Ok("gemini-1.5-flash".to_owned()),
+            LLMType::O1Preview => Ok("o1-preview".to_owned()), // o1 baby
             _ => Err(LLMClientError::UnSupportedModel),
         }
     }
@@ -209,6 +214,7 @@ impl CodeStoryClient {
             LLMType::Gpt4 => Ok(self.gpt4_endpoint(&self.api_base)),
             LLMType::Gpt4Turbo => Ok(self.gpt4_preview_endpoint(&self.api_base)),
             LLMType::Gpt4OMini => Ok(self.gpt4_preview_endpoint(&self.api_base)),
+            LLMType::O1Preview => Ok(self.o1_preview_endpoint(&self.api_base)),
             LLMType::CodeLlama13BInstruct
             | LLMType::CodeLlama7BInstruct
             | LLMType::DeepSeekCoder33BInstruct => Ok(self.together_api_endpoint(&self.api_base)),

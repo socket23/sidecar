@@ -1519,6 +1519,7 @@ pub async fn agent_session_chat(
         access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
+    dbg!(&access_token);
     // bring this back later
     let agent_mode = AideAgentMode::Chat;
     println!("webserver::agent_session::chat::hit");

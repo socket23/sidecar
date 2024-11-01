@@ -74,6 +74,9 @@ async fn main() {
         ),
     ));
 
+    /// update as necessary
+    let access_token = String::from("");
+
     let user_context = UserContext::new(vec![], vec![], None, vec![]);
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -83,6 +86,7 @@ async fn main() {
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
 
     let _symbol_manager = SymbolManager::new(

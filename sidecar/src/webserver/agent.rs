@@ -392,6 +392,7 @@ pub struct FollowupChatRequest {
     pub editor_url: Option<String>,
     pub is_deep_reasoning: bool,
     pub with_lsp_enrichment: bool,
+    pub access_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -468,6 +469,7 @@ pub struct ExecutePlanUntilRequest {
     self_feedback: bool,
     thread_id: uuid::Uuid,
     editor_url: String,
+    access_token: String,
 }
 
 // handler that executes plan until a given index
@@ -478,6 +480,7 @@ pub async fn execute_plan_until(
         self_feedback,
         thread_id,
         editor_url,
+        access_token,
     }): Json<ExecutePlanUntilRequest>,
 ) -> Result<impl IntoResponse> {
     let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
@@ -498,6 +501,7 @@ pub async fn execute_plan_until(
         plan_storage_path,
         editor_url,
         plan_service,
+        access_token,
     )
     .await
 }
@@ -570,7 +574,7 @@ pub async fn handle_check_references(
         user_context,
         is_deep_reasoning,
         with_lsp_enrichment: _with_lsp_enrichment,
-        access_token: _,
+        access_token,
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::handle_check_references({})", &user_query);
@@ -600,6 +604,7 @@ pub async fn handle_check_references(
                 thread_id,
                 plan_service,
                 is_deep_reasoning,
+                access_token,
             )
             .await
         }
@@ -680,6 +685,7 @@ pub async fn handle_append_plan(
                 plan_service,
                 is_deep_reasoning,
                 sender,
+                access_token,
             )
             .await
         }
@@ -715,6 +721,7 @@ pub async fn followup_chat(
         editor_url,
         is_deep_reasoning,
         with_lsp_enrichment: _,
+        access_token,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -749,6 +756,7 @@ pub async fn followup_chat(
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 editor_url.clone().expect("is_some to hold"), // why is this needed?
                 plan_service,
+                access_token.clone(),
             )
             .await;
         } else if user_context.is_plan_drop_from().is_some() {
@@ -764,6 +772,7 @@ pub async fn followup_chat(
                 check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
                 plan_service,
                 is_deep_reasoning,
+                access_token,
             )
             .await;
         }

@@ -94,6 +94,10 @@ impl LLMProviderAPIKeys {
         matches!(self, LLMProviderAPIKeys::OpenAI(_))
     }
 
+    pub fn is_codestory(&self) -> bool {
+        matches!(self, LLMProviderAPIKeys::CodeStory(_))
+    }
+
     pub fn provider_type(&self) -> LLMProvider {
         match self {
             LLMProviderAPIKeys::OpenAI(_) => LLMProvider::OpenAI,

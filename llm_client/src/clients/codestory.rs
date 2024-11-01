@@ -231,6 +231,26 @@ impl CodeStoryClient {
             _ => Ok(self.together_api_endpoint(&self.api_base)),
         }
     }
+
+    // returns codestory access token
+    fn _access_token(&self, api_key: LLMProviderAPIKeys) -> Result<String, LLMClientError> {
+        match api_key {
+            LLMProviderAPIKeys::CodeStory(api_key) => Ok(api_key.access_token),
+            _ => Err(LLMClientError::WrongAPIKeyType),
+        }
+    }
+
+    fn access_token_as_bearer(
+        &self,
+        api_key: LLMProviderAPIKeys,
+    ) -> Result<String, LLMClientError> {
+        match api_key {
+            LLMProviderAPIKeys::CodeStory(access_token) => {
+                Ok(format!("Bearer {}", access_token.access_token))
+            }
+            _ => Err(LLMClientError::WrongAPIKeyType),
+        }
+    }
 }
 
 #[async_trait]
@@ -239,6 +259,7 @@ impl LLMClient for CodeStoryClient {
         &LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
     }
 
+    // todo(zi): send access_token from here too
     async fn completion(
         &self,
         api_key: LLMProviderAPIKeys,
@@ -248,20 +269,25 @@ impl LLMClient for CodeStoryClient {
         self.stream_completion(api_key, request, sender).await
     }
 
+    // codestory stream woooo
     async fn stream_completion(
         &self,
-        _api_key: LLMProviderAPIKeys,
+        api_key: LLMProviderAPIKeys,
         request: LLMClientCompletionRequest,
         sender: UnboundedSender<LLMClientCompletionResponse>,
     ) -> Result<String, LLMClientError> {
         let model = self.model_name(request.model())?;
         let endpoint = self.model_endpoint(request.model())?;
 
+        // get access token from api_key
+        let access_token = self.access_token_as_bearer(api_key)?;
+
         let request = CodeStoryRequest::from_chat_request(request, model.to_owned());
         let mut response_stream = self
             .client
             .post(endpoint)
             .header("X-Accel-Buffering", "no")
+            .header("Authorization", format!("Bearer {}", access_token))
             .json(&request)
             .send()
             .await?

@@ -259,7 +259,6 @@ impl LLMClient for CodeStoryClient {
         &LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None })
     }
 
-    // todo(zi): send access_token from here too
     async fn completion(
         &self,
         api_key: LLMProviderAPIKeys,

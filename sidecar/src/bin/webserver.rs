@@ -86,7 +86,8 @@ pub async fn run(application: Application) -> Result<()> {
     Ok(())
 }
 
-async fn auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+// reintroduce when necessary
+async fn _auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     // Get token from Authorization header
     let auth_header = request
         .headers()
@@ -151,8 +152,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .nest("/inline_completion", inline_completion())
         .nest("/agentic", agentic_router())
         .nest("/plan", plan_router())
-        .nest("/agent", agent_router())
-        .layer(from_fn(auth_middleware)); // routes through middleware
+        .nest("/agent", agent_router());
+    // .layer(from_fn(auth_middleware)); // routes through middleware
 
     // no middleware check
     let public_routes = Router::new()

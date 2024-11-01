@@ -133,7 +133,7 @@ pub fn fix_model_for_sidecar_provider(
     provider: &LLMProviderAPIKeys,
     fast_model: LLMType,
 ) -> LLMType {
-    if matches!(provider, LLMProviderAPIKeys::CodeStory) {
+    if matches!(provider, LLMProviderAPIKeys::CodeStory(_)) {
         if fast_model.is_togetherai_model() {
             fast_model
         } else {

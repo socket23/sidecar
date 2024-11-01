@@ -557,6 +557,7 @@ pub struct AppendPlanRequest {
     is_deep_reasoning: bool,
     #[serde(default)]
     with_lsp_enrichment: bool,
+    access_token: String,
 }
 
 /// Checks the references on a file with the user context
@@ -569,6 +570,7 @@ pub async fn handle_check_references(
         user_context,
         is_deep_reasoning,
         with_lsp_enrichment: _with_lsp_enrichment,
+        access_token: _,
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::handle_check_references({})", &user_query);
@@ -618,6 +620,7 @@ pub async fn handle_append_plan(
         user_context,
         is_deep_reasoning,
         with_lsp_enrichment,
+        access_token,
     }): Json<AppendPlanRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agent::append_plan({})", &user_query);
@@ -647,6 +650,7 @@ pub async fn handle_append_plan(
                 tokio::sync::mpsc::unbounded_channel().0, // Dummy sender, as we're not using streaming
                 editor_url,
                 tokio_util::sync::CancellationToken::new(),
+                access_token,
             );
 
             append_to_plan(

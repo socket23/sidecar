@@ -19,7 +19,7 @@ use tracing::{debug, error, info};
 use axum::http::header::AUTHORIZATION;
 use axum::{
     http::{Request, StatusCode},
-    middleware::{from_fn, Next},
+    middleware::Next,
     response::Response,
 };
 pub type Router<S = Application> = axum::Router<S>;
@@ -101,7 +101,7 @@ async fn _auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Respo
             // Check if token starts with "Bearer "
             if let Some(token) = token.strip_prefix("Bearer ") {
                 // Validate token here
-                if is_valid_token(token).await {
+                if _is_valid_token(token).await {
                     Ok(next.run(request).await)
                 } else {
                     Err(StatusCode::UNAUTHORIZED)
@@ -115,16 +115,16 @@ async fn _auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Respo
 }
 
 // Token validation function (implement your own logic)
-async fn is_valid_token(token: &str) -> bool {
+async fn _is_valid_token(token: &str) -> bool {
     println!("webserver::is_valid_token::token({})", token);
 
-    match validate_workos_token(token).await {
+    match _validate_workos_token(token).await {
         Ok(_) => true,
         Err(_) => false,
     }
 }
 
-async fn validate_workos_token(token: &str) -> Result<bool> {
+async fn _validate_workos_token(token: &str) -> Result<bool> {
     let client = reqwest::Client::new();
 
     let auth_proxy_endpoint = "";

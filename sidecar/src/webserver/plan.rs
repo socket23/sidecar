@@ -274,6 +274,7 @@ pub async fn create_plan(
     is_deep_reasoning: bool,
     // we can send events using this
     agent_sender: UnboundedSender<anyhow::Result<ConversationMessage>>,
+    access_token: String,
 ) -> Result<Plan, PlanServiceError> {
     println!("plan_storage_location::{}", &plan_storage_path);
     let _ = agent_sender.send(Ok(ConversationMessage::answer_update(
@@ -292,6 +293,7 @@ pub async fn create_plan(
         sender,
         editor_url,
         cancellation_token,
+        access_token,
     );
 
     let plan = plan_service
@@ -355,6 +357,7 @@ pub async fn handle_execute_plan_until(
     plan_storage_path: String,
     editor_url: String,
     plan_service: PlanService,
+    access_token: String,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -366,6 +369,7 @@ pub async fn handle_execute_plan_until(
         ui_sender,
         editor_url,
         cancellation_token,
+        access_token,
     );
 
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -430,6 +434,7 @@ pub async fn handle_check_references_and_stream(
     plan_id: uuid::Uuid,
     plan_service: PlanService,
     is_deep_reasoning: bool,
+    access_token: String,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -441,6 +446,7 @@ pub async fn handle_check_references_and_stream(
         ui_sender,
         editor_url,
         cancellation_token,
+        access_token,
     );
 
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -506,6 +512,7 @@ pub async fn handle_create_plan(
     plan_storage_path: String,
     plan_service: PlanService,
     is_deep_reasoning: bool,
+    access_token: String,
 ) -> Result<
     Sse<std::pin::Pin<Box<dyn tokio_stream::Stream<Item = anyhow::Result<sse::Event>> + Send>>>,
 > {
@@ -521,6 +528,7 @@ pub async fn handle_create_plan(
             plan_service,
             is_deep_reasoning,
             sender,
+            access_token,
         )
         .await;
     });

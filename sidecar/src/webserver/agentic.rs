@@ -1180,6 +1180,7 @@ pub struct AgenticReasoningThreadCreationRequest {
     user_context: UserContext,
     #[serde(default)]
     is_deep_reasoning: bool,
+    access_token: String,
 }
 
 // this is PlanResponse on IDE. using pub here cuz lazy
@@ -1200,6 +1201,7 @@ pub async fn reasoning_thread_create(
         editor_url,
         user_context,
         is_deep_reasoning,
+        access_token,
     }): Json<AgenticReasoningThreadCreationRequest>,
 ) -> Result<impl IntoResponse> {
     println!("webserver::agentic::reasoning_thread_create");
@@ -1223,6 +1225,7 @@ pub async fn reasoning_thread_create(
         plan_service,
         is_deep_reasoning,
         sender,
+        access_token,
     )
     .await;
     let response = match plan_output {

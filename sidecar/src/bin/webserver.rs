@@ -16,6 +16,12 @@ use tokio::sync::oneshot;
 use tower_http::{catch_panic::CatchPanicLayer, cors::CorsLayer};
 use tracing::{debug, error, info};
 
+use axum::http::header::AUTHORIZATION;
+use axum::{
+    http::{Request, StatusCode},
+    middleware::{from_fn, Next},
+    response::Response,
+};
 pub type Router<S = Application> = axum::Router<S>;
 
 #[tokio::main]
@@ -80,13 +86,59 @@ pub async fn run(application: Application) -> Result<()> {
     Ok(())
 }
 
+async fn auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+    // Get token from Authorization header
+    let auth_header = request
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|header| header.to_str().ok());
+
+    dbg!(&auth_header);
+
+    match auth_header {
+        Some(token) => {
+            // Check if token starts with "Bearer "
+            if let Some(token) = token.strip_prefix("Bearer ") {
+                // Validate token here
+                if is_valid_token(token) {
+                    Ok(next.run(request).await)
+                } else {
+                    Err(StatusCode::UNAUTHORIZED)
+                }
+            } else {
+                Err(StatusCode::UNAUTHORIZED)
+            }
+        }
+        None => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
+// Token validation function (implement your own logic)
+fn is_valid_token(token: &str) -> bool {
+    println!("webserver::is_valid_token::token({})", token);
+    // Implement your token validation logic here
+    // For example, check against a valid token list or verify JWT
+
+    false
+}
+
 // TODO(skcd): Add routes here which can do the following:
 // - when a file changes, it should still be logged and tracked
 // - when a file is opened, it should be tracked over here too
 pub async fn start(app: Application) -> anyhow::Result<()> {
     println!("Port: {}", app.config.port);
     let bind = SocketAddr::new(app.config.host.parse()?, app.config.port);
-    let mut api = Router::new()
+
+    // routes through middleware
+    let protected_routes = Router::new()
+        .nest("/inline_completion", inline_completion())
+        .nest("/agentic", agentic_router())
+        .nest("/plan", plan_router())
+        .nest("/agent", agent_router())
+        .layer(from_fn(auth_middleware)); // routes through middleware
+
+    // no middleware check
+    let public_routes = Router::new()
         .route("/config", get(sidecar::webserver::config::get))
         .route(
             "/reach_the_devs",
@@ -94,13 +146,12 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         )
         .route("/version", get(sidecar::webserver::config::version))
         .nest("/repo", repo_router())
-        .nest("/agent", agent_router())
         .nest("/in_editor", in_editor_router())
         .nest("/tree_sitter", tree_sitter_router())
-        .nest("/file", file_operations_router())
-        .nest("/inline_completion", inline_completion())
-        .nest("/agentic", agentic_router())
-        .nest("/plan", plan_router());
+        .nest("/file", file_operations_router());
+
+    // both protected and public merged into api
+    let mut api = Router::new().merge(protected_routes).merge(public_routes);
 
     api = api.route("/health", get(sidecar::webserver::health::health));
 

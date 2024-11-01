@@ -474,14 +474,14 @@ pub async fn swe_bench(
     //         LLMType::GeminiPro,
     //         LLMProvider::GoogleAIStudio,
     //         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-    //             "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    //             "".to_owned(),
     //         )),
     //     ),
     // ));
     // let user_context = UserContext::new(vec![], vec![], None, vec![git_dname]);
     // let model = LLMType::ClaudeSonnet;
     // let provider_type = LLMProvider::Anthropic;
-    // let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    // let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned()));
     // let symbol_manager = SymbolManager::new(
     //     tool_broker,
     //     app.symbol_tracker.clone(),

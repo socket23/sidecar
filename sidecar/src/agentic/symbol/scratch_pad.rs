@@ -504,7 +504,7 @@ impl ScratchPadAgent {
             user_context,
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
             user_query.to_owned(),
             edit_request_id.to_owned(),
             edit_request_id,
@@ -620,7 +620,7 @@ impl ScratchPadAgent {
             let llm_properties = LLMProperties::new(
                 LLMType::ClaudeSonnet,
                 LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
             );
 
             let ts_parsing = Arc::new(TSLanguageParsing::init());

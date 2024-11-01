@@ -58,9 +58,8 @@ async fn main() {
             "s8Y7yIXdL0lMeHHgvbZXS77oGtBAHAsfsLviL2AKnzuGpg1n".to_owned(),
         )),
     );
-    let _google_ai_studio_api_keys = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
-    ));
+    let _google_ai_studio_api_keys =
+        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("".to_owned()));
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
     let tool_broker = Arc::new(ToolBroker::new(
@@ -77,14 +76,12 @@ async fn main() {
         LLMProperties::new(
             LLMType::Gpt4O,
             LLMProvider::OpenAI,
-            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
-            )),
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("".to_owned())),
         ), // LLMProperties::new(
            //     LLMType::GeminiPro,
            //     LLMProvider::GoogleAIStudio,
            //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-           //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+           //         "".to_owned(),
            //     )),
            // ),
     ));

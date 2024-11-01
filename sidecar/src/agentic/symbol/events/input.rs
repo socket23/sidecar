@@ -246,7 +246,7 @@ impl SymbolInputEvent {
                                 LLMType::GeminiProFlash,
                                 LLMProvider::GoogleAIStudio,
                                 LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                                    "".to_owned(),
                                 )),
                                 Some(root_directory),
                                 self.request_id.root_request_id().to_string(),

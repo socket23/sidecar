@@ -5706,7 +5706,7 @@ FILEPATH: {fs_file_path}
                     LLMType::GeminiProFlash,
                     LLMProvider::GoogleAIStudio,
                     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                        "".to_owned(),
                     )),
                 ),
                 // this is the special request id sent along with every edit which we want to make
@@ -6802,7 +6802,7 @@ FILEPATH: {fs_file_path}
                 LLMType::GeminiProFlash,
                 LLMProvider::GoogleAIStudio,
                 LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                    "".to_owned(),
                 )),
             ),
             message_properties.root_request_id().to_owned(),
@@ -8787,7 +8787,7 @@ FILEPATH: {fs_file_path}
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
         );
 
         // we use the same session id for the exchange id
@@ -9169,7 +9169,7 @@ FILEPATH: {fs_file_path}
         message_properties: SymbolEventMessageProperties,
     ) {
         let start = std::time::Instant::now();
-        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+        let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned()));
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,

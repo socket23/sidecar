@@ -9,7 +9,7 @@ use llm_client::{
 #[tokio::main]
 async fn main() {
     let api_key = LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-        "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+        "".to_owned(),
     ));
     let _request = LLMClientCompletionRequest::from_messages(
         vec![

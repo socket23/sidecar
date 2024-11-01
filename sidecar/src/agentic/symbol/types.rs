@@ -1007,7 +1007,7 @@ impl Symbol {
                         LLMType::GeminiPro,
                         LLMProvider::GoogleAIStudio,
                         LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                            "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                            "".to_owned(),
                         )),
                     ),
                     original_request,
@@ -1109,7 +1109,7 @@ impl Symbol {
                 LLMType::GeminiPro,
                 LLMProvider::GoogleAIStudio,
                 LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                    "".to_owned(),
                 )),
                 message_properties.root_request_id().to_owned(),
             );

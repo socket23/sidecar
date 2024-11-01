@@ -113,7 +113,7 @@ impl Application {
                 LLMType::Gpt4O,
                 LLMProvider::OpenAI,
                 LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(), // should this go too?
                 )),
             ),
         ));
@@ -129,7 +129,7 @@ impl Application {
             LLMProperties::new(
                 LLMType::ClaudeSonnet,
                 LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
             ),
         ));
         let session_service = Arc::new(SessionService::new(

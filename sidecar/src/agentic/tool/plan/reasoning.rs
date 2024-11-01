@@ -143,7 +143,7 @@ impl Tool for ReasoningClient {
         let llm_properties = LLMProperties::new(
             LLMType::O1Preview,
             LLMProvider::OpenAI,
-            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("sk-GF8nCfhNTszdK_rr96cxH2vNEQw6aLa4V5FhTka80aT3BlbkFJWS6GYYDuNGSDwqjEuZTSDG2R2EYcHPp14mx8DL6HIA".to_owned())),
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("".to_owned())),
         );
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let model_str = llm_properties.llm().to_string();

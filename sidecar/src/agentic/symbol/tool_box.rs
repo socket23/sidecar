@@ -5524,6 +5524,7 @@ FILEPATH: {fs_file_path}
             sub_symbol.plan_step_id(),
             sub_symbol.previous_message(),
             message_properties.cancellation_token(),
+            message_properties.access_token().to_owned(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5620,6 +5621,7 @@ FILEPATH: {fs_file_path}
         });
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
+        let access_token = message_properties.access_token().to_owned();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5652,6 +5654,7 @@ FILEPATH: {fs_file_path}
             None,
             session_id.to_owned(),
             exchange_id.to_owned(),
+            access_token,
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -5748,6 +5751,8 @@ FILEPATH: {fs_file_path}
             .unwrap_or("".to_owned());
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
+        
+        let access_token = message_properties.access_token().to_owned();
         let new_symbols_edited = symbol_edited_list.map(|symbol_list| {
             symbol_list
                 .into_iter()
@@ -5794,6 +5799,7 @@ FILEPATH: {fs_file_path}
             user_provided_context,
             session_id,
             exchange_id,
+            access_token,
         ));
         self.tools
             .invoke(request)
@@ -8801,6 +8807,7 @@ FILEPATH: {fs_file_path}
             None,
             vec![],
             message_properties.cancellation_token(),
+            message_properties.access_token().to_owned(),
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();

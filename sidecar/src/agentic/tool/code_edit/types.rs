@@ -61,6 +61,7 @@ pub struct CodeEdit {
     session_id: String,
     // The exchange id to which the edit belongs
     exchange_id: String,
+    access_token: String,
 }
 
 impl CodeEdit {
@@ -89,6 +90,7 @@ impl CodeEdit {
         user_provided_context: Option<String>,
         session_id: String,
         exchange_id: String,
+        access_token: String,
     ) -> Self {
         Self {
             code_above,
@@ -115,7 +117,12 @@ impl CodeEdit {
             user_provided_context,
             session_id,
             exchange_id,
+            access_token,
         }
+    }
+
+    pub fn access_token(&self) -> &str {
+        &self.access_token
     }
 }
 

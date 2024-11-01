@@ -8,6 +8,7 @@ use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
+    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -99,6 +100,8 @@ pub struct SearchAndReplaceEditingRequest {
     previous_messages: Vec<SessionChatMessage>,
     // cancellation token
     cancellation_token: tokio_util::sync::CancellationToken,
+    // to authenticate a user session
+    access_token: String,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -128,6 +131,7 @@ impl SearchAndReplaceEditingRequest {
         plan_step_id: Option<String>,
         previous_messages: Vec<SessionChatMessage>,
         cancellation_token: tokio_util::sync::CancellationToken,
+        access_token: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -153,6 +157,7 @@ impl SearchAndReplaceEditingRequest {
             plan_step_id,
             previous_messages,
             cancellation_token,
+            access_token,
         }
     }
 }
@@ -592,6 +597,7 @@ impl Tool for SearchAndReplaceEditing {
         let is_warmup = context.is_warmup;
         let previous_messages = context.previous_messages.to_vec();
         let cancellation_token = context.cancellation_token.clone();
+        let access_token = context.access_token.clone();
         let whole_file_context = context.complete_file.to_owned();
         let start_line = 0;
         let symbol_identifier = context.symbol_identifier.clone();
@@ -627,6 +633,15 @@ impl Tool for SearchAndReplaceEditing {
         let exchange_id = context.exchange_id.to_owned();
         let session_id = context.session_id.to_owned();
         let llm_properties = context.llm_properties.clone();
+
+        let llm_type = llm_properties.llm().clone();
+
+        // zi: putting codestory provider here
+        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
+        let codestory_access_token = CodestoryAccessToken {
+            access_token,
+        };
+
         let root_request_id = context.root_request_id.to_owned();
         let plan_step_id = context.plan_step_id.clone();
         let system_message = LLMClientMessage::system(self.system_message());
@@ -644,7 +659,7 @@ impl Tool for SearchAndReplaceEditing {
         let user_messages = self.user_messages(context);
         let example_messages = self.example_messages();
         let mut request = LLMClientCompletionRequest::new(
-            llm_properties.llm().clone(),
+            llm_type,
             vec![system_message]
                 .into_iter()
                 .chain(previous_messages)
@@ -663,9 +678,9 @@ impl Tool for SearchAndReplaceEditing {
         let llm_response = tokio::spawn(async move {
             cloned_llm_client
                 .stream_completion(
-                    llm_properties.api_key().clone(),
+                    LLMProviderAPIKeys::CodeStory(codestory_access_token),
                     request,
-                    llm_properties.provider().clone(),
+                    llm_provider,
                     vec![
                         (
                             "event_type".to_owned(),

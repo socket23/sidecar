@@ -465,9 +465,6 @@ impl Tool for StepGeneratorClient {
             Self::user_message(context.user_query(), context.user_context()).await,
         ));
 
-        // delete!
-        // let is_deep_reasoning = true;
-
         let request = if is_deep_reasoning {
             LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)
         } else {

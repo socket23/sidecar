@@ -208,7 +208,6 @@ impl CodeStoryClient {
     }
 
     pub fn model_endpoint(&self, model: &LLMType) -> Result<String, LLMClientError> {
-        println!("codestory::model_endpoint::{:?}", &model);
         match model {
             LLMType::GPT3_5_16k => Ok(self.gpt3_endpoint(&self.api_base)),
             LLMType::Gpt4 => Ok(self.gpt4_endpoint(&self.api_base)),

@@ -74,7 +74,7 @@ impl LLMBroker {
             .add_provider(
                 LLMProvider::CodeStory(CodeStoryLLMTypes { llm_type: None }),
                 Box::new(CodeStoryClient::new(
-                    "https://9a64-80-209-142-211.ngrok-free.app", // changing this for debugging
+                    "https://codestory-provider-dot-anton-390822.ue.r.appspot.com",
                 )),
             )
             .add_provider(LLMProvider::FireworksAI, Box::new(FireworksAIClient::new()))

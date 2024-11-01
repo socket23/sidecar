@@ -1535,7 +1535,7 @@ mod tests {
 
     let model = LLMType::ClaudeSonnet;
     let provider_type = LLMProvider::Anthropic;
-    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned()));
+    let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned()));
     let symbol_manager = SymbolManager::new(
         tool_broker,
         app.symbol_tracker.clone(),
@@ -1672,7 +1672,7 @@ mod tests {
 
     let model: LLMType = LLMType::ClaudeSonnet;
     let provider_type: LLMProvider = LLMProvider::Anthropic;
-    let anthropic_api_keys: LLMProviderAPIKeys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(api_key: "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".to_owned()));
+    let anthropic_api_keys: LLMProviderAPIKeys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new(api_key: "".to_owned()));
     let symbol_manager: SymbolManager = SymbolManager::new(
         tools: tool_broker,
         symbol_broker: app.symbol_tracker.clone(),

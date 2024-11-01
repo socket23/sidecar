@@ -466,7 +466,7 @@ impl Tool for StepGeneratorClient {
         ));
 
         // delete!
-        let is_deep_reasoning = true;
+        // let is_deep_reasoning = true;
 
         let request = if is_deep_reasoning {
             LLMClientCompletionRequest::new(LLMType::O1Preview, messages, 0.2, None)

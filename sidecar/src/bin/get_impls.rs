@@ -96,12 +96,16 @@ async fn main() {
         anthropic_llm_properties.clone(),
     );
 
+    // fill this
+    let access_token = String::from("");
+
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(request_id_str.clone(), request_id_str.clone()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
     let root_directory = "/Users/zi/codestory/testing/sidecar".to_owned();
     let fs_file_path =

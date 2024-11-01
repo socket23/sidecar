@@ -66,11 +66,14 @@ async fn main() {
     // File where you have made changes
     let fs_file_path = "/Users/skcd/scratch/sidecar/llm_client/src/clients/types.rs";
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    // fill this
+    let access_token = String::from("");
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
         sender.clone(),
         editor_url.to_owned(),
         tokio_util::sync::CancellationToken::new(),
+        access_token,
     );
     let response = tool_box
         .get_outline_nodes_using_editor(fs_file_path, event_properties)

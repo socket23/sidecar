@@ -122,6 +122,8 @@ async fn main() {
     );
 
     let (response_sender, response_receiver) = tokio::sync::oneshot::channel();
+    // fill this
+    let access_token = String::from("");
     let symbol_message_request = SymbolEventMessage::new(
         probe_request,
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),
@@ -129,6 +131,7 @@ async fn main() {
         response_sender,
         tokio_util::sync::CancellationToken::new(),
         editor_url.to_owned(),
+        access_token,
     );
     let mut probe_task =
         Box::pin(symbol_manager.probe_request(symbol_message_request, response_receiver));

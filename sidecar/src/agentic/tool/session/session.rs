@@ -726,6 +726,8 @@ impl Session {
         if last_exchange.is_none() {
             return Ok(self);
         }
+
+        // plan and edit todos are intentional. Should never be hit, but double check @skcd
         match exchange_reply {
             AideAgentMode::Chat => self.chat_reply(tool_box, message_properties).await,
             AideAgentMode::Plan => {
@@ -787,7 +789,9 @@ impl Session {
         }
 
         let exchange_id = message_properties.request_id_str().to_owned();
+        let access_token = message_properties.access_token().to_owned();
 
+        // ok, refactor starts here. Pass access token.
         let tool_input = SessionChatClientRequest::new(
             tool_box
                 .recently_edited_files(Default::default(), message_properties.clone())
@@ -800,6 +804,7 @@ impl Session {
             exchange_id.to_owned(),
             message_properties.ui_sender(),
             message_properties.cancellation_token(),
+            access_token,
         );
         let chat_output = tool_box
             .tools()

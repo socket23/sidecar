@@ -75,6 +75,7 @@ pub struct SessionChatClientRequest {
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     cancellation_token: tokio_util::sync::CancellationToken,
+    access_token: String,
 }
 
 impl SessionChatClientRequest {
@@ -88,6 +89,7 @@ impl SessionChatClientRequest {
         exchange_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
         cancellation_token: tokio_util::sync::CancellationToken,
+        access_token: String,
     ) -> Self {
         Self {
             diff_recent_edits,
@@ -99,6 +101,7 @@ impl SessionChatClientRequest {
             project_labels,
             ui_sender,
             cancellation_token,
+            access_token,
         }
     }
 }

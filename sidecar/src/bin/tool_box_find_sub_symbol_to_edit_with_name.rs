@@ -62,7 +62,7 @@ async fn main() {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    /// update as necessary
+    // update as necessary
     let access_token = String::from("");
     let event_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new("".to_owned(), "".to_owned()),

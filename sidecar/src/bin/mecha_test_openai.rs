@@ -77,7 +77,7 @@ async fn main() {
     let llm_properties = LLMProperties::new(LLMType::Gpt4O, LLMProvider::OpenAI, api_key.clone());
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    /// fill this
+    // fill this
     let access_token = String::from("");
 
     let _event_properties = SymbolEventMessageProperties::new(

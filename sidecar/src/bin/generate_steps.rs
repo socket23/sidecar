@@ -75,7 +75,7 @@ async fn main() {
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
-    /// fill this
+    // fill this
     let access_token = String::from("");
 
     let _event_properties = SymbolEventMessageProperties::new(

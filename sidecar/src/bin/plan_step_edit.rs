@@ -74,7 +74,7 @@ async fn main() {
         ),
     ));
 
-    /// update as necessary
+    // update as necessary
     let access_token = String::from("");
 
     let user_context = UserContext::new(vec![], vec![], None, vec![]);

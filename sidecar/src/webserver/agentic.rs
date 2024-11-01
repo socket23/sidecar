@@ -1497,6 +1497,7 @@ pub struct AgentSessionChatRequest {
     project_labels: Vec<String>,
     #[serde(default)]
     codebase_search: bool,
+    access_token: String,
 }
 
 /// Handles the agent session and either creates it or appends to it
@@ -1515,6 +1516,7 @@ pub async fn agent_session_chat(
         project_labels,
         root_directory: _root_directory,
         codebase_search: _codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1611,6 +1613,7 @@ pub async fn agent_session_edit_anchored(
         project_labels,
         root_directory: _root_directory,
         codebase_search: _codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1718,6 +1721,7 @@ pub async fn agent_session_edit_agentic(
         project_labels,
         root_directory,
         codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1827,6 +1831,7 @@ pub async fn agent_session_plan(
         project_labels,
         root_directory,
         codebase_search,
+        access_token,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later

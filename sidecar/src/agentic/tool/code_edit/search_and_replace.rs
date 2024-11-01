@@ -8,7 +8,6 @@ use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
-    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -597,7 +596,6 @@ impl Tool for SearchAndReplaceEditing {
         let is_warmup = context.is_warmup;
         let previous_messages = context.previous_messages.to_vec();
         let cancellation_token = context.cancellation_token.clone();
-        let access_token = context.access_token.clone();
         let whole_file_context = context.complete_file.to_owned();
         let start_line = 0;
         let symbol_identifier = context.symbol_identifier.clone();
@@ -634,14 +632,6 @@ impl Tool for SearchAndReplaceEditing {
         let session_id = context.session_id.to_owned();
         let llm_properties = context.llm_properties.clone();
 
-        let llm_type = llm_properties.llm().clone();
-
-        // zi: putting codestory provider here
-        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
-        let codestory_access_token = CodestoryAccessToken {
-            access_token,
-        };
-
         let root_request_id = context.root_request_id.to_owned();
         let plan_step_id = context.plan_step_id.clone();
         let system_message = LLMClientMessage::system(self.system_message());
@@ -659,7 +649,7 @@ impl Tool for SearchAndReplaceEditing {
         let user_messages = self.user_messages(context);
         let example_messages = self.example_messages();
         let mut request = LLMClientCompletionRequest::new(
-            llm_type,
+            llm_properties.llm().to_owned(),
             vec![system_message]
                 .into_iter()
                 .chain(previous_messages)
@@ -678,9 +668,9 @@ impl Tool for SearchAndReplaceEditing {
         let llm_response = tokio::spawn(async move {
             cloned_llm_client
                 .stream_completion(
-                    LLMProviderAPIKeys::CodeStory(codestory_access_token),
+                    llm_properties.api_key().to_owned(),
                     request,
-                    llm_provider,
+                    llm_properties.provider().to_owned(),
                     vec![
                         (
                             "event_type".to_owned(),

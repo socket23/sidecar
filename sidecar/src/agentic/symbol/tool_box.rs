@@ -6,7 +6,7 @@ use std::time::Instant;
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{
-    AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys,
+    AnthropicAPIKey, CodeStoryLLMTypes, CodestoryAccessToken, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -5495,18 +5495,28 @@ FILEPATH: {fs_file_path}
 
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
+        let access_token = message_properties.access_token().to_owned();
         println!("code_editing_with_search_and_replace::session_id({})::exchange_id({})", &session_id, &exchange_id);
+
+        let codestory_access_token = CodestoryAccessToken {
+            access_token,
+        };
+        let llm_type = LLMType::ClaudeSonnet;
+        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
+
+        let llm_properties = LLMProperties::new(
+            llm_type,
+            llm_provider,
+            LLMProviderAPIKeys::CodeStory(codestory_access_token),
+        );
+
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
             in_range_selection,
             file_content.to_owned(),
             extra_context,
-            LLMProperties::new(
-                LLMType::ClaudeSonnet,
-                LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-            ),
+            llm_properties,
             symbols_to_edit,
             instruction,
             message_properties.root_request_id().to_owned(),

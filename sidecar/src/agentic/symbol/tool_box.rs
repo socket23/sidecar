@@ -9521,6 +9521,7 @@ FILEPATH: {fs_file_path}
             message_properties.ui_sender(),
             step_sender,
             message_properties.cancellation_token(),
+            message_properties.access_token().to_owned(),
         )
         .with_user_context(user_context);
         println!("tool_box::generate_plan::start");

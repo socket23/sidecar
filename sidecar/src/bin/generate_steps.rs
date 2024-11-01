@@ -115,6 +115,9 @@ async fn main() {
 
     let user_context = UserContext::new(vec![], file_contents, None, vec![]); // this is big, should be passed using references
 
+    // fill this
+    let access_token = "".to_string();
+
     // toggle this to true to use o1-preview for planning
     let (ui_sender, _ui_receiver) = tokio::sync::mpsc::unbounded_channel();
     let is_deep_reasoning = false;
@@ -129,6 +132,7 @@ async fn main() {
         ui_sender,
         None,
         cancellation_token,
+        access_token,
     )
     .with_user_context(&user_context);
 

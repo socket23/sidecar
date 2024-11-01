@@ -24,9 +24,7 @@ use futures::StreamExt;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{
-        AnthropicAPIKey, CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys,
-    },
+    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
 };
 use tokio::sync::mpsc::UnboundedSender;
 

@@ -161,7 +161,7 @@ impl Tool for PlanUpdaterClient {
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
         );
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
 

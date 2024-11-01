@@ -1160,7 +1160,7 @@ pub async fn code_editing(
     //     LLMType::GeminiPro,
     //     LLMProvider::GoogleAIStudio,
     //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-    //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+    //         "".to_owned(),
     //     )),
     // );
     let fireworks_ai = LLMProperties::new(

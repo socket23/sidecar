@@ -549,12 +549,12 @@ impl Tool for ScratchPadAgentBroker {
         let llm_properties = LLMProperties::new(
             LLMType::ClaudeSonnet,
             LLMProvider::Anthropic,
-            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
         );
         let _llm_properties = LLMProperties::new(
             LLMType::O1Preview,
             LLMProvider::OpenAI,
-            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
+            LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("".to_owned())),
         );
         let system_message = LLMClientMessage::system(self.system_message());
         let user_messages_context = self.user_message(context, llm_properties.llm().clone());

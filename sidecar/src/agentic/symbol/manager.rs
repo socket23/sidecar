@@ -198,7 +198,7 @@ impl SymbolManager {
                 LLMType::GeminiPro,
                 LLMProvider::GoogleAIStudio,
                 llm_client::provider::LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                    "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+                    "".to_owned(),
                 )),
                 request_id_ref.root_request_id().to_owned(),
                 outline,

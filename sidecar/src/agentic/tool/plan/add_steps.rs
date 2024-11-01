@@ -277,16 +277,16 @@ impl Tool for PlanAddStepClient {
 
         let llm_properties = if is_deep_reasoning {
             LLMProperties::new(
-                    LLMType::O1Preview,
-                    LLMProvider::OpenAI,
-                    LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("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".to_owned())),
-                )
+                LLMType::O1Preview,
+                LLMProvider::OpenAI,
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("".to_owned())),
+            )
         } else {
             LLMProperties::new(
-                    LLMType::ClaudeSonnet,
-                    LLMProvider::Anthropic,
-                    LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("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".to_owned())),
-                )
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
+            )
         };
 
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();

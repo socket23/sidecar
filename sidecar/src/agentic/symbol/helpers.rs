@@ -1499,13 +1499,13 @@ mod tests {
             LLMType::Gpt4O,
             LLMProvider::OpenAI,
             LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                "".to_owned(),
             )),
         ), // LLMProperties::new(
            //     LLMType::GeminiPro,
            //     LLMProvider::GoogleAIStudio,
            //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-           //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+           //         "".to_owned(),
            //     )),
            // ),
     ));
@@ -1636,13 +1636,13 @@ mod tests {
             llm: LLMType::Gpt4O,
             provider: LLMProvider::OpenAI,
             api_keys: LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                api_key: "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(),
+                api_key: "".to_owned(),
             )),
         ), // LLMProperties::new(
            //     LLMType::GeminiPro,
            //     LLMProvider::GoogleAIStudio,
            //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-           //         "AIzaSyCMkKfNkmjF8rTOWMg53NiYmz0Zv6xbfsE".to_owned(),
+           //         "".to_owned(),
            //     )),
            // ),
     ));

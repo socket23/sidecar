@@ -100,7 +100,7 @@ async fn auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Respon
             // Check if token starts with "Bearer "
             if let Some(token) = token.strip_prefix("Bearer ") {
                 // Validate token here
-                if is_valid_token(token) {
+                if is_valid_token(token).await {
                     Ok(next.run(request).await)
                 } else {
                     Err(StatusCode::UNAUTHORIZED)
@@ -114,12 +114,29 @@ async fn auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Respon
 }
 
 // Token validation function (implement your own logic)
-fn is_valid_token(token: &str) -> bool {
+async fn is_valid_token(token: &str) -> bool {
     println!("webserver::is_valid_token::token({})", token);
-    // Implement your token validation logic here
-    // For example, check against a valid token list or verify JWT
 
-    false
+    match validate_workos_token(token).await {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+async fn validate_workos_token(token: &str) -> Result<bool> {
+    let client = reqwest::Client::new();
+
+    let auth_proxy_endpoint = "";
+
+    let response = client
+        .get(auth_proxy_endpoint)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await?;
+
+    dbg!(&response);
+
+    Ok(response.status().is_success())
 }
 
 // TODO(skcd): Add routes here which can do the following:

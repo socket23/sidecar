@@ -203,6 +203,7 @@ impl CodeStoryClient {
     }
 
     pub fn model_endpoint(&self, model: &LLMType) -> Result<String, LLMClientError> {
+        println!("codestory::model_endpoint::{:?}", &model);
         match model {
             LLMType::GPT3_5_16k => Ok(self.gpt3_endpoint(&self.api_base)),
             LLMType::Gpt4 => Ok(self.gpt4_endpoint(&self.api_base)),
@@ -233,21 +234,9 @@ impl CodeStoryClient {
     }
 
     // returns codestory access token
-    fn _access_token(&self, api_key: LLMProviderAPIKeys) -> Result<String, LLMClientError> {
+    fn access_token(&self, api_key: LLMProviderAPIKeys) -> Result<String, LLMClientError> {
         match api_key {
             LLMProviderAPIKeys::CodeStory(api_key) => Ok(api_key.access_token),
-            _ => Err(LLMClientError::WrongAPIKeyType),
-        }
-    }
-
-    fn access_token_as_bearer(
-        &self,
-        api_key: LLMProviderAPIKeys,
-    ) -> Result<String, LLMClientError> {
-        match api_key {
-            LLMProviderAPIKeys::CodeStory(access_token) => {
-                Ok(format!("Bearer {}", access_token.access_token))
-            }
             _ => Err(LLMClientError::WrongAPIKeyType),
         }
     }
@@ -279,7 +268,7 @@ impl LLMClient for CodeStoryClient {
         let endpoint = self.model_endpoint(request.model())?;
 
         // get access token from api_key
-        let access_token = self.access_token_as_bearer(api_key)?;
+        let access_token = self.access_token(api_key)?;
 
         let request = CodeStoryRequest::from_chat_request(request, model.to_owned());
         let mut response_stream = self

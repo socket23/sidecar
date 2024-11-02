@@ -123,6 +123,7 @@ pub enum StepSenderEvent {
 #[derive(Debug, Clone)]
 pub struct StepGeneratorRequest {
     user_query: String,
+    previous_queries: Vec<String>,
     previous_messages: Vec<SessionChatMessage>,
     user_context: Option<UserContext>,
     is_deep_reasoning: bool,
@@ -143,6 +144,7 @@ pub struct StepGeneratorRequest {
 impl StepGeneratorRequest {
     pub fn new(
         user_query: String,
+        previous_queries: Vec<String>,
         is_deep_reasoning: bool,
         previous_messages: Vec<SessionChatMessage>,
         root_request_id: String,
@@ -155,6 +157,7 @@ impl StepGeneratorRequest {
     ) -> Self {
         Self {
             user_query,
+            previous_queries,
             previous_messages,
             root_request_id,
             editor_url,
@@ -171,6 +174,10 @@ impl StepGeneratorRequest {
 
     pub fn user_query(&self) -> &str {
         &self.user_query
+    }
+
+    pub fn previous_queries(&self) -> &[String] {
+        self.previous_queries.as_slice()
     }
 
     pub fn access_token(&self) -> &str {
@@ -347,13 +354,14 @@ Separation of Concerns: Keeps execution state separate from other data, making t
 
     pub fn system_message() -> String {
         format!(
-            r#"You are a senior software engineer, expert planner and system architect.
+            r#"You are a senior software engineer, expert planner and system architect working alongside a software engineer.
 - Given a request and context, you will generate a step by step plan to accomplish it. Use prior art seen in context where applicable.
 - Your job is to be precise and effective, so avoid extraneous steps even if they offer convenience.
 - Do not talk about testing out the changes unless you are instructed to do so.
 - Please ensure that each step includes all required fields and that the steps are logically ordered.
 - Please ensure each code block you emit is INDENTED either using spaces or tabs the original context.
 - Always give the full path in <file> section, do not use the user friendly name but the original path as present on the disk.
+- The software developer might not be happy with the state of the plan and could ask you to iterate on the plan, you are given the previous requests for iteration on the plan in "Previous queries" section. Use this to understand the intent and the direction of the user (only if this section is present).
 - Each step you suggest must only change a single file and must be a logical unit of work, logic units of work are defined as code changes where the change is complete and encapsulates a logical step forward.
 For example, if you have to import a helper function and use it in the code, it should be combined to a single step instead of it being 2 steps, one which imports the helper function and another which makes the changes.
 - Do not leave placeholder code when its the critical section of the code which you know needs to change
@@ -388,7 +396,11 @@ Each xml tag in the response should be in its own line and the content in the xm
     }
 
     // TODO(skcd): Send a reminder about the perferred output over here
-    pub async fn user_message(user_query: &str, user_context: Option<&UserContext>) -> String {
+    pub async fn user_message(
+        user_query: &str,
+        previous_queries: Vec<String>,
+        user_context: Option<&UserContext>,
+    ) -> String {
         let context_xml = match user_context {
             Some(ctx) => match ctx.to_owned().to_xml(Default::default()).await {
                 Ok(xml) => xml,
@@ -421,8 +433,9 @@ Each xml tag in the response should be in its own line and the content in the xm
 </steps>
 </response>"#;
 
-        format!(
-            "Context:
+        if previous_queries.is_empty() {
+            format!(
+                "Context:
 {context_xml}
 ---
 Request:
@@ -430,7 +443,23 @@ Request:
 ---
 Reminder for format:
 {reminder_for_format}"
-        )
+            )
+        } else {
+            let formatted_previous_queries = previous_queries.join("\n");
+            format!(
+                "Context:
+{context_xml}
+---
+Previous queries:
+{formatted_previous_queries}
+---
+Request:
+{user_query}
+---
+Reminder for format:
+{reminder_for_format}"
+            )
+        }
     }
 }
 
@@ -440,6 +469,7 @@ impl Tool for StepGeneratorClient {
         let context = ToolInput::step_generator(input)?;
 
         let previous_messages = context.previous_messages.to_vec();
+        let previous_queries = context.previous_queries().to_vec();
         let _editor_url = context.editor_url.to_owned();
         let session_id = context.root_request_id.to_owned();
         let cancellation_token = context.cancellation_token.clone();
@@ -462,7 +492,12 @@ impl Tool for StepGeneratorClient {
             }
         }));
         messages.push(LLMClientMessage::user(
-            Self::user_message(context.user_query(), context.user_context()).await,
+            Self::user_message(
+                context.user_query(),
+                previous_queries,
+                context.user_context(),
+            )
+            .await,
         ));
 
         let request = if is_deep_reasoning {

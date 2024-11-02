@@ -374,6 +374,7 @@ impl PlanService {
         &self,
         plan_id: String,
         query: String,
+        previous_queries: Vec<String>,
         mut user_context: UserContext,
         previous_messages: Vec<SessionChatMessage>,
         is_deep_reasoning: bool,
@@ -394,6 +395,7 @@ impl PlanService {
             .tool_box
             .generate_plan(
                 &query,
+                previous_queries,
                 &user_context,
                 previous_messages,
                 is_deep_reasoning,
@@ -513,32 +515,6 @@ impl PlanService {
         let _ = edit_done_receiver.await;
 
         Ok(())
-    }
-
-    /// Should drop the plan until a point
-    /// We should have the step index and then the exchange id for the plan
-    pub fn should_drop_plan(&self) -> Option<(String, usize)> {
-        None
-        // the query for dropping should look exactly like this:
-        // @drop plan_step_idx exchange_id
-        // since it will be in this format we can just parse it like this
-        // let query_parts = query
-        //     .split(' ')
-        //     .into_iter()
-        //     .map(|query_part| query_part.to_owned())
-        //     .collect::<Vec<_>>();
-        // if query_parts.len() == 3 {
-        //     let first_query_part = query_parts[1].to_owned();
-        //     let second_query_part = query_parts[2].to_owned();
-        //     Some((
-        //         second_query_part,
-        //         first_query_part
-        //             .parse::<usize>()
-        //             .expect("to work from editor"),
-        //     ))
-        // } else {
-        //     None
-        // }
     }
 
     /// Marks the plan as complete over here

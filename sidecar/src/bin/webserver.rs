@@ -286,6 +286,10 @@ fn agentic_router() -> Router {
             post(sidecar::webserver::agentic::agent_session_plan),
         )
         .route(
+            "/agent_session_plan_iterate",
+            post(sidecar::webserver::agentic::agent_session_plan_iterate),
+        )
+        .route(
             "/cancel_running_event",
             post(sidecar::webserver::agentic::cancel_running_exchange),
         )

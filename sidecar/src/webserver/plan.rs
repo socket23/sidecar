@@ -300,6 +300,7 @@ pub async fn create_plan(
         .create_plan(
             plan_id_str,
             user_query,
+            vec![],
             user_context,
             vec![],
             is_deep_reasoning,

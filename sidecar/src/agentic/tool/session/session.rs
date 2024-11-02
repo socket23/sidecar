@@ -1067,6 +1067,14 @@ impl Session {
                     message_properties.request_id_str().to_owned(),
                 ));
 
+            // send a message over here that the plan is regenerating
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::plan_regeneration(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+
             let ui_sender = message_properties.ui_sender();
             let _ = ui_sender.send(UIEventWithID::start_plan_generation(
                 session_id.to_owned(),

@@ -617,6 +617,16 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn plan_regeneration(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::RegeneratePlan(
+                RegeneratePlanExchangeEvent::new(exchange_id, session_id),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1177,6 +1187,7 @@ impl ChatMessageEvent {
 
 #[derive(Debug, serde::Serialize)]
 pub enum ExchangeMessageEvent {
+    RegeneratePlan(RegeneratePlanExchangeEvent),
     FinishedExchange(FinishedExchangeEvent),
     EditsExchangeState(EditsExchangeStateEvent),
     PlansExchangeState(EditsExchangeStateEvent),
@@ -1201,6 +1212,21 @@ pub enum EditsStateEvent {
 #[derive(Debug, serde::Serialize)]
 pub enum EditsExchangeStateEvent {
     EditsState(EditsStateEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct RegeneratePlanExchangeEvent {
+    exchange_id: String,
+    session_id: String,
+}
+
+impl RegeneratePlanExchangeEvent {
+    pub fn new(exchange_id: String, session_id: String) -> Self {
+        Self {
+            exchange_id,
+            session_id,
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]

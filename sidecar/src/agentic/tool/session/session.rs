@@ -231,7 +231,7 @@ impl Exchange {
         Self {
             exchange_id,
             exchange_type: ExchangeType::Plan(ExchangeTypePlan {
-                previous_queries: vec![query.to_owned()],
+                previous_queries: vec![],
                 query,
                 user_context,
             }),

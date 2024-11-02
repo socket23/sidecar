@@ -139,6 +139,75 @@ impl SessionService {
         Ok(())
     }
 
+    /// Takes the user iteration request and regenerates the plan a new
+    /// by reacting according to the user request
+    pub async fn plan_iteration(
+        &self,
+        session_id: String,
+        storage_path: String,
+        plan_storage_path: String,
+        plan_id: String,
+        plan_service: PlanService,
+        exchange_id: String,
+        iteration_request: String,
+        user_context: UserContext,
+        project_labels: Vec<String>,
+        repo_ref: RepoRef,
+        _root_directory: String,
+        _codebase_search: bool,
+        mut message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        // Things to figure out:
+        // - should we rollback all the changes we did before over here or build
+        // on top of it
+        // - we have to send the messages again on the same request over here
+        // which implies that the same exchange id will be used to reset the plan which
+        // has already happened
+        // - we need to also send an event stating that the review pane needs a refresh
+        // since we are generating a new request over here
+        println!("session_service::plan::plan_iteration::start");
+        let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
+        {
+            println!(
+                "session_service::load_from_storage_ok::session_id({})",
+                &session_id
+            );
+            session
+        } else {
+            self.create_new_session(
+                session_id.to_owned(),
+                project_labels.to_vec(),
+                repo_ref.clone(),
+                storage_path,
+                user_context.clone(),
+            )
+        };
+        session = session.plan_iteration(exchange_id.to_owned(), iteration_request, user_context);
+        self.save_to_storage(&session).await?;
+        // keep track of the user requests for the plan generation as well since
+        // we are iterating quite a bit
+        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        message_properties = message_properties
+            .set_request_id(exchange_id.to_owned())
+            .set_cancellation_token(cancellation_token);
+        // now we can perform the plan generation over here
+        session = session
+            .perform_plan_generation(
+                plan_service,
+                plan_id,
+                plan_storage_path,
+                self.tool_box.clone(),
+                self.symbol_manager.clone(),
+                message_properties,
+            )
+            .await?;
+        // save the session to the disk
+        self.save_to_storage(&session).await?;
+
+        println!("session_service::plan_iteration::stop");
+        Ok(())
+    }
+
     /// Generates the plan over here and upon invocation we take care of executing
     /// the steps
     pub async fn plan_generation(
@@ -175,72 +244,35 @@ impl SessionService {
             )
         };
 
-        // here we first check if we are going to revert and if we are, then we need
-        // to go back certain steps
-        if let Some((previous_exchange_id, step_index)) = plan_service.should_drop_plan() {
-            println!(
-                "dropping_plan::exchange_id({})::step_index({:?})",
-                &previous_exchange_id, &step_index
-            );
-            // we first add an exchange that the human has request us to rollback
-            // on the plan
-            session =
-                session.human_message(exchange_id, query, user_context, project_labels, repo_ref);
+        // add an exchange that we are going to genrate a plan over here
+        session = session.plan_iteration(exchange_id, query, user_context);
+        self.save_to_storage(&session).await?;
 
-            let plan_exchange_id = self
-                .tool_box
-                .create_new_exchange(session_id.to_owned(), message_properties.clone())
-                .await?;
+        // create a new exchange over here for the plan
+        let plan_exchange_id = self
+            .tool_box
+            .create_new_exchange(session_id.to_owned(), message_properties.clone())
+            .await?;
 
-            let cancellation_token = tokio_util::sync::CancellationToken::new();
-            self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())
-                .await;
-            message_properties = message_properties
-                .set_request_id(plan_exchange_id)
-                .set_cancellation_token(cancellation_token);
-
-            session = session
-                .perform_plan_revert(
-                    plan_service,
-                    previous_exchange_id,
-                    step_index,
-                    self.tool_box.clone(),
-                    message_properties,
-                )
-                .await?;
-            // save the session to the disk
-            self.save_to_storage(&session).await?;
-        } else {
-            // add an exchange that we are going to genrate a plan over here
-            session = session.plan(exchange_id, query, user_context);
-            self.save_to_storage(&session).await?;
-
-            // create a new exchange over here for the plan
-            let plan_exchange_id = self
-                .tool_box
-                .create_new_exchange(session_id.to_owned(), message_properties.clone())
-                .await?;
-
-            let cancellation_token = tokio_util::sync::CancellationToken::new();
-            self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())
-                .await;
-            message_properties = message_properties
-                .set_request_id(plan_exchange_id)
-                .set_cancellation_token(cancellation_token);
-            // now we can perform the plan generation over here
-            session = session
-                .perform_plan_generation(
-                    plan_service,
-                    plan_id,
-                    plan_storage_path,
-                    self.tool_box.clone(),
-                    self.symbol_manager.clone(),
-                    message_properties,
-                )
-                .await?;
-            // save the session to the disk
-            self.save_to_storage(&session).await?;
-        }
+        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())
+            .await;
+        message_properties = message_properties
+            .set_request_id(plan_exchange_id)
+            .set_cancellation_token(cancellation_token);
+        // now we can perform the plan generation over here
+        session = session
+            .perform_plan_generation(
+                plan_service,
+                plan_id,
+                plan_storage_path,
+                self.tool_box.clone(),
+                self.symbol_manager.clone(),
+                message_properties,
+            )
+            .await?;
+        // save the session to the disk
+        self.save_to_storage(&session).await?;
 
         println!("session_service::plan_generation::stop");
         Ok(())

@@ -5534,7 +5534,6 @@ FILEPATH: {fs_file_path}
             sub_symbol.plan_step_id(),
             sub_symbol.previous_message(),
             message_properties.cancellation_token(),
-            message_properties.access_token().to_owned(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -8817,7 +8816,6 @@ FILEPATH: {fs_file_path}
             None,
             vec![],
             message_properties.cancellation_token(),
-            message_properties.access_token().to_owned(),
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();
@@ -9505,6 +9503,7 @@ FILEPATH: {fs_file_path}
     pub async fn generate_plan(
         &self,
         user_query: &str,
+        previous_queries: Vec<String>,
         user_context: &UserContext,
         previous_messages: Vec<SessionChatMessage>,
         is_deep_reasoning: bool,
@@ -9513,6 +9512,7 @@ FILEPATH: {fs_file_path}
     ) -> Result<Vec<PlanStep>, SymbolError> {
         let step_generator_request = StepGeneratorRequest::new(
             user_query.to_owned(),
+            previous_queries,
             is_deep_reasoning,
             previous_messages,
             message_properties.root_request_id().to_owned(),

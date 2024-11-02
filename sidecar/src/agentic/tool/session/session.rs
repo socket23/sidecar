@@ -83,8 +83,12 @@ pub enum ExchangeType {
     Plan(ExchangeTypePlan),
 }
 
+// TODO(codestory): The user is probably going to add more context over here as they
+// keep iterating with their requests over here, we have to do something about it
+// or we can keep it simple and just make it so that we store the previous iterations over here
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeTypePlan {
+    previous_queries: Vec<String>,
     query: String,
     user_context: UserContext,
 }
@@ -227,6 +231,7 @@ impl Exchange {
         Self {
             exchange_id,
             exchange_type: ExchangeType::Plan(ExchangeTypePlan {
+                previous_queries: vec![query.to_owned()],
                 query,
                 user_context,
             }),
@@ -495,6 +500,36 @@ impl Session {
         self.exchanges
             .iter_mut()
             .find(|exchange| &exchange.exchange_id == exchange_id)
+    }
+
+    /// Finds the exchange we are interested in and mutates the previous queries
+    /// and the current query
+    pub fn plan_iteration(
+        mut self,
+        exchange_id: String,
+        query: String,
+        user_context: UserContext,
+    ) -> Session {
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context.clone());
+        let exchange_to_change = self
+            .exchanges
+            .iter_mut()
+            .find(|exchange| exchange.exchange_id == exchange_id);
+        if let Some(exchange_to_change) = exchange_to_change {
+            match &mut exchange_to_change.exchange_type {
+                ExchangeType::Plan(plan_exchange) => {
+                    let mut previous_queries = plan_exchange.previous_queries.to_vec();
+                    previous_queries.push(plan_exchange.query.to_owned());
+                    plan_exchange.query = query;
+                    plan_exchange.previous_queries = previous_queries;
+                    plan_exchange.user_context = user_context;
+                }
+                _ => {}
+            }
+        }
+        self
     }
 
     pub fn plan(
@@ -1002,6 +1037,9 @@ impl Session {
             exchange_id: _,
             exchange_type:
                 ExchangeType::Plan(ExchangeTypePlan {
+                    // when doing plan generation we are looking at the previous
+                    // queries
+                    previous_queries,
                     query,
                     user_context: _,
                 }),
@@ -1043,6 +1081,7 @@ impl Session {
                     .create_plan(
                         plan_id,
                         query.to_owned(),
+                        previous_queries.to_vec(),
                         // always send the global running context over here
                         global_running_context,
                         converted_messages,

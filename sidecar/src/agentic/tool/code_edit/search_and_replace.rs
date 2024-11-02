@@ -99,8 +99,6 @@ pub struct SearchAndReplaceEditingRequest {
     previous_messages: Vec<SessionChatMessage>,
     // cancellation token
     cancellation_token: tokio_util::sync::CancellationToken,
-    // to authenticate a user session
-    access_token: String,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -130,7 +128,6 @@ impl SearchAndReplaceEditingRequest {
         plan_step_id: Option<String>,
         previous_messages: Vec<SessionChatMessage>,
         cancellation_token: tokio_util::sync::CancellationToken,
-        access_token: String,
     ) -> Self {
         Self {
             fs_file_path,
@@ -156,7 +153,6 @@ impl SearchAndReplaceEditingRequest {
             plan_step_id,
             previous_messages,
             cancellation_token,
-            access_token,
         }
     }
 }

@@ -245,7 +245,7 @@ impl SessionService {
         };
 
         // add an exchange that we are going to genrate a plan over here
-        session = session.plan_iteration(exchange_id, query, user_context);
+        session = session.plan(exchange_id, query, user_context);
         self.save_to_storage(&session).await?;
 
         // create a new exchange over here for the plan

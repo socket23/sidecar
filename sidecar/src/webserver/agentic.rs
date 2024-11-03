@@ -1389,6 +1389,8 @@ pub async fn user_feedback_on_exchange(
 pub struct AgenticCancelRunningExchange {
     exchange_id: String,
     session_id: String,
+    editor_url: String,
+    access_token: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1404,6 +1406,8 @@ pub async fn cancel_running_exchange(
     Json(AgenticCancelRunningExchange {
         exchange_id,
         session_id,
+        editor_url,
+        access_token,
     }): Json<AgenticCancelRunningExchange>,
 ) -> Result<impl IntoResponse> {
     println!(
@@ -1412,6 +1416,14 @@ pub async fn cancel_running_exchange(
     );
     let session_service = app.session_service.clone();
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(exchange_id.to_owned(), session_id.to_string()),
+        sender.clone(),
+        editor_url,
+        cancellation_token.clone(),
+        access_token,
+    );
     if let Some(cancellation_token) = session_service
         .get_cancellation_token(&session_id, &exchange_id)
         .await
@@ -1442,18 +1454,14 @@ pub async fn cancel_running_exchange(
         // finished without destroying the world) or we we have to let the user
         // know that there are some edits associated with the current run and the user
         // should see the approve and reject flow
-        let send_cancellation_signal = session_service
-            .set_exchange_as_cancelled(session_storage_path, exchange_id.to_owned())
+        session_service
+            .set_exchange_as_cancelled(
+                session_storage_path,
+                exchange_id.to_owned(),
+                message_properties,
+            )
             .await
             .unwrap_or_default();
-
-        // we have to send the event only for edits not for everything
-        if send_cancellation_signal {
-            let _ = sender.send(UIEventWithID::edits_cancelled_in_exchange(
-                session_id.to_owned(),
-                exchange_id.to_owned(),
-            ));
-        }
 
         let _ = sender.send(UIEventWithID::request_cancelled(
             session_id.to_owned(),

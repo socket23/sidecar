@@ -10,6 +10,7 @@ use crate::{
         symbol::{
             errors::SymbolError, events::message_event::SymbolEventMessageProperties,
             manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
+            ui_event::UIEventWithID,
         },
         tool::plan::service::PlanService,
     },
@@ -198,9 +199,22 @@ impl SessionService {
         let user_plan_exchange_id = user_plan_request_exchange.exchange_id().to_owned();
         session = session.plan_iteration(
             user_plan_request_exchange.exchange_id().to_owned(),
-            iteration_request,
+            iteration_request.to_owned(),
             user_context,
         );
+        // send a chat message over here telling the editor about the followup:
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::chat_event(
+                session_id.to_owned(),
+                user_plan_exchange_id.to_owned(),
+                "".to_owned(),
+                Some(format!(
+                    r#"\n### Followup:
+{iteration_request}"#
+                )),
+            ));
+
         let user_plan_request_exchange =
             session.get_exchange_by_id(user_plan_request_exchange.exchange_id());
         self.save_to_storage(&session).await?;

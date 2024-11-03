@@ -294,6 +294,7 @@ impl SessionService {
             .tool_box
             .create_new_exchange(session_id.to_owned(), message_properties.clone())
             .await?;
+        println!("session_service::plan_generation::create_new_exchange::session_id({})::plan_exchange_id({})", &session_id, &plan_exchange_id);
 
         let cancellation_token = tokio_util::sync::CancellationToken::new();
         self.track_exchange(&session_id, &plan_exchange_id, cancellation_token.clone())

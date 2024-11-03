@@ -110,7 +110,7 @@ impl SessionService {
 
         // add human message
         session = session.human_message(
-            exchange_id,
+            exchange_id.to_owned(),
             human_message,
             user_context,
             project_labels,
@@ -131,7 +131,12 @@ impl SessionService {
 
         // now react to the last message
         session = session
-            .reply_to_last_exchange(agent_mode, self.tool_box.clone(), message_properties)
+            .reply_to_last_exchange(
+                agent_mode,
+                self.tool_box.clone(),
+                exchange_id,
+                message_properties,
+            )
             .await?;
 
         // save the session to the disk
@@ -182,8 +187,23 @@ impl SessionService {
                 user_context.clone(),
             )
         };
-        session = session.plan_iteration(exchange_id.to_owned(), iteration_request, user_context);
+        // One trick over here which we can do for now is keep track of the
+        // exchange which we are going to reply to this way we make sure
+        // that we are able to get the right exchange properly
+        let user_plan_request_exchange = session.get_parent_exchange_id(&exchange_id);
+        if let None = user_plan_request_exchange {
+            return Ok(());
+        }
+        let user_plan_request_exchange = user_plan_request_exchange.expect("if let None to hold");
+        session = session.plan_iteration(
+            user_plan_request_exchange.exchange_id().to_owned(),
+            iteration_request,
+            user_context,
+        );
         self.save_to_storage(&session).await?;
+        // we get the exchange using the parent id over here, since what we get
+        // here is the reply_exchange and we want to get the parent one to which we
+        // are replying since thats the source of truth
         // keep track of the user requests for the plan generation as well since
         // we are iterating quite a bit
         let cancellation_token = tokio_util::sync::CancellationToken::new();
@@ -195,6 +215,8 @@ impl SessionService {
             .perform_plan_generation(
                 plan_service,
                 plan_id,
+                user_plan_request_exchange.exchange_id().to_owned(),
+                Some(user_plan_request_exchange),
                 plan_storage_path,
                 self.tool_box.clone(),
                 self.symbol_manager.clone(),
@@ -245,8 +267,10 @@ impl SessionService {
         };
 
         // add an exchange that we are going to genrate a plan over here
-        session = session.plan(exchange_id, query, user_context);
+        session = session.plan(exchange_id.to_owned(), query, user_context);
         self.save_to_storage(&session).await?;
+
+        let exchange_in_focus = session.get_exchange_by_id(&exchange_id);
 
         // create a new exchange over here for the plan
         let plan_exchange_id = self
@@ -265,6 +289,8 @@ impl SessionService {
             .perform_plan_generation(
                 plan_service,
                 plan_id,
+                exchange_id.to_owned(),
+                exchange_in_focus,
                 plan_storage_path,
                 self.tool_box.clone(),
                 self.symbol_manager.clone(),
@@ -407,7 +433,7 @@ impl SessionService {
 
         // add an exchange that we are going to perform anchored edits
         session = session.anchored_edit(
-            exchange_id,
+            exchange_id.to_owned(),
             edit_request,
             user_context,
             selection_range,
@@ -417,7 +443,7 @@ impl SessionService {
 
         // Now we can start editing the selection over here
         session = session
-            .perform_anchored_edit(scratch_pad_agent, message_properties)
+            .perform_anchored_edit(exchange_id, scratch_pad_agent, message_properties)
             .await?;
 
         // save the session to the disk

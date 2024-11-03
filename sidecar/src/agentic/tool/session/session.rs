@@ -155,30 +155,35 @@ pub enum ExchangeReplyAgent {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeTypeAgent {
     reply: ExchangeReplyAgent,
+    /// This points to the exchange id which we are replying to as the agent
+    parent_exchange_id: String,
 }
 
 impl ExchangeTypeAgent {
-    fn chat_reply(reply: String) -> Self {
+    fn chat_reply(reply: String, parent_exchange_id: String) -> Self {
         Self {
             reply: ExchangeReplyAgent::Chat(ExchangeReplyAgentChat { reply }),
+            parent_exchange_id,
         }
     }
 
-    fn plan_reply(steps: Vec<Step>) -> Self {
+    fn plan_reply(steps: Vec<Step>, parent_exchange_id: String) -> Self {
         Self {
             reply: ExchangeReplyAgent::Plan(ExchangeReplyAgentPlan {
                 plan_steps: steps,
                 plan_discarded: false,
             }),
+            parent_exchange_id,
         }
     }
 
-    fn edits_reply(edits_made: String) -> Self {
+    fn edits_reply(edits_made: String, parent_exchange_id: String) -> Self {
         Self {
             reply: ExchangeReplyAgent::Edit(ExchangeReplyAgentEdit {
                 edits_made_diff: edits_made,
                 accepted: false,
             }),
+            parent_exchange_id,
         }
     }
 }
@@ -208,6 +213,10 @@ pub struct Exchange {
 }
 
 impl Exchange {
+    pub fn exchange_id(&self) -> &str {
+        &self.exchange_id
+    }
+
     fn human_chat(
         exchange_id: String,
         query: String,
@@ -283,26 +292,39 @@ impl Exchange {
         }
     }
 
-    fn agent_chat_reply(exchange_id: String, message: String) -> Self {
+    fn agent_chat_reply(parent_exchange_id: String, exchange_id: String, message: String) -> Self {
         Self {
             exchange_id,
-            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::chat_reply(message)),
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::chat_reply(
+                message,
+                parent_exchange_id,
+            )),
             exchange_state: ExchangeState::Running,
         }
     }
 
-    fn agent_plan_reply(exchange_id: String, steps: Vec<Step>) -> Self {
+    fn agent_plan_reply(parent_exchange_id: String, exchange_id: String, steps: Vec<Step>) -> Self {
         Self {
             exchange_id,
-            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::plan_reply(steps)),
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::plan_reply(
+                steps,
+                parent_exchange_id,
+            )),
             exchange_state: ExchangeState::Running,
         }
     }
 
-    fn agent_edits_reply(exchange_id: String, edits_response: String) -> Self {
+    fn agent_edits_reply(
+        parent_exchange_id: String,
+        exchange_id: String,
+        edits_response: String,
+    ) -> Self {
         Self {
             exchange_id,
-            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::edits_reply(edits_response)),
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::edits_reply(
+                edits_response,
+                parent_exchange_id,
+            )),
             exchange_state: ExchangeState::Running,
         }
     }
@@ -546,6 +568,28 @@ impl Session {
         self
     }
 
+    pub fn get_parent_exchange_id(&self, exchange_id: &str) -> Option<Exchange> {
+        self.exchanges
+            .iter()
+            .find(|exchange| &exchange.exchange_id == exchange_id)
+            .map(|exchange| match &exchange.exchange_type {
+                ExchangeType::AgentChat(ref agent_chat) => {
+                    Some(agent_chat.parent_exchange_id.to_owned())
+                }
+                _ => None,
+            })
+            .flatten()
+            .map(|parent_exchange_id| self.get_exchange_by_id(&parent_exchange_id))
+            .flatten()
+    }
+
+    pub fn get_exchange_by_id(&self, exchange_id: &str) -> Option<Exchange> {
+        self.exchanges
+            .iter()
+            .find(|exchange| &exchange.exchange_id == exchange_id)
+            .cloned()
+    }
+
     pub fn agentic_edit(
         mut self,
         exchange_id: String,
@@ -650,6 +694,7 @@ impl Session {
                     // post that index
                     match exchange.exchange_type {
                         ExchangeType::AgentChat(agent_exchange) => {
+                            let parent_exchange_id = agent_exchange.parent_exchange_id.to_owned();
                             let exchange_reply = match agent_exchange.reply {
                                 ExchangeReplyAgent::Plan(mut plan_step) => {
                                     if let Some(step_index) = step_index {
@@ -674,6 +719,7 @@ impl Session {
                                 exchange_id: exchange_id.to_owned(),
                                 exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent {
                                     reply: exchange_reply,
+                                    parent_exchange_id,
                                 }),
                                 exchange_state: exchange.exchange_state,
                             }
@@ -755,6 +801,7 @@ impl Session {
         self,
         exchange_reply: AideAgentMode,
         tool_box: Arc<ToolBox>,
+        parent_exchange_id: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         let last_exchange = self.last_exchange();
@@ -764,7 +811,10 @@ impl Session {
 
         // plan and edit todos are intentional. Should never be hit, but double check @skcd
         match exchange_reply {
-            AideAgentMode::Chat => self.chat_reply(tool_box, message_properties).await,
+            AideAgentMode::Chat => {
+                self.chat_reply(tool_box, parent_exchange_id, message_properties)
+                    .await
+            }
             AideAgentMode::Plan => {
                 todo!("plan branch")
             }
@@ -778,6 +828,7 @@ impl Session {
     async fn chat_reply(
         self,
         tool_box: Arc<ToolBox>,
+        parent_exchange_id: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         println!("session::chat_reply");
@@ -794,7 +845,7 @@ impl Session {
         let last_exchange_type = last_exchange.exchange_type;
         match last_exchange_type {
             ExchangeType::HumanChat(_) => {
-                self.human_chat_message_reply(tool_box, message_properties)
+                self.human_chat_message_reply(tool_box, parent_exchange_id, message_properties)
                     .await
             }
             ExchangeType::AgentChat(_agent_message) => {
@@ -813,6 +864,7 @@ impl Session {
     async fn human_chat_message_reply(
         mut self,
         tool_box: Arc<ToolBox>,
+        parent_exchange_id: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Session, SymbolError> {
         println!("session::human_chat_message_reply");
@@ -849,6 +901,7 @@ impl Session {
             .ok_or(SymbolError::WrongToolOutput)?
             .reply();
         self.exchanges.push(Exchange::agent_chat_reply(
+            parent_exchange_id,
             exchange_id.to_owned(),
             chat_output,
         ));
@@ -1027,12 +1080,16 @@ impl Session {
         mut self,
         plan_service: PlanService,
         plan_id: String,
+        parent_exchange_id: String,
+        exchange_in_focus: Option<Exchange>,
         plan_storage_path: String,
         tool_box: Arc<ToolBox>,
         symbol_manager: Arc<SymbolManager>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
-        let last_exchange = self.last_exchange().cloned();
+        // one of the bugs here is that the last exchange is now of the agent
+        // replying to the user, so the exchange type is different completely
+        // so can we pass it top down instead of getting the exchange here implicitly
         if let Some(Exchange {
             exchange_id: _,
             exchange_type:
@@ -1044,7 +1101,7 @@ impl Session {
                     user_context: _,
                 }),
             exchange_state: _,
-        }) = last_exchange
+        }) = exchange_in_focus
         {
             // take everything until the exchange id of the message we are supposed to
             // reply to
@@ -1234,6 +1291,7 @@ impl Session {
             println!("session::perform_plan_generation::finished_plan_generation");
 
             self.exchanges.push(Exchange::agent_plan_reply(
+                parent_exchange_id,
                 message_properties.request_id_str().to_owned(),
                 generated_steps,
             ));
@@ -1304,6 +1362,7 @@ impl Session {
     /// We perform the anchored edit over here
     pub async fn perform_anchored_edit(
         mut self,
+        parent_exchange_id: String,
         scratch_pad_agent: ScratchPadAgent,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
@@ -1372,11 +1431,13 @@ impl Session {
             match edits_performed {
                 Ok(edits_performed) => {
                     self.exchanges.push(Exchange::agent_edits_reply(
+                        parent_exchange_id,
                         message_properties.request_id_str().to_owned(),
                         edits_performed,
                     ));
                 }
                 Err(_) => self.exchanges.push(Exchange::agent_edits_reply(
+                    parent_exchange_id,
                     message_properties.request_id_str().to_owned(),
                     "Failed to edit selection properly".to_owned(),
                 )),

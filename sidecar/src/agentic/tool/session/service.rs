@@ -513,6 +513,7 @@ impl SessionService {
         &self,
         storage_path: String,
         exchange_id: String,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<bool, SymbolError> {
         let mut session = self.load_from_storage(storage_path).await.map_err(|e| {
             println!(
@@ -528,13 +529,7 @@ impl SessionService {
             &exchange_id, send_cancellation_signal
         );
 
-        let session = if send_cancellation_signal {
-            session = session.set_exchange_as_cancelled(&exchange_id);
-            session
-        } else {
-            session
-        };
-
+        session = session.set_exchange_as_cancelled(&exchange_id, message_properties);
         self.save_to_storage(&session).await?;
         Ok(send_cancellation_signal)
     }

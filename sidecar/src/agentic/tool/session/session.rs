@@ -1468,11 +1468,37 @@ impl Session {
         }
     }
 
-    pub fn set_exchange_as_cancelled(mut self, exchange_id: &str) -> Self {
+    pub fn set_exchange_as_cancelled(
+        mut self,
+        exchange_id: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Self {
         if self.has_running_code_edits(exchange_id) {
             let found_exchange = self.find_exchange_by_id_mut(exchange_id);
             if let Some(exchange) = found_exchange {
                 exchange.set_exchange_as_cancelled();
+                match &mut exchange.exchange_type {
+                    ExchangeType::AgentChat(ref agent_chat) => match agent_chat.reply {
+                        ExchangeReplyAgent::Edit(_) => {
+                            let _ = message_properties.ui_sender().send(
+                                UIEventWithID::edits_cancelled_in_exchange(
+                                    message_properties.root_request_id().to_owned(),
+                                    message_properties.request_id_str().to_owned(),
+                                ),
+                            );
+                        }
+                        ExchangeReplyAgent::Plan(_) => {
+                            let _ = message_properties.ui_sender().send(
+                                UIEventWithID::plan_as_cancelled(
+                                    message_properties.root_request_id().to_owned(),
+                                    message_properties.request_id_str().to_owned(),
+                                ),
+                            );
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                };
             }
         }
         self

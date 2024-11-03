@@ -533,7 +533,7 @@ impl Tool for StepGeneratorClient {
         // we have to poll both the futures in parallel and stream it back to the
         // editor so we can get it as quickly as possible
         let llm_response = run_with_cancellation(
-            cancellation_token,
+            cancellation_token.clone(),
             tokio::spawn(async move {
                 cloned_llm_client
                     .stream_completion(
@@ -557,6 +557,9 @@ impl Tool for StepGeneratorClient {
             PlanStepGenerator::new(session_id, exchange_id, ui_sender, stream_steps.clone());
         while let Some(stream_msg) = delta_stream.next().await {
             let delta = stream_msg.delta();
+            if cancellation_token.is_cancelled() {
+                break;
+            }
             if let Some(delta) = delta {
                 plan_step_incremental_parser
                     .add_delta(delta.to_owned())

@@ -784,6 +784,7 @@ impl Session {
         }
 
         // now close the exchange
+        println!("session::react_to_feedback::finished_exchange");
         let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::finished_exchange(

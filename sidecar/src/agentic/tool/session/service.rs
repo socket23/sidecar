@@ -195,11 +195,14 @@ impl SessionService {
             return Ok(());
         }
         let user_plan_request_exchange = user_plan_request_exchange.expect("if let None to hold");
+        let user_plan_exchange_id = user_plan_request_exchange.exchange_id().to_owned();
         session = session.plan_iteration(
             user_plan_request_exchange.exchange_id().to_owned(),
             iteration_request,
             user_context,
         );
+        let user_plan_request_exchange =
+            session.get_exchange_by_id(user_plan_request_exchange.exchange_id());
         self.save_to_storage(&session).await?;
         // we get the exchange using the parent id over here, since what we get
         // here is the reply_exchange and we want to get the parent one to which we
@@ -215,8 +218,8 @@ impl SessionService {
             .perform_plan_generation(
                 plan_service,
                 plan_id,
-                user_plan_request_exchange.exchange_id().to_owned(),
-                Some(user_plan_request_exchange),
+                user_plan_exchange_id,
+                user_plan_request_exchange,
                 plan_storage_path,
                 self.tool_box.clone(),
                 self.symbol_manager.clone(),

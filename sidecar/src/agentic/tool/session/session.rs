@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
+use tokio::io::AsyncWriteExt;
 
 use crate::{
     agentic::{
@@ -1114,6 +1115,17 @@ impl Session {
             let mut stream_receiver =
                 tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
 
+            // we should set our exchange over here
+            self.exchanges.push(Exchange::agent_plan_reply(
+                parent_exchange_id.to_owned(),
+                message_properties.request_id_str().to_owned(),
+                vec![],
+            ));
+            let agent_reply_exchange = self
+                .exchanges
+                .iter_mut()
+                .find(|exchange| &exchange.exchange_id == message_properties.request_id_str());
+
             let exchange_id = message_properties.request_id_str().to_owned();
             let session_id = self.session_id.to_owned();
 
@@ -1291,11 +1303,18 @@ impl Session {
 
             println!("session::perform_plan_generation::finished_plan_generation");
 
-            self.exchanges.push(Exchange::agent_plan_reply(
-                parent_exchange_id,
-                message_properties.request_id_str().to_owned(),
-                generated_steps,
-            ));
+            if let Some(agent_reply_exchange) = agent_reply_exchange {
+                match &mut agent_reply_exchange.exchange_type {
+                    ExchangeType::AgentChat(ref mut agent_chat) => match &mut agent_chat.reply {
+                        ExchangeReplyAgent::Plan(ref mut plan_reply) => {
+                            plan_reply.plan_steps = generated_steps;
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+            self.save_to_storage().await?;
 
             let _ = message_properties
                 .ui_sender()
@@ -1502,5 +1521,16 @@ impl Session {
             }
         }
         self
+    }
+
+    async fn save_to_storage(&self) -> Result<(), SymbolError> {
+        let serialized = serde_json::to_string(self).unwrap();
+        let mut file = tokio::fs::File::create(self.storage_path())
+            .await
+            .map_err(|e| SymbolError::IOError(e))?;
+        file.write_all(serialized.as_bytes())
+            .await
+            .map_err(|e| SymbolError::IOError(e))?;
+        Ok(())
     }
 }

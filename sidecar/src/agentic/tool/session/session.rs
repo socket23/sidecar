@@ -1347,13 +1347,6 @@ impl Session {
                 Err(_) => println!("Failed to edit"),
             };
 
-            // Also tell the exchange that we are in review mode now
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::edits_in_review(
-                    message_properties.root_request_id().to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                ));
             println!("session::finished_agentic_editing_exchange");
         }
         Ok(self)
@@ -1412,6 +1405,7 @@ impl Session {
                 .send(UIEventWithID::edits_started_in_exchange(
                     message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
+                    vec![fs_file_path.to_owned()],
                 ));
             let edits_performed = scratch_pad_agent
                 .anchor_editing_on_range(
@@ -1457,6 +1451,7 @@ impl Session {
                 .send(UIEventWithID::edits_in_review(
                     message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
+                    vec![fs_file_path.to_owned()],
                 ));
         }
         Ok(self)

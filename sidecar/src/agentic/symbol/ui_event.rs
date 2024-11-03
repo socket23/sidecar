@@ -438,7 +438,10 @@ impl UIEventWithID {
             request_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::InReview),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::InReview,
+                    files: vec![],
+                },
             )),
         }
     }
@@ -538,12 +541,19 @@ impl UIEventWithID {
         }
     }
 
-    pub fn edits_started_in_exchange(session_id: String, exchange_id: String) -> Self {
+    pub fn edits_started_in_exchange(
+        session_id: String,
+        exchange_id: String,
+        files: Vec<String>,
+    ) -> Self {
         Self {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::Loading),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::Loading,
+                    files,
+                },
             )),
         }
     }
@@ -553,7 +563,10 @@ impl UIEventWithID {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::Cancelled),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::Cancelled,
+                    files: vec![],
+                },
             )),
         }
     }
@@ -563,17 +576,23 @@ impl UIEventWithID {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::MarkedComplete),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::MarkedComplete,
+                    files: vec![],
+                },
             )),
         }
     }
 
-    pub fn edits_in_review(session_id: String, exchange_id: String) -> Self {
+    pub fn edits_in_review(session_id: String, exchange_id: String, files: Vec<String>) -> Self {
         Self {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::InReview),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::InReview,
+                    files,
+                },
             )),
         }
     }
@@ -583,7 +602,10 @@ impl UIEventWithID {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::Loading),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::Loading,
+                    files: vec![],
+                },
             )),
         }
     }
@@ -593,7 +615,10 @@ impl UIEventWithID {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::InReview),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::InReview,
+                    files: vec![],
+                },
             )),
         }
     }
@@ -603,7 +628,10 @@ impl UIEventWithID {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::MarkedComplete),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::MarkedComplete,
+                    files: vec![],
+                },
             )),
         }
     }
@@ -613,7 +641,10 @@ impl UIEventWithID {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent::EditsState(EditsStateEvent::Cancelled),
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::Cancelled,
+                    files: vec![],
+                },
             )),
         }
     }
@@ -1210,8 +1241,9 @@ pub enum EditsStateEvent {
 }
 
 #[derive(Debug, serde::Serialize)]
-pub enum EditsExchangeStateEvent {
-    EditsState(EditsStateEvent),
+pub struct EditsExchangeStateEvent {
+    edits_state: EditsStateEvent,
+    files: Vec<String>,
 }
 
 #[derive(Debug, serde::Serialize)]

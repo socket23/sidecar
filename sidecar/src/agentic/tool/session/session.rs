@@ -1,7 +1,7 @@
 //! We can create a new session over here and its composed of exchanges
 //! The exchanges can be made by the human or the agent
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
@@ -25,6 +25,7 @@ use crate::{
         },
         tool::{
             input::ToolInput,
+            lsp::file_diagnostics::DiagnosticMap,
             plan::{
                 generator::{Step, StepSenderEvent},
                 service::PlanService,
@@ -477,6 +478,19 @@ impl Exchange {
             }
         }
     }
+
+    /// Hot streak worthy message gets access to the diagnostics and allows the
+    /// agent to auto-generaate a reply
+    pub fn is_hot_streak_worthy_message(&self) -> bool {
+        let exchange_type = &self.exchange_type;
+        match exchange_type {
+            ExchangeType::AgentChat(agent_chat) => match agent_chat.reply {
+                ExchangeReplyAgent::Edit(_) | ExchangeReplyAgent::Plan(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -505,6 +519,10 @@ impl Session {
             storage_path,
             global_running_user_context,
         }
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
     }
 
     pub fn storage_path(&self) -> &str {
@@ -1466,6 +1484,127 @@ impl Session {
                 ));
         }
         Ok(self)
+    }
+
+    /// Grab the references over here and
+    pub async fn hot_streak_message(
+        mut self,
+        exchange_id: &str,
+        tool_box: Arc<ToolBox>,
+        mut message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        let exchange_by_id = self.get_exchange_by_id(exchange_id);
+        // if its a plan we want to look at the files which were part of the executed
+        // steps
+        let files_to_edit_if_plan = match exchange_by_id {
+            Some(Exchange {
+                exchange_id: _,
+                exchange_type:
+                    ExchangeType::AgentChat(ExchangeTypeAgent {
+                        reply:
+                            ExchangeReplyAgent::Plan(ExchangeReplyAgentPlan {
+                                plan_steps,
+                                plan_discarded: _,
+                            }),
+                        parent_exchange_id: _,
+                    }),
+                exchange_state: _,
+            }) => {
+                // do something over here
+                let files_to_edit = plan_steps
+                    .into_iter()
+                    .filter_map(|plan_step| plan_step.file_to_edit())
+                    .collect::<Vec<_>>();
+                files_to_edit
+            }
+            _ => vec![],
+        };
+        // if its an anchored edit then we want to look at the parent of the
+        // exchange_id to which we are creating a hot streak for (since our own
+        // exchange has no data about the file edited)
+        let parent_exchange_id = self.get_parent_exchange_id(exchange_id);
+        let files_to_check_if_edit = match parent_exchange_id {
+            Some(Exchange {
+                exchange_id: _,
+                exchange_type:
+                    ExchangeType::Edit(ExchangeTypeEdit {
+                        information:
+                            ExchangeEditInformation::Anchored(ExchangeEditInformationAnchored {
+                                query: _,
+                                fs_file_path,
+                                range: _,
+                                selection_context: _,
+                            }),
+                        ..
+                    }),
+                exchange_state: _,
+            }) => {
+                vec![fs_file_path.to_owned()]
+            }
+            _ => vec![],
+        };
+        let final_files = files_to_edit_if_plan
+            .into_iter()
+            .chain(files_to_check_if_edit)
+            .collect::<Vec<_>>();
+
+        // now get the diagnostics which are part of the references over here
+        if final_files.is_empty() {
+            // return early if we have no files.. bizzare but okay
+            return Ok(());
+        }
+        let (diagnostics, extra_variables) = tool_box
+            .grab_workspace_diagnostics(message_properties.clone())
+            .await?;
+        if extra_variables.is_empty() {
+            return Ok(());
+        }
+        let mut user_context = UserContext::new(vec![], vec![], None, vec![]);
+        let _extra_files = extra_variables.len();
+        user_context = user_context.add_variables(extra_variables.to_vec());
+        // add the diagnostics context over here
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context);
+
+        // get the diagnostics over here properly
+        let _: DiagnosticMap = diagnostics
+            .into_iter()
+            .fold(HashMap::new(), |mut acc, error| {
+                acc.entry(error.fs_file_path().to_owned())
+                    .or_insert_with(Vec::new)
+                    .push(error);
+                acc
+            });
+        // create a new exchange and store it over here since we are going to illict
+        // a response from the user over here
+        let chat_reply_exchange = tool_box
+            .create_new_exchange(self.session_id.to_owned(), message_properties.clone())
+            .await?;
+        message_properties = message_properties.set_request_id(chat_reply_exchange.to_owned());
+
+        // now send a message first listing out the files we are going to look at
+        let message = "Looking at Language Server errors ...".to_owned();
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::chat_event(
+                self.session_id().to_owned(),
+                message_properties.request_id_str().to_owned(),
+                "".to_owned(),
+                Some(message),
+            ));
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::send_variables(
+                self.session_id().to_owned(),
+                message_properties.request_id_str().to_owned(),
+                extra_variables,
+            ));
+
+        // now just keep it until here for now, lets see how that works
+        // now we can start creating the message and using it for an idea
+        // on what to do next
+        Ok(())
     }
 
     pub fn has_running_code_edits(&self, exchange_id: &str) -> bool {

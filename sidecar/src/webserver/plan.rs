@@ -46,6 +46,8 @@ pub async fn drop_plan(
 /// for as long as it can
 ///
 /// This is the function we want to run and test out if its working properly
+/// TODO(skcd): Use this to grab the related references which are broken using the global workspace
+/// diagnostics
 pub async fn check_references_on_file(
     plan_id: uuid::Uuid,
     plan: Plan,

@@ -495,7 +495,8 @@ impl SessionService {
         step_index: Option<usize>,
         accepted: bool,
         storage_path: String,
-        message_properties: SymbolEventMessageProperties,
+        tool_box: Arc<ToolBox>,
+        mut message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let session_maybe = self.load_from_storage(storage_path.to_owned()).await;
         if session_maybe.is_err() {
@@ -503,9 +504,51 @@ impl SessionService {
         }
         let mut session = session_maybe.expect("is_err to hold above");
         session = session
-            .react_to_feedback(exchange_id, step_index, accepted, message_properties)
+            .react_to_feedback(
+                exchange_id,
+                step_index,
+                accepted,
+                message_properties.clone(),
+            )
             .await?;
         self.save_to_storage(&session).await?;
+        let session_id = session.session_id().to_owned();
+        if accepted {
+            // if we have accepted it, then we can help the user move forward
+            // there are many conditions we can handle over here
+            let is_hot_streak_worthy_message = session
+                .get_exchange_by_id(&exchange_id)
+                .map(|exchange| exchange.is_hot_streak_worthy_message())
+                .unwrap_or_default();
+            // if we can't reply to the message return quickly over here
+            if !is_hot_streak_worthy_message {
+                return Ok(());
+            }
+            let hot_streak_exchange_id = self
+                .tool_box
+                .create_new_exchange(session_id.to_owned(), message_properties.clone())
+                .await?;
+
+            let cancellation_token = tokio_util::sync::CancellationToken::new();
+            self.track_exchange(
+                &session_id,
+                &hot_streak_exchange_id,
+                cancellation_token.clone(),
+            )
+            .await;
+            message_properties = message_properties
+                .set_request_id(hot_streak_exchange_id)
+                .set_cancellation_token(cancellation_token);
+
+            // now ask the session_service to generate the next most important step
+            // which the agent should take over here
+            session
+                .hot_streak_message(exchange_id, tool_box, message_properties)
+                .await?;
+        } else {
+            // if we rejected the agent message, then we can ask for feedback so we can
+            // work on it
+        }
         Ok(())
     }
 

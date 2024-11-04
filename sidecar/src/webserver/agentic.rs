@@ -1336,6 +1336,7 @@ pub async fn user_feedback_on_exchange(
                 step_index,
                 accepted,
                 session_storage_path,
+                app.tool_box.clone(),
                 message_properties,
             )
             .await;

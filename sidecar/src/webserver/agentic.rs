@@ -1442,7 +1442,7 @@ pub async fn cancel_running_exchange(
             &session_id
         );
         // give ourselves some time to cleanup before we start working on the cancellation
-        let _ = tokio::time::sleep(Duration::from_millis(100)).await;
+        let _ = tokio::time::sleep(Duration::from_millis(300)).await;
         println!(
             "webserver::agent_session::loading_from_storage::({})",
             &exchange_id

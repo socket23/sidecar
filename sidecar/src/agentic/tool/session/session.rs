@@ -1123,7 +1123,8 @@ impl Session {
                 message_properties.request_id_str().to_owned(),
                 vec![],
             ));
-            let agent_reply_exchange = self
+            self.save_to_storage().await?;
+            let mut agent_reply_exchange = self
                 .exchanges
                 .iter_mut()
                 .find(|exchange| &exchange.exchange_id == message_properties.request_id_str());
@@ -1242,6 +1243,21 @@ impl Session {
             while let Some(step_message) = stream_receiver.next().await {
                 match step_message {
                     StepSenderEvent::NewStep(step) => {
+                        {
+                            if let Some(ref mut agent_reply_exchange) = agent_reply_exchange {
+                                match &mut agent_reply_exchange.exchange_type {
+                                    ExchangeType::AgentChat(ref mut agent_chat) => {
+                                        match &mut agent_chat.reply {
+                                            ExchangeReplyAgent::Plan(ref mut plan_reply) => {
+                                                plan_reply.plan_steps.push(step.clone());
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
                         generated_steps.push(step.clone());
                         let _ = edits_sender.send(Some(step)).await;
                     }
@@ -1284,32 +1300,19 @@ impl Session {
 
             println!("session::perform_plan_generation::stream_receiver::closed");
             stream_receiver.close();
+            self.save_to_storage().await?;
 
             // send a message over here that the request is in review now
             // since we generated something for the plan
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::request_review(
-                    message_properties.root_request_id().to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                ));
-
-            println!("session::perform_plan_generation::finished_plan_generation");
-
-            if let Some(agent_reply_exchange) = agent_reply_exchange {
-                match &mut agent_reply_exchange.exchange_type {
-                    ExchangeType::AgentChat(ref mut agent_chat) => match &mut agent_chat.reply {
-                        ExchangeReplyAgent::Plan(ref mut plan_reply) => {
-                            plan_reply.plan_steps = generated_steps;
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                }
+            if !message_properties.cancellation_token().is_cancelled() {
+                println!("session::perform_plan_generation::cancellation_token::not_cancelled");
+                let _ = message_properties
+                    .ui_sender()
+                    .send(UIEventWithID::request_review(
+                        message_properties.root_request_id().to_owned(),
+                        message_properties.request_id_str().to_owned(),
+                    ));
             }
-            self.save_to_storage().await?;
-
-            println!("session::finished_plan_generation");
         }
         Ok(self)
     }
@@ -1457,6 +1460,10 @@ impl Session {
 
     pub fn has_running_code_edits(&self, exchange_id: &str) -> bool {
         let found_exchange = self.find_exchange_by_id(exchange_id);
+        println!(
+            "session::has_running_code_edits::exchange_id({})::found_exchange::({:?})",
+            exchange_id, found_exchange
+        );
         match found_exchange {
             Some(exchange) => {
                 exchange.is_agent_work() && exchange.is_still_running() && exchange.has_code_edits()

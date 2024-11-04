@@ -5501,6 +5501,7 @@ FILEPATH: {fs_file_path}
         let codestory_access_token = CodestoryAccessToken {
             access_token,
         };
+        // can't be haiku yet, we need to prompt it better
         let llm_type = LLMType::ClaudeSonnet;
         let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
 

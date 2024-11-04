@@ -199,7 +199,7 @@ impl CodeStoryClient {
                 Ok("deepseek-ai/deepseek-coder-33b-instruct".to_owned())
             }
             LLMType::ClaudeSonnet => Ok("claude-3-5-sonnet-20241022".to_owned()), // updated to latest sonnet
-            LLMType::ClaudeHaiku => Ok("claude-3-haiku-20240307".to_owned()),
+            LLMType::ClaudeHaiku => Ok("claude-3-5-haiku-20241022".to_owned()), // updated to latest haiku
             LLMType::GeminiPro => Ok("gemini-1.5-pro".to_owned()),
             LLMType::GeminiProFlash => Ok("gemini-1.5-flash".to_owned()),
             LLMType::O1Preview => Ok("o1-preview".to_owned()), // o1 baby

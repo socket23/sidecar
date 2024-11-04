@@ -432,20 +432,6 @@ impl UIEventWithID {
         }
     }
 
-    /// Finished plan generation
-    pub fn finished_plan_generation(request_id: String, exchange_id: String) -> Self {
-        Self {
-            request_id,
-            exchange_id,
-            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent {
-                    edits_state: EditsStateEvent::InReview,
-                    files: vec![],
-                },
-            )),
-        }
-    }
-
     pub fn plan_description_updated(
         session_id: String,
         exchange_id: String,
@@ -584,19 +570,6 @@ impl UIEventWithID {
         }
     }
 
-    pub fn edits_in_review(session_id: String, exchange_id: String, files: Vec<String>) -> Self {
-        Self {
-            request_id: session_id,
-            exchange_id,
-            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
-                EditsExchangeStateEvent {
-                    edits_state: EditsStateEvent::InReview,
-                    files,
-                },
-            )),
-        }
-    }
-
     pub fn start_plan_generation(session_id: String, exchange_id: String) -> Self {
         Self {
             request_id: session_id,
@@ -604,19 +577,6 @@ impl UIEventWithID {
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
                 EditsExchangeStateEvent {
                     edits_state: EditsStateEvent::Loading,
-                    files: vec![],
-                },
-            )),
-        }
-    }
-
-    pub fn plan_in_review(session_id: String, exchange_id: String) -> Self {
-        Self {
-            request_id: session_id,
-            exchange_id,
-            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
-                EditsExchangeStateEvent {
-                    edits_state: EditsStateEvent::InReview,
                     files: vec![],
                 },
             )),
@@ -1235,7 +1195,6 @@ pub enum ExecutionExchangeStateEvent {
 #[derive(Debug, serde::Serialize)]
 pub enum EditsStateEvent {
     Loading,
-    InReview,
     MarkedComplete,
     Cancelled,
 }

@@ -1233,20 +1233,9 @@ impl Session {
                 Ok::<(), SymbolError>(())
             });
 
-            let mut first_step_processed = false;
             let mut generated_steps = vec![];
 
             while let Some(step_message) = stream_receiver.next().await {
-                if !first_step_processed {
-                    first_step_processed = true;
-                    let _ = message_properties
-                        .ui_sender()
-                        .send(UIEventWithID::plan_in_review(
-                            session_id.to_owned(),
-                            exchange_id.to_owned(),
-                        ));
-                }
-
                 match step_message {
                     StepSenderEvent::NewStep(step) => {
                         generated_steps.push(step.clone());
@@ -1316,12 +1305,6 @@ impl Session {
             }
             self.save_to_storage().await?;
 
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::finished_plan_generation(
-                    self.session_id.to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                ));
             println!("session::finished_plan_generation");
         }
         Ok(self)
@@ -1463,15 +1446,6 @@ impl Session {
                 .send(UIEventWithID::request_review(
                     message_properties.root_request_id().to_owned(),
                     message_properties.request_id_str().to_owned(),
-                ));
-
-            // Also tell the exchange that we are in review mode now
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::edits_in_review(
-                    message_properties.root_request_id().to_owned(),
-                    message_properties.request_id_str().to_owned(),
-                    vec![fs_file_path.to_owned()],
                 ));
         }
         Ok(self)

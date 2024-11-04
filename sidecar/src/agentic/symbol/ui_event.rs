@@ -596,6 +596,19 @@ impl UIEventWithID {
         }
     }
 
+    pub fn plan_as_accepted(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::PlansExchangeState(
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::Accepted,
+                    files: vec![],
+                },
+            )),
+        }
+    }
+
     pub fn plan_as_cancelled(session_id: String, exchange_id: String) -> Self {
         Self {
             request_id: session_id,
@@ -1197,6 +1210,7 @@ pub enum EditsStateEvent {
     Loading,
     MarkedComplete,
     Cancelled,
+    Accepted,
 }
 
 #[derive(Debug, serde::Serialize)]

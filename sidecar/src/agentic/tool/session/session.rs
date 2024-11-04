@@ -754,7 +754,7 @@ impl Session {
             if matches!(exchange_to_react, Some(AideAgentMode::Plan)) {
                 let _ = message_properties
                     .ui_sender()
-                    .send(UIEventWithID::plan_as_finished(
+                    .send(UIEventWithID::plan_as_accepted(
                         self.session_id.to_owned(),
                         exchange_id.to_owned(),
                     ));
@@ -1309,6 +1309,12 @@ impl Session {
                 let _ = message_properties
                     .ui_sender()
                     .send(UIEventWithID::request_review(
+                        message_properties.root_request_id().to_owned(),
+                        message_properties.request_id_str().to_owned(),
+                    ));
+                let _ = message_properties
+                    .ui_sender()
+                    .send(UIEventWithID::plan_as_finished(
                         message_properties.root_request_id().to_owned(),
                         message_properties.request_id_str().to_owned(),
                     ));

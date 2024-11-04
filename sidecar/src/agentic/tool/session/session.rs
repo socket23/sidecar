@@ -132,6 +132,8 @@ pub struct ExchangeTypeHuman {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeReplyAgentPlan {
     plan_steps: Vec<Step>,
+    // plan discarded over here represents the fact that the plan we CANCELLED
+    // it had other meanings but thats what we are going with now 🔫
     plan_discarded: bool,
 }
 
@@ -1227,7 +1229,9 @@ impl Session {
                             message_properties_clone.editor_url(),
                             message_properties_clone.access_token().to_owned(),
                         ));
+                        println!("session::perform_plan_generation::edit_event::hub_sender::send");
                         let _ = edit_done_receiver.await;
+                        println!("session::perform_plan_generation::edits_done::hub_sender::happy");
                     }
                 }
                 Ok::<(), SymbolError>(())
@@ -1471,7 +1475,7 @@ impl Session {
             if let Some(exchange) = found_exchange {
                 exchange.set_exchange_as_cancelled();
                 match &mut exchange.exchange_type {
-                    ExchangeType::AgentChat(ref agent_chat) => match agent_chat.reply {
+                    ExchangeType::AgentChat(ref mut agent_chat) => match &mut agent_chat.reply {
                         ExchangeReplyAgent::Edit(_) => {
                             let _ = message_properties.ui_sender().send(
                                 UIEventWithID::edits_cancelled_in_exchange(
@@ -1480,7 +1484,8 @@ impl Session {
                                 ),
                             );
                         }
-                        ExchangeReplyAgent::Plan(_) => {
+                        ExchangeReplyAgent::Plan(ref mut plan) => {
+                            plan.plan_discarded = true;
                             let _ = message_properties.ui_sender().send(
                                 UIEventWithID::plan_as_cancelled(
                                     message_properties.root_request_id().to_owned(),

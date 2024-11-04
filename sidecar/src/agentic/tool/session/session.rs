@@ -1269,7 +1269,7 @@ impl Session {
                                     self.session_id.to_owned(),
                                     exchange_id.clone(),
                                     title_found.step_index(),
-                                    vec![],
+                                    title_found.files_to_edit().to_vec(),
                                     title_found.title().to_owned(),
                                 ));
                     }
@@ -1281,6 +1281,7 @@ impl Session {
                                 description_update.index(),
                                 description_update.delta(),
                                 description_update.description_up_until_now().to_owned(),
+                                description_update.files_to_edit().to_vec(),
                             ),
                         );
                     }

@@ -438,6 +438,7 @@ impl UIEventWithID {
         index: usize,
         delta: Option<String>,
         description_up_until_now: String,
+        files_to_edit: Vec<String>,
     ) -> Self {
         Self {
             request_id: session_id.to_owned(),
@@ -446,7 +447,7 @@ impl UIEventWithID {
                 PlanStepDescriptionUpdateEvent {
                     session_id,
                     exchange_id,
-                    files_to_edit: vec![],
+                    files_to_edit,
                     delta,
                     description_up_until_now,
                     index,

@@ -34,21 +34,33 @@ pub struct StepTitleFound {
     step_index: usize,
     session_id: String,
     exchange_id: String,
+    files_to_edit: Vec<String>,
     title: String,
 }
 
 impl StepTitleFound {
-    fn new(step_index: usize, title: String, session_id: String, exchange_id: String) -> Self {
+    fn new(
+        step_index: usize,
+        title: String,
+        session_id: String,
+        exchange_id: String,
+        files_to_edit: Vec<String>,
+    ) -> Self {
         Self {
             step_index,
             session_id,
             exchange_id,
             title,
+            files_to_edit,
         }
     }
 
     pub fn step_index(&self) -> usize {
         self.step_index
+    }
+
+    pub fn files_to_edit(&self) -> &[String] {
+        self.files_to_edit.as_slice()
     }
 
     pub fn session_id(&self) -> &str {
@@ -67,6 +79,7 @@ impl StepTitleFound {
 pub struct StepDescriptionUpdate {
     delta: Option<String>,
     description_up_until_now: String,
+    files_to_edit: Vec<String>,
     session_id: String,
     exchange_id: String,
     index: usize,
@@ -76,6 +89,7 @@ impl StepDescriptionUpdate {
     fn new(
         delta: Option<String>,
         description_up_until_now: String,
+        files_to_edit: Vec<String>,
         session_id: String,
         exchange_id: String,
         index: usize,
@@ -83,10 +97,15 @@ impl StepDescriptionUpdate {
         Self {
             delta,
             description_up_until_now,
+            files_to_edit,
             session_id,
             exchange_id,
             index,
         }
+    }
+
+    pub fn files_to_edit(&self) -> &[String] {
+        self.files_to_edit.as_slice()
     }
 
     pub fn delta(&self) -> Option<String> {
@@ -744,6 +763,7 @@ impl PlanStepGenerator {
                                         title.to_owned(),
                                         self.session_id.to_owned(),
                                         self.exchange_id.to_owned(),
+                                        self.current_files_to_edit.to_vec(),
                                     ),
                                 ));
                             }
@@ -780,6 +800,7 @@ impl PlanStepGenerator {
                                     StepDescriptionUpdate::new(
                                         Some(answer_line_at_index.to_owned()),
                                         description.to_owned(),
+                                        self.current_files_to_edit.to_vec(),
                                         self.session_id.to_owned(),
                                         self.exchange_id.to_owned(),
                                         self.step_index,

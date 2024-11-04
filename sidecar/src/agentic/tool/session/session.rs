@@ -1301,6 +1301,9 @@ impl Session {
 
             println!("session::perform_plan_generation::stream_receiver::closed");
             stream_receiver.close();
+
+            // there is a race condition with cancel_running_exchange's invocation of
+            // set_exchange_as_cancelled, which also saves to storage.
             self.save_to_storage().await?;
 
             // send a message over here that the request is in review now

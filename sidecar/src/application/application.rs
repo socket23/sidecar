@@ -112,9 +112,7 @@ impl Application {
             LLMProperties::new(
                 LLMType::Gpt4O,
                 LLMProvider::OpenAI,
-                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new(
-                    "sk-proj-BLaSMsWvoO6FyNwo9syqT3BlbkFJo3yqCyKAxWXLm4AvePtt".to_owned(), // should this go too?
-                )),
+                LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("".to_owned())),
             ),
         ));
         let tool_box = Arc::new(ToolBox::new(

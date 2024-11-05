@@ -1670,6 +1670,7 @@ impl Session {
             message_properties.request_id_str().to_owned(),
             response,
         ));
+        self.save_to_storage().await?;
         // finsihed the exchange here since we have replied already
         let _ = message_properties
             .ui_sender()

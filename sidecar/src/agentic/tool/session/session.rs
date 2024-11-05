@@ -1606,7 +1606,7 @@ impl Session {
             .merge_user_context(user_context);
 
         // now send a message first listing out the files we are going to look at
-        let message = "Looking at Language Server errors ...".to_owned();
+        let message = "Looking at Language Server errors ...\n".to_owned();
         let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::chat_event(

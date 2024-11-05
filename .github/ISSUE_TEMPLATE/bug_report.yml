@@ -56,5 +56,5 @@ body:
     attributes:
       label: Log output
       description: |
-        
+        Paste any logs that may be relevant to the bug
       render: Shell

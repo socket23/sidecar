@@ -60,7 +60,10 @@ use super::{
     ref_filter::ref_filter::ReferenceFilterRequest,
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
-    session::{chat::SessionChatClientRequest, exchange::SessionExchangeNewRequest},
+    session::{
+        chat::SessionChatClientRequest, exchange::SessionExchangeNewRequest,
+        hot_streak::SessionHotStreakRequest,
+    },
     swe_bench::test_tool::SWEBenchTestRequest,
 };
 
@@ -164,6 +167,8 @@ pub enum ToolInput {
     NewExchangeDuringSession(SessionExchangeNewRequest),
     // Undo changes made during a session
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRequest),
+    // Context drive hot streak reply
+    ContextDriveHotStreakReply(SessionHotStreakRequest),
 }
 
 impl ToolInput {
@@ -239,6 +244,17 @@ impl ToolInput {
             ToolInput::ContextDrivenChatReply(_) => ToolType::ContextDrivenChatReply,
             ToolInput::NewExchangeDuringSession(_) => ToolType::NewExchangeDuringSession,
             ToolInput::UndoChangesMadeDuringSession(_) => ToolType::UndoChangesMadeDuringSession,
+            ToolInput::ContextDriveHotStreakReply(_) => ToolType::ContextDriveHotStreakReply,
+        }
+    }
+
+    pub fn is_context_driven_hot_streak_reply(self) -> Result<SessionHotStreakRequest, ToolError> {
+        if let ToolInput::ContextDriveHotStreakReply(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::ContextDriveHotStreakReply,
+            ))
         }
     }
 

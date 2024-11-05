@@ -50,7 +50,10 @@ use super::{
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
-    session::{chat::SessionChatClientResponse, exchange::SessionExchangeNewResponse},
+    session::{
+        chat::SessionChatClientResponse, exchange::SessionExchangeNewResponse,
+        hot_streak::SessionHotStreakResponse,
+    },
     swe_bench::test_tool::SWEBenchTestRepsonse,
 };
 
@@ -192,9 +195,15 @@ pub enum ToolOutput {
     NewExchangeDuringSession(SessionExchangeNewResponse),
     // undo changes made during the session
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRespnose),
+    // context drive hot streak reply
+    ContextDriveHotStreakReply(SessionHotStreakResponse),
 }
 
 impl ToolOutput {
+    pub fn context_driven_hot_streak_reply(response: SessionHotStreakResponse) -> Self {
+        ToolOutput::ContextDriveHotStreakReply(response)
+    }
+
     pub fn undo_changes_made_during_session(
         response: UndoChangesMadeDuringExchangeRespnose,
     ) -> Self {
@@ -767,6 +776,13 @@ impl ToolOutput {
     ) -> Option<UndoChangesMadeDuringExchangeRespnose> {
         match self {
             ToolOutput::UndoChangesMadeDuringSession(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_context_driven_hot_streak_reply(self) -> Option<SessionHotStreakResponse> {
+        match self {
+            ToolOutput::ContextDriveHotStreakReply(response) => Some(response),
             _ => None,
         }
     }

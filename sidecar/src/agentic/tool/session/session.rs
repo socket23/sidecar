@@ -38,7 +38,10 @@ use crate::{
     user_context::types::UserContext,
 };
 
-use super::chat::{SessionChatClientRequest, SessionChatMessage};
+use super::{
+    chat::{SessionChatClientRequest, SessionChatMessage},
+    hot_streak::SessionHotStreakRequest,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -1491,7 +1494,7 @@ impl Session {
         mut self,
         exchange_id: &str,
         tool_box: Arc<ToolBox>,
-        mut message_properties: SymbolEventMessageProperties,
+        message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         let exchange_by_id = self.get_exchange_by_id(exchange_id);
         // if its a plan we want to look at the files which were part of the executed
@@ -1522,9 +1525,14 @@ impl Session {
         // if its an anchored edit then we want to look at the parent of the
         // exchange_id to which we are creating a hot streak for (since our own
         // exchange has no data about the file edited)
-        let parent_exchange_id = self.get_parent_exchange_id(exchange_id);
-        let files_to_check_if_edit = match parent_exchange_id {
-            Some(Exchange {
+        let parent_exchange = self.get_parent_exchange_id(exchange_id);
+        if let None = parent_exchange {
+            return Ok(());
+        }
+        let parent_exchange = parent_exchange.expect("if let None to hold");
+        let parent_exchange_id = parent_exchange.exchange_id.to_owned();
+        let files_to_check_if_edit = match parent_exchange {
+            Exchange {
                 exchange_id: _,
                 exchange_type:
                     ExchangeType::Edit(ExchangeTypeEdit {
@@ -1538,7 +1546,7 @@ impl Session {
                         ..
                     }),
                 exchange_state: _,
-            }) => {
+            } => {
                 vec![fs_file_path.to_owned()]
             }
             _ => vec![],
@@ -1553,35 +1561,49 @@ impl Session {
             // return early if we have no files.. bizzare but okay
             return Ok(());
         }
-        let (diagnostics, extra_variables) = tool_box
+        let (diagnostics, mut extra_variables) = tool_box
             .grab_workspace_diagnostics(message_properties.clone())
             .await?;
         if extra_variables.is_empty() {
             return Ok(());
         }
         let mut user_context = UserContext::new(vec![], vec![], None, vec![]);
-        let _extra_files = extra_variables.len();
+        if extra_variables.is_empty() {
+            // Over here we should ask the agent to reflect on its work and suggest
+            // better changes over here or gotchas for the user to keep in mind
+            return Ok(());
+        }
         user_context = user_context.add_variables(extra_variables.to_vec());
+
+        // get the diagnostics over here properly
+        let diagnostics_grouped_by_file: DiagnosticMap =
+            diagnostics
+                .into_iter()
+                .fold(HashMap::new(), |mut acc, error| {
+                    acc.entry(error.fs_file_path().to_owned())
+                        .or_insert_with(Vec::new)
+                        .push(error);
+                    acc
+                });
+
+        for (fs_file_path, lsp_diagnostics) in diagnostics_grouped_by_file.iter() {
+            let extra_variables_type_definitions = tool_box
+                .grab_type_definition_worthy_positions_using_diagnostics(
+                    fs_file_path,
+                    lsp_diagnostics.to_vec(),
+                    message_properties.clone(),
+                )
+                .await;
+            if let Ok(extra_variables_type_definitions) = extra_variables_type_definitions {
+                extra_variables.extend(extra_variables_type_definitions.to_vec());
+                user_context = user_context.add_variables(extra_variables_type_definitions);
+            }
+        }
+
         // add the diagnostics context over here
         self.global_running_user_context = self
             .global_running_user_context
             .merge_user_context(user_context);
-
-        // get the diagnostics over here properly
-        let _: DiagnosticMap = diagnostics
-            .into_iter()
-            .fold(HashMap::new(), |mut acc, error| {
-                acc.entry(error.fs_file_path().to_owned())
-                    .or_insert_with(Vec::new)
-                    .push(error);
-                acc
-            });
-        // create a new exchange and store it over here since we are going to illict
-        // a response from the user over here
-        let chat_reply_exchange = tool_box
-            .create_new_exchange(self.session_id.to_owned(), message_properties.clone())
-            .await?;
-        message_properties = message_properties.set_request_id(chat_reply_exchange.to_owned());
 
         // now send a message first listing out the files we are going to look at
         let message = "Looking at Language Server errors ...".to_owned();
@@ -1593,6 +1615,7 @@ impl Session {
                 "".to_owned(),
                 Some(message),
             ));
+        // send all the gathered references over here
         let _ = message_properties
             .ui_sender()
             .send(UIEventWithID::send_variables(
@@ -1601,9 +1624,50 @@ impl Session {
                 extra_variables,
             ));
 
-        // now just keep it until here for now, lets see how that works
-        // now we can start creating the message and using it for an idea
-        // on what to do next
+        let formatted_diagnostics = PlanService::format_diagnostics(&diagnostics_grouped_by_file);
+
+        let mut converted_messages = vec![];
+        for previous_message in self.exchanges.iter() {
+            converted_messages.push(previous_message.to_conversation_message().await);
+        }
+        // we can use the tool_box to send a message over here
+        let response = tool_box
+            .tools()
+            .invoke(ToolInput::ContextDriveHotStreakReply(
+                SessionHotStreakRequest::new(
+                    tool_box
+                        .recently_edited_files(Default::default(), message_properties.clone())
+                        .await?,
+                    self.global_running_user_context.clone(),
+                    converted_messages,
+                    formatted_diagnostics,
+                    self.repo_ref.clone(),
+                    self.project_labels.clone(),
+                    self.session_id.to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                    message_properties.ui_sender().clone(),
+                    message_properties.cancellation_token().clone(),
+                    message_properties.access_token().to_owned(),
+                ),
+            ))
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .get_context_driven_hot_streak_reply()
+            .ok_or(SymbolError::WrongToolOutput)?
+            .reply()
+            .to_owned();
+        self.exchanges.push(Exchange::agent_chat_reply(
+            parent_exchange_id,
+            message_properties.request_id_str().to_owned(),
+            response,
+        ));
+        // finsihed the exchange here since we have replied already
+        let _ = message_properties
+            .ui_sender()
+            .send(UIEventWithID::finished_exchange(
+                self.session_id.to_owned(),
+                message_properties.request_id_str().to_owned(),
+            ));
         Ok(())
     }
 

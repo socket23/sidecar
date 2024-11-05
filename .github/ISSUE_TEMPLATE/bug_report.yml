@@ -1,5 +1,5 @@
 ---
-name: Report a Bug
+name: Report Bug
 description: Easy form to report a bug
 labels: [bug]
 body:

@@ -132,6 +132,9 @@ impl StepDescriptionUpdate {
 /// Exposes 2 kinds of events one which notifies that a new step has been
 /// added and another which is the case when the steps are done
 pub enum StepSenderEvent {
+    /// this just includes the delta which we want to send to the frontend
+    /// and never the complete message
+    DeveloperMessage(String),
     NewStep(Step),
     NewStepTitle(StepTitleFound),
     NewStepDescription(StepDescriptionUpdate),
@@ -388,6 +391,9 @@ For example, if you have to import a helper function and use it in the code, it 
 - DO NOT suggest any changes for the files which you can not see in your context.
 - Your response must strictly follow the following schema:
 <response>
+<developer_message>
+{{Your message to the developer, you can use this section to explain your reasoning or ask the developer for more help}}
+</developer_message>
 <steps>
 {{There can be as many steps as you need}}
 <step>
@@ -434,6 +440,9 @@ Each xml tag in the response should be in its own line and the content in the xm
         let reminder_for_format = r#"As as reminder your format for reply is strictly this:
 - Your response must strictly follow the following schema:
 <response>
+<developer_message>
+{{Your message to the developer, you can use this section to explain your reasoning or ask the developer for more help}}
+</developer_message>
 <steps>
 {{There can be as many steps as you need}}
 <step>
@@ -617,6 +626,7 @@ impl Tool for StepGeneratorClient {
 #[derive(Debug, Clone)]
 enum StepBlockStatus {
     NoBlock,
+    DeveloperMessage,
     StepStart,
     StepFile,
     StepTitle,
@@ -631,6 +641,7 @@ struct PlanStepGenerator {
     previous_answer_line_number: Option<usize>,
     current_files_to_edit: Vec<String>,
     current_title: Option<String>,
+    current_developer_message: Option<String>,
     current_description: Option<String>,
     generated_steps: Vec<Step>,
     session_id: String,
@@ -654,6 +665,7 @@ impl PlanStepGenerator {
             current_files_to_edit: vec![],
             current_title: None,
             current_description: None,
+            current_developer_message: None,
             generated_steps: vec![],
             session_id,
             exchange_id,
@@ -725,6 +737,33 @@ impl PlanStepGenerator {
                     // we had no block but found the start of a step over here
                     if answer_line_at_index == "<step>" {
                         self.step_block_status = StepBlockStatus::StepStart;
+                    }
+                    if answer_line_at_index == "<developer_message>" {
+                        self.step_block_status = StepBlockStatus::DeveloperMessage;
+                    }
+                }
+                StepBlockStatus::DeveloperMessage => {
+                    if answer_line_at_index == "</developer_message>" {
+                        self.current_developer_message = None;
+                        self.step_block_status = StepBlockStatus::NoBlock;
+                    } else {
+                        // send the developer message over here
+                        if let Some(step_sender) = self.stream_steps.as_ref() {
+                            if let Some(developer_message) = self.current_developer_message.clone()
+                            {
+                                self.current_developer_message =
+                                    Some(developer_message + "\n" + answer_line_at_index);
+                                let _ = step_sender.send(StepSenderEvent::DeveloperMessage(
+                                    "\n".to_owned() + &answer_line_at_index,
+                                ));
+                            } else {
+                                self.current_developer_message =
+                                    Some(answer_line_at_index.to_owned());
+                                let _ = step_sender.send(StepSenderEvent::DeveloperMessage(
+                                    answer_line_at_index.to_owned(),
+                                ));
+                            }
+                        }
                     }
                 }
                 StepBlockStatus::StepStart => {

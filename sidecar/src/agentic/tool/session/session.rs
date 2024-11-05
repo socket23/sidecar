@@ -1306,6 +1306,16 @@ impl Session {
                             ),
                         );
                     }
+                    StepSenderEvent::DeveloperMessage(developer_message_delta) => {
+                        let _ = message_properties
+                            .ui_sender()
+                            .send(UIEventWithID::chat_event(
+                                self.session_id.to_owned(),
+                                exchange_id.to_owned(),
+                                "".to_owned(),
+                                Some(developer_message_delta),
+                            ));
+                    }
                     StepSenderEvent::Done => {
                         let _ = edits_sender.send(None).await;
                         break;

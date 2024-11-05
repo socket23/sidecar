@@ -1566,25 +1566,13 @@ impl Session {
             .chain(files_to_check_if_edit)
             .collect::<Vec<_>>();
 
-        // now get the diagnostics which are part of the references over here
-        if final_files.is_empty() {
-            // return early if we have no files.. bizzare but okay
-            return Ok(());
+        let mut converted_messages = vec![];
+        for previous_message in self.exchanges.iter() {
+            converted_messages.push(previous_message.to_conversation_message().await);
         }
         let (diagnostics, mut extra_variables) = tool_box
             .grab_workspace_diagnostics(message_properties.clone())
             .await?;
-        if extra_variables.is_empty() {
-            return Ok(());
-        }
-        let mut user_context = UserContext::new(vec![], vec![], None, vec![]);
-        if extra_variables.is_empty() {
-            // Over here we should ask the agent to reflect on its work and suggest
-            // better changes over here or gotchas for the user to keep in mind
-            return Ok(());
-        }
-        user_context = user_context.add_variables(extra_variables.to_vec());
-
         // get the diagnostics over here properly
         let diagnostics_grouped_by_file: DiagnosticMap =
             diagnostics
@@ -1595,6 +1583,9 @@ impl Session {
                         .push(error);
                     acc
                 });
+
+        let mut user_context = UserContext::new(vec![], vec![], None, vec![]);
+        user_context = user_context.add_variables(extra_variables.to_vec());
 
         for (fs_file_path, lsp_diagnostics) in diagnostics_grouped_by_file.iter() {
             let extra_variables_type_definitions = tool_box
@@ -1615,6 +1606,20 @@ impl Session {
             .global_running_user_context
             .merge_user_context(user_context);
 
+        // now get the diagnostics which are part of the references over here
+        let user_query = if final_files.is_empty() {
+            // return early if we have no files.. bizzare but okay
+            "Reflect on the recent changes you made and if there is anything you can improve"
+                .to_owned()
+        } else if extra_variables.is_empty() {
+            // Over here we should ask the agent to reflect on its work and suggest
+            // better changes over here or gotchas for the user to keep in mind
+            "Reflect on the recent changes you made and if there is anything you can improve"
+                .to_owned()
+        } else {
+            PlanService::format_diagnostics(&diagnostics_grouped_by_file)
+        };
+
         // now send a message first listing out the files we are going to look at
         let message = "Looking at Language Server errors ...\n".to_owned();
         let _ = message_properties
@@ -1634,12 +1639,6 @@ impl Session {
                 extra_variables,
             ));
 
-        let formatted_diagnostics = PlanService::format_diagnostics(&diagnostics_grouped_by_file);
-
-        let mut converted_messages = vec![];
-        for previous_message in self.exchanges.iter() {
-            converted_messages.push(previous_message.to_conversation_message().await);
-        }
         // we can use the tool_box to send a message over here
         let response = tool_box
             .tools()
@@ -1650,7 +1649,7 @@ impl Session {
                         .await?,
                     self.global_running_user_context.clone(),
                     converted_messages,
-                    formatted_diagnostics,
+                    user_query,
                     self.repo_ref.clone(),
                     self.project_labels.clone(),
                     self.session_id.to_owned(),

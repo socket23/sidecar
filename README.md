@@ -45,17 +45,15 @@ Broadly speaking these are the following important bits in Sidecar:
 
 There are many ways in which you can participate in this project, for example:
 
-* [Submit bugs and feature requests](https://github.com/codestoryai/aide/issues), and help us verify as they are checked in
-* Review [source code changes](https://github.com/codestoryai/aide/pulls)
+* [Submit bugs and feature requests](https://github.com/codestoryai/sidecar/issues), and help us verify as they are checked in
+* Review [source code changes](https://github.com/codestoryai/sidecar/pulls)
 
 If you are interested in fixing issues and contributing directly to the code base,
-please see the document [How to Contribute](https://github.com/codestoryai/aide/blob/cs-main/HOW_TO_CONTRIBUTE.md), which covers the following:
+please see the document [How to Contribute](HOW_TO_CONTRIBUTE.md), which covers the following:
 
-* [How to build and run from source](https://github.com/codestoryai/aide/blob/cs-main/HOW_TO_CONTRIBUTE.md)
-* [The development workflow, including debugging and running tests](https://github.com/codestoryai/aide/blob/cs-main/HOW_TO_CONTRIBUTE.md#debugging)
-* [Coding guidelines](https://github.com/codestoryai/aide/wiki/Coding-Guidelines)
-* [Submitting pull requests](https://github.com/codestoryai/aide/blob/cs-main/HOW_TO_CONTRIBUTE.md#pull-requests)
-* [Finding an issue to work on](https://github.com/codestoryai/aide/blob/cs-main/HOW_TO_CONTRIBUTE.md#where-to-contribute)
+* [How to build and run from source](HOW_TO_CONTRIBUTE.md)
+* [The development workflow, including debugging and running tests](HOW_TO_CONTRIBUTE.md#debugging)
+* [Submitting pull requests](HOW_TO_CONTRIBUTE.md#pull-requests)
 
 ## Feedback
 

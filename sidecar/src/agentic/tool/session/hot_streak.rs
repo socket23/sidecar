@@ -173,6 +173,7 @@ Respect these rules at all times:
 - Remember you can suggest edits in at most 2 files right now, keep your edits concise and list out the files which you want to edit in full
 - Put a single line or more of reasoning on what you want to fix (this will help the user approve the changes you are suggesting later on)
 - The code blocks which you generate for the edits should be of very high quality and small, extensively use `// Rest of the code..` and help the user understand how to fix the problem.
+- If you want more information ask the user explictly for it, this is helpful to the developer as well.
 - You HAVE A SINGLE CHANCE to suggest "edits" to the user, so use it wisely"#
         );
         system_message
@@ -259,6 +260,7 @@ Respect these rules at all times:
 - Put a single line or more of reasoning on what you want to fix (this will help the user approve the changes you are suggesting later on)
 - The code blocks which you generate for the edits should be of very high quality and small, extensively use `// Rest of the code..` and help the user understand how to fix the problem.
 - You HAVE A SINGLE CHANCE to suggest "edits" to the user, so use it wisely
+- If you want more information ask the user explictly for it, this is helpful to the developer as well.
 - Only reply in natural language and do not reply back in the format of a plan."#
         )));
         messages

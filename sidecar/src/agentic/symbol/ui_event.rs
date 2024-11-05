@@ -558,13 +558,26 @@ impl UIEventWithID {
         }
     }
 
-    pub fn edits_accepted(session_id: String, exchange_id: String) -> Self {
+    pub fn edits_marked_complete(session_id: String, exchange_id: String) -> Self {
         Self {
             request_id: session_id,
             exchange_id,
             event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
                 EditsExchangeStateEvent {
                     edits_state: EditsStateEvent::MarkedComplete,
+                    files: vec![],
+                },
+            )),
+        }
+    }
+
+    pub fn edits_accepted(session_id: String, exchange_id: String) -> Self {
+        Self {
+            request_id: session_id,
+            exchange_id,
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::EditsExchangeState(
+                EditsExchangeStateEvent {
+                    edits_state: EditsStateEvent::Accepted,
                     files: vec![],
                 },
             )),

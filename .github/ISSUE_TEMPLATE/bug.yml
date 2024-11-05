@@ -1,0 +1,59 @@
+name: Report a Bug
+description: Easy form to report a bug
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this bug! This will help us find the cause of the problem quickly with less back-and-forth required.
+  - type: checkboxes
+    attributes:
+      label: Before submitting your bug report
+      options:
+        - label: I believe this is a bug. I'll try to join our community channels for questions if I have any.
+          required: false
+        - label: I'm not able to find an [open issue](https://github.com/codestoryai/sidecar/issues) that reports the same bug
+          required: false
+  - type: textarea
+    attributes:
+      label: Environment
+      description: |
+        Details about your environment.
+
+        - **OS**: macOS
+        - **Sidecar version**: v0.9.4
+        - **IDE version**:  VSCode 1.85.1
+      value: |
+        - OS:
+        - Sidecar version:
+        - IDE version:
+      render: Markdown
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Description
+      description: |
+        Please provide a clear and concise description of the bug
+      placeholder: |
+        Short description
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: To reproduce
+      description: Steps to reproduce the problem. If possible, include a screenshot or video.
+      placeholder: |
+        1. 
+        2. 
+        3. 
+        4. 
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: |
+        
+      render: Shell

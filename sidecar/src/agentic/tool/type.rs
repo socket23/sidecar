@@ -125,6 +125,8 @@ pub enum ToolType {
     NewExchangeDuringSession,
     // Undo changes made via exchange
     UndoChangesMadeDuringSession,
+    // context driven hot streak reply which looks at LSP errors
+    ContextDriveHotStreakReply,
 }
 
 impl std::fmt::Display for ToolType {
@@ -208,6 +210,10 @@ impl std::fmt::Display for ToolType {
             ToolType::ContextDrivenChatReply => write!(f, "Context driven chat reply"),
             ToolType::NewExchangeDuringSession => write!(f, "New exchange during session"),
             ToolType::UndoChangesMadeDuringSession => write!(f, "Undo changes made during session"),
+            ToolType::ContextDriveHotStreakReply => write!(
+                f,
+                "Context driven hot streak reply which looks at things out of scope"
+            ),
         }
     }
 }

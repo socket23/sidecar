@@ -6,5 +6,6 @@
 
 pub(crate) mod chat;
 pub(crate) mod exchange;
+pub(crate) mod hot_streak;
 pub mod service;
 pub mod session;

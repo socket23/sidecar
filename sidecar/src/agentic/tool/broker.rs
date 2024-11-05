@@ -59,7 +59,10 @@ use super::{
     ref_filter::ref_filter::ReferenceFilterBroker,
     rerank::base::ReRankBroker,
     search::big_search::BigSearchBroker,
-    session::{chat::SessionChatClient, exchange::SessionExchangeClient},
+    session::{
+        chat::SessionChatClient, exchange::SessionExchangeClient,
+        hot_streak::SessionHotStreakClient,
+    },
     swe_bench::test_tool::SWEBenchTestTool,
 };
 
@@ -422,7 +425,7 @@ impl ToolBroker {
         );
         tools.insert(
             ToolType::ContextDrivenChatReply,
-            Box::new(SessionChatClient::new(llm_client)),
+            Box::new(SessionChatClient::new(llm_client.clone())),
         );
         tools.insert(
             ToolType::NewExchangeDuringSession,
@@ -431,6 +434,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::UndoChangesMadeDuringSession,
             Box::new(UndoChangesMadeDuringExchange::new()),
+        );
+        tools.insert(
+            ToolType::ContextDriveHotStreakReply,
+            Box::new(SessionHotStreakClient::new(llm_client)),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

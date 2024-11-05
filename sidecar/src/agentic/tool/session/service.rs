@@ -514,6 +514,10 @@ impl SessionService {
         self.save_to_storage(&session).await?;
         let session_id = session.session_id().to_owned();
         if accepted {
+            println!(
+                "session_service::feedback_for_exchange::exchange_id({})::accepted::({})",
+                &exchange_id, accepted,
+            );
             // if we have accepted it, then we can help the user move forward
             // there are many conditions we can handle over here
             let is_hot_streak_worthy_message = session

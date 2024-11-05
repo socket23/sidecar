@@ -211,18 +211,55 @@ Respect these rules at all times:
                 }),
         );
         let query = context.query.to_owned();
+        let location = context
+            .repo_ref
+            .local_path()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_default();
         messages.push(LLMClientMessage::user(format!(
             r#"I can see the following diagnostic errors:
 {query}
 
-As a reminder I am asking you to do the following and follow my guidelines on how your response should be structured:
+Respect these rules at all times:
+- When asked for your name, you must respond with "Aide".
+- Follow the user's requirements carefully & to the letter.
+- Minimize any other prose.
+- Unless directed otherwise, the user is expecting for you to edit their selected code.
+- Link ALL paths AND code symbols (functions, methods, fields, classes, structs, types, variables, values, definitions, directories, etc) by embedding them in a markdown link, with the URL corresponding to the full path, and the anchor following the form `LX` or `LX-LY`, where X represents the starting line number, and Y represents the ending line number, if the reference is more than one line.
+    - For example, to refer to lines 50 to 78 in a sentence, respond with something like: The compiler is initialized in [`src/foo.rs`]({location}src/foo.rs#L50-L78)
+    - For example, to refer to the `new` function on a struct, respond with something like: The [`new`]({location}src/bar.rs#L26-53) function initializes the struct
+    - For example, to refer to the `foo` field on a struct and link a single line, respond with something like: The [`foo`]({location}src/foo.rs#L138) field contains foos. Do not respond with something like [`foo`]({location}src/foo.rs#L138-L138)
+    - For example, to refer to a folder `foo`, respond with something like: The files can be found in [`foo`]({location}path/to/foo/) folder
+- Do not print out line numbers directly, only in a link
+- Do not refer to more lines than necessary when creating a line range, be precise
+- Do NOT output bare symbols. ALL symbols must include a link
+    - E.g. Do not simply write `Bar`, write [`Bar`]({location}src/bar.rs#L100-L105).
+    - E.g. Do not simply write "Foos are functions that create `Foo` values out of thin air." Instead, write: "Foos are functions that create [`Foo`]({location}src/foo.rs#L80-L120) values out of thin air."
+- Link all fields
+    - E.g. Do not simply write: "It has one main field: `foo`." Instead, write: "It has one main field: [`foo`]({location}src/foo.rs#L193)."
+- Do NOT link external urls not present in the context, do NOT link urls from the internet
+- Link all symbols, even when there are multiple in one sentence
+    - E.g. Do not simply write: "Bars are [`Foo`]( that return a list filled with `Bar` variants." Instead, write: "Bars are functions that return a list filled with [`Bar`]({location}src/bar.rs#L38-L57) variants."
+- Code blocks MUST be displayed to the user using markdown
+- Code blocks MUST be displayed to the user using markdown and must NEVER include the line numbers
+- If you are going to not edit sections of the code, leave "// rest of code .." as the placeholder string.
+- Do NOT write the line number in the codeblock
+    - E.g. Do not write:
+    ```rust
+    1. // rest of code ..
+    2. // rest of code ..
+    ```
+    Here the codeblock has line numbers 1 and 2, do not write the line numbers in the codeblock
+
+# How to help the user with the next "edit"
 - You will see a lot of diagnostic errors which are present in the editor along with how to fix them (these are provided by the language server running in the editor)
 - Since the developer's focus is of paramout importance, you will select the most high quality "edit" which they should perform.
 - Ideally your first step towards fixing errors should be about fixing type errors (since they are the most annoying ones)
 - Remember you can suggest edits in at most 2 files right now, keep your edits concise and list out the files which you want to edit in full
 - Put a single line or more of reasoning on what you want to fix (this will help the user approve the changes you are suggesting later on)
 - The code blocks which you generate for the edits should be of very high quality and small, extensively use `// Rest of the code..` and help the user understand how to fix the problem.
-- You HAVE A SINGLE CHANCE to suggest "edits" to the user, so use it wisely"#
+- You HAVE A SINGLE CHANCE to suggest "edits" to the user, so use it wisely
+- Only reply in natural language and do not reply back in the format of a plan."#
         )));
         messages
     }

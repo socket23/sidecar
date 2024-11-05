@@ -1214,7 +1214,12 @@ impl Session {
                     }
                     let step = step.expect("is_none to hold");
                     println!("session::perform_plan_generation::new_step_found");
-                    let instruction = step.description();
+                    let step_title = step.title.to_owned();
+                    let step_description = step.description();
+                    let instruction = format!(
+                        r#"{step_title}
+{step_description}"#
+                    );
                     if let Some(file_to_edit) = step.file_to_edit() {
                         let file_open_response = tool_box_clone
                             .file_open(file_to_edit.to_owned(), message_properties_clone.clone())

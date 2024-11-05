@@ -43,9 +43,7 @@ body:
       label: Reproduction
       description: Steps to reproduce the problem. If possible, include a screenshot or video.
       placeholder: |
-        1. Do this
-        2. Then that
-        3. See this?
+        Steps
     validations:
       required: false
   - type: textarea

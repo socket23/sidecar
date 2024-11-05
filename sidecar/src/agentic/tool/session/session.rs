@@ -1488,6 +1488,13 @@ impl Session {
                 )),
             }
 
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::edits_marked_complete(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.request_id_str().to_owned(),
+                ));
+
             // send a message over here static that we can ask the user for review
             let _ = message_properties
                 .ui_sender()

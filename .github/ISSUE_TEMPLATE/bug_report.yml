@@ -11,8 +11,6 @@ body:
     attributes:
       label: Before submitting your bug report
       options:
-        - label: I believe this is a bug. I'll try to join our community channels for questions if I have any.
-          required: false
         - label: I'm not able to find an [open issue](https://github.com/codestoryai/sidecar/issues) that reports the same bug
           required: false
   - type: textarea
@@ -21,13 +19,13 @@ body:
       description: |
         Details about your environment.
 
-        - **OS**: macOS
-        - **Sidecar version**: v0.9.4
-        - **IDE version**:  VSCode 1.85.1
+        - **OS**: 
+        - **Sidecar commit**: 
+        - **IDE commit**: 
       value: |
-        - OS:
-        - Sidecar version:
-        - IDE version:
+        - OS: 
+        - Sidecar commit: 
+        - IDE commit: 
       render: Markdown
     validations:
       required: false
@@ -42,13 +40,12 @@ body:
       required: false
   - type: textarea
     attributes:
-      label: To reproduce
+      label: Reproduction
       description: Steps to reproduce the problem. If possible, include a screenshot or video.
       placeholder: |
-        1. 
-        2. 
-        3. 
-        4. 
+        1. Do this
+        2. Then that
+        3. See this?
     validations:
       required: false
   - type: textarea

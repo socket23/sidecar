@@ -23,6 +23,7 @@ use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::lsp::LSPDiagnosticError;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
 use crate::agentic::symbol::helpers::SymbolFollowupBFS;
+use crate::agentic::symbol::identifier::LLMProperties;
 use crate::agentic::symbol::scratch_pad::ScratchPadAgent;
 use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
@@ -1527,6 +1528,7 @@ pub struct AgentSessionChatRequest {
     #[serde(default)]
     codebase_search: bool,
     access_token: String,
+    llm_properties: Option<LLMProperties>,
 }
 
 /// Handles the agent session and either creates it or appends to it
@@ -1546,6 +1548,7 @@ pub async fn agent_session_chat(
         root_directory: _root_directory,
         codebase_search: _codebase_search,
         access_token,
+        llm_properties: _llm_properties,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     dbg!(&access_token);
@@ -1645,6 +1648,7 @@ pub async fn agent_session_edit_anchored(
         root_directory: _root_directory,
         codebase_search: _codebase_search,
         access_token,
+        llm_properties: _llm_properties,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1754,6 +1758,7 @@ pub async fn agent_session_edit_agentic(
         root_directory,
         codebase_search,
         access_token,
+        llm_properties: _llm_properties,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1864,6 +1869,7 @@ pub async fn agent_session_plan_iterate(
         root_directory,
         codebase_search,
         access_token,
+        llm_properties: _llm_properties,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later
@@ -1974,6 +1980,7 @@ pub async fn agent_session_plan(
         root_directory,
         codebase_search,
         access_token,
+        llm_properties: _llm_properties,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     // bring this back later

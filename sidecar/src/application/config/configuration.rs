@@ -21,10 +21,6 @@ pub struct Configuration {
     /// Bind the webserver to `<host>`
     pub port: u16,
 
-    #[clap(long)]
-    /// Path to the embedding model directory
-    pub model_dir: PathBuf,
-
     #[clap(long, default_value_t = default_host())]
     #[serde(default = "default_host")]
     /// Bind the webserver to `<port>`

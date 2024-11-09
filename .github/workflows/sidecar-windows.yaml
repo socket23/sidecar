@@ -17,18 +17,6 @@ jobs:
     - name: Install 7-Zip
       run: choco install 7zip.install
     
-    - name: Demo run for 7zip
-      run: |
-        ./package_windows.sh
-    
-    - name: Run 7z action
-      run: |
-        7z a -t7z "sidecar_test.7z" "sidecar/onnxruntime/" "sidecar/qdrant/" "sidecar/models/"
-
-    - name: Run 7z action again
-      run: |
-        7z a -t7z "sidecar_test.7z" "sidecar/onnxruntime/" "sidecar/qdrant/" "sidecar/models/"
-
     - name: Setup python
       uses: actions/setup-python@v4
       with:

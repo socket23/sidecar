@@ -6,11 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::application::background::SyncPipes;
-
 pub trait FileSource {
     fn len(&self) -> usize;
-    fn for_each(self, signal: &SyncPipes, iterator: impl Fn(RepoDirectoryEntry) + Sync + Send);
 }
 
 impl RepoDirectoryEntry {

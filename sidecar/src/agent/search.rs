@@ -6,7 +6,6 @@ use crate::{
     application::application::Application,
     chunking::editor_parsing::EditorParsing,
     db::sqlite::SqlDb,
-    git::commit_statistics::GitLogScore,
     repo::types::RepoRef,
     user_context::types::UserContext,
     webserver::model_selection::LLMClientConfig,
@@ -35,11 +34,7 @@ use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, info, warn};
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 static STOPWORDS: OnceCell<StopWords> = OnceCell::new();
 static STOP_WORDS_LIST: &str = include_str!("stopwords.txt");
@@ -53,9 +48,6 @@ pub fn stop_words() -> &'static StopWords {
         sw
     })
 }
-
-const PATH_LIMIT: u64 = 30;
-const PATH_LIMIT_USIZE: usize = 30;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -202,62 +194,8 @@ impl Agent {
         agent
     }
 
-    pub async fn path_search(&mut self, query: &str) -> Result<String> {
-        // Here we first take the user query and perform a lexical search
-        // on all the paths which are present
-        let mut path_matches = self
-            .application
-            .indexes
-            .file
-            .fuzzy_path_match(self.reporef(), query, PATH_LIMIT_USIZE)
-            .await
-            .map(|c| c.relative_path)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-
-        // Now we try semantic search on the same query
-        if self.application.semantic_client.is_some() && path_matches.is_empty() {
-            path_matches = self
-                .application
-                .semantic_client
-                .as_ref()
-                .expect("is_some to hold above")
-                .search(query, self.reporef(), PATH_LIMIT, 0, 0.0, true)
-                .await?
-                .into_iter()
-                .map(|payload| payload.relative_path)
-                .collect::<HashSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
-        }
-
-        // This also updates the path in the last exchange which has happened
-        // with the agent
-        let mut paths = path_matches
-            .iter()
-            .map(|p| (self.get_path_alias(p), p.to_string()))
-            .collect::<Vec<_>>();
-        paths.sort_by(|a: &(usize, String), b| a.0.cmp(&b.0));
-
-        let response = paths
-            .iter()
-            .map(|(alias, path)| format!("{}: {}", alias, path))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Now we want to update the path in agent
-        let last_exchange = self.get_last_conversation_message();
-        last_exchange.add_agent_step(super::types::AgentStep::Path {
-            query: query.to_owned(),
-            response: response.to_owned(),
-            paths: paths
-                .into_iter()
-                .map(|path_with_alias| path_with_alias.1)
-                .collect(),
-        });
-
-        Ok(response)
+    pub async fn path_search(&mut self, _query: &str) -> Result<String> {
+        Ok("".to_owned())
     }
 
     pub fn update_user_selected_variables(&mut self, user_variables: Vec<VariableInformation>) {
@@ -318,151 +256,8 @@ impl Agent {
         Ok(response)
     }
 
-    pub async fn code_search_hybrid(&mut self, query: &str) -> Result<Vec<CodeSpan>> {
-        const CODE_SEARCH_LIMIT: u64 = 10;
-        if self.application.semantic_client.is_none() {
-            return Err(anyhow::anyhow!("no semantic client defined"));
-        }
-        let results_semantic = self
-            .application
-            .semantic_client
-            .as_ref()
-            .expect("is_none to hold")
-            .search(query, self.reporef(), CODE_SEARCH_LIMIT, 0, 0.0, true)
-            .await?;
-        // let hyde_snippets = self.hyde(query).await?;
-        // if !hyde_snippets.is_empty() {
-        //     let hyde_snippets = hyde_snippets.first().unwrap();
-        //     let hyde_search = self
-        //         .application
-        //         .semantic_client
-        //         .as_ref()
-        //         .expect("is_none to hold")
-        //         .search(
-        //             hyde_snippets,
-        //             self.reporef(),
-        //             CODE_SEARCH_LIMIT,
-        //             0,
-        //             0.3,
-        //             true,
-        //         )
-        //         .await?;
-        //     results_semantic.extend(hyde_search);
-        // }
-
-        // Now we do a lexical search as well this is to help figure out which
-        // snippets are relevant
-        let lexical_search_code_snippets = self
-            .application
-            .indexes
-            .code_snippet
-            .lexical_search(
-                self.reporef(),
-                query,
-                CODE_SEARCH_LIMIT
-                    .try_into()
-                    .expect("conversion to not fail"),
-            )
-            .await
-            .unwrap_or(vec![]);
-
-        // Now we get the statistics from the git log and use that for scoring
-        // as well
-        let git_log_score =
-            GitLogScore::generate_git_log_score(self.reporef.clone(), self.application.sql.clone())
-                .await;
-
-        let mut code_snippets_semantic = results_semantic
-            .into_iter()
-            .map(|result| {
-                let path_alias = self.get_path_alias(&result.relative_path);
-                // convert it to a code snippet here
-                let code_span = CodeSpan::new(
-                    result.relative_path,
-                    path_alias,
-                    result.start_line,
-                    result.end_line,
-                    result.text,
-                    result.score,
-                );
-                code_span
-            })
-            .collect::<Vec<_>>();
-
-        let code_snippets_lexical_score: HashMap<String, (f32, CodeSpan)> =
-            lexical_search_code_snippets
-                .into_iter()
-                .map(|lexical_code_snippet| {
-                    let path_alias = self.get_path_alias(&lexical_code_snippet.relative_path);
-                    // convert it to a code snippet here
-                    let code_span = CodeSpan::new(
-                        lexical_code_snippet.relative_path,
-                        path_alias,
-                        lexical_code_snippet.line_start,
-                        lexical_code_snippet.line_end,
-                        lexical_code_snippet.content,
-                        Some(lexical_code_snippet.score),
-                    );
-                    (
-                        code_span.get_unique_key(),
-                        (lexical_code_snippet.score, code_span),
-                    )
-                })
-                .collect();
-
-        // Now that we have the git log score, lets use that to score the results
-        // Lets first get the lexical scores for the code snippets which we are getting from the search
-        code_snippets_semantic = code_snippets_semantic
-            .into_iter()
-            .map(|mut code_snippet| {
-                let unique_key = code_snippet.get_unique_key();
-                // If we don't get anything here we just return 0.3
-                let lexical_score = code_snippets_lexical_score
-                    .get(&unique_key)
-                    .map(|v| &v.0)
-                    .unwrap_or(&0.3);
-                let git_log_score = git_log_score.get_score_for_file(&code_snippet.file_path);
-                if let Some(semantic_score) = code_snippet.score {
-                    code_snippet.score = Some(semantic_score + 2.5 * lexical_score + git_log_score);
-                } else {
-                    code_snippet.score = Some(2.5 * lexical_score + git_log_score);
-                }
-                code_snippet
-            })
-            .collect::<Vec<_>>();
-
-        // We should always include the results from the lexical search, since
-        // we have hits for the keywords so they are worth a lot of points
-        let code_snippet_semantic_keys: HashSet<String> = code_snippets_semantic
-            .iter()
-            .map(|c| c.get_unique_key())
-            .collect();
-        // Now check with the lexical set which are not included in the result
-        // and add them
-        code_snippets_lexical_score
-            .into_iter()
-            .for_each(|(_, mut code_snippet_with_score)| {
-                // if we don't have it, it makes sense to add the results here and give
-                // it a semantic score of 0.3 or something (which is our threshold)
-                let unique_key_for_code_snippet = code_snippet_with_score.1.get_unique_key();
-                if !code_snippet_semantic_keys.contains(&unique_key_for_code_snippet) {
-                    let git_log_score =
-                        git_log_score.get_score_for_file(&code_snippet_with_score.1.file_path);
-                    code_snippet_with_score.1.score =
-                        Some(0.3 + git_log_score + 2.5 * code_snippet_with_score.0);
-                    code_snippets_semantic.push(code_snippet_with_score.1);
-                }
-            });
-        code_snippets_semantic.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-
-        Ok(code_snippets_semantic
-            .into_iter()
-            .take(
-                (CODE_SEARCH_LIMIT * 2)
-                    .try_into()
-                    .expect("20u64 to usize should not fail"),
-            )
-            .collect())
+    pub async fn code_search_hybrid(&mut self, _query: &str) -> Result<Vec<CodeSpan>> {
+        Ok(vec![])
     }
 
     /// This code search combines semantic + lexical + git log score

@@ -16,12 +16,7 @@ fn main() {
     // Copy over the model files to where the binary gets generated at
     // copy_model_files();
     // This will run the migrations scripts for the sqlx
-    let important_files_which_trigger_reindexing = [
-        "src/indexes/file.rs",
-        "src/indexes/schema.rs",
-        "src/chunking/languages.rs",
-        "src/semantic_search/schema.rs",
-    ];
+    let important_files_which_trigger_reindexing = ["src/chunking/languages.rs"];
     let sql_schema_files = ["migrations"];
     let mut hasher = blake3::Hasher::new();
     for path in important_files_which_trigger_reindexing {

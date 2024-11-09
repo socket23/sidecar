@@ -1,6 +1,6 @@
 cargo build --bin webserver --release
 
-pathsToZip="sidecar/onnxruntime/ sidecar/qdrant/ target/release/webserver.exe sidecar/models/"
+pathsToZip="target/release/webserver.exe"
 
 # Destination of the zip file
 zipFileDestination="sidecar.zip"

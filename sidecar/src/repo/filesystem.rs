@@ -13,13 +13,8 @@ use gix::ThreadSafeRepository;
 use ignore::WalkBuilder;
 use regex::RegexSet;
 
-use crate::{
-    application::background::SyncPipes,
-    repo::iterator::{RepositoryDirectory, RepositoryFile},
-};
-
 use super::{
-    iterator::{should_index, should_index_entry, FileSource, FileType, RepoDirectoryEntry},
+    iterator::{should_index, should_index_entry, FileSource, FileType},
     types::RepoRef,
 };
 
@@ -58,37 +53,6 @@ impl FileSource for FileWalker {
     fn len(&self) -> usize {
         self.file_list.len()
     }
-
-    fn for_each(self, signal: &SyncPipes, iterator: impl Fn(RepoDirectoryEntry) + Sync + Send) {
-        use rayon::prelude::*;
-        // using the rayon parallel iterator here so we can walk the directory
-        // in parallel
-        self.file_list
-            .into_par_iter()
-            .filter_map(|entry_disk_path| {
-                if entry_disk_path.is_file() {
-                    let buffer = match std::fs::read_to_string(&entry_disk_path) {
-                        Err(_) => {
-                            return None;
-                        }
-                        Ok(buffer) => buffer,
-                    };
-                    Some(RepoDirectoryEntry::File(RepositoryFile {
-                        buffer,
-                        path: entry_disk_path.to_string_lossy().to_string(),
-                        pathbuf: entry_disk_path,
-                    }))
-                } else if entry_disk_path.is_dir() {
-                    Some(RepoDirectoryEntry::Dir(RepositoryDirectory {
-                        path: entry_disk_path.to_string_lossy().to_string(),
-                    }))
-                } else {
-                    Some(RepoDirectoryEntry::Other)
-                }
-            })
-            .take_any_while(|_| !signal.is_cancelled())
-            .for_each(iterator);
-    }
 }
 
 fn human_readable_branch_name(r: &gix::Reference<'_>) -> String {
@@ -119,7 +83,7 @@ impl Default for BranchFilter {
 }
 
 pub struct GitWalker {
-    git: ThreadSafeRepository,
+    _git: ThreadSafeRepository,
     entries: HashMap<(String, FileType, gix::ObjectId), BTreeSet<String>>,
 }
 
@@ -247,45 +211,12 @@ impl GitWalker {
                 },
             );
 
-        Ok(Self { git, entries })
+        Ok(Self { _git: git, entries })
     }
 }
 
 impl FileSource for GitWalker {
     fn len(&self) -> usize {
         self.entries.len()
-    }
-
-    fn for_each(self, pipes: &SyncPipes, iterator: impl Fn(RepoDirectoryEntry) + Sync + Send) {
-        use rayon::prelude::*;
-        self.entries
-            .into_par_iter()
-            .filter_map(|((path, kind, oid), _)| {
-                let git = self.git.to_thread_local();
-                let Ok(Some(object)) = git.try_find_object(oid) else {
-                    return None;
-                };
-
-                if object.data.len() as u64 > MAX_FILE_LEN {
-                    return None;
-                }
-
-                let entry = match kind {
-                    FileType::File => {
-                        let buffer = String::from_utf8_lossy(&object.data).to_string();
-                        RepoDirectoryEntry::File(RepositoryFile {
-                            path: path.to_owned(),
-                            buffer,
-                            pathbuf: PathBuf::from(path),
-                        })
-                    }
-                    FileType::Directory => RepoDirectoryEntry::Dir(RepositoryDirectory { path }),
-                    FileType::NotTracked => return None,
-                };
-
-                Some(entry)
-            })
-            .take_any_while(|_| !pipes.is_cancelled())
-            .for_each(iterator)
     }
 }

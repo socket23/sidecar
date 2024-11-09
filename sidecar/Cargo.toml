@@ -7,15 +7,12 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["dynamic-ort"]
-dynamic-ort = ["ort/load-dynamic"]
 ee = []
 
 [dependencies]
 async-trait = "0.1.77"
 ndarray = "0.15.6"
 smallvec = { version = "1.11.0", features = ["serde"]}
-ort = { git = "https://github.com/bloopai/ort", branch = "env-builder-telemetry" }
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-util = "0.7.12"
 scc = { version = "1.8.3", features = ["serde"] }

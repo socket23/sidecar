@@ -1,7 +1,6 @@
 use super::agent_stream::generate_agent_stream;
 use super::model_selection::LLMClientConfig;
 use super::types::json;
-use anyhow::Context;
 use llm_prompts::reranking::types::TERMINAL_OUTPUT;
 use std::collections::HashSet;
 
@@ -202,30 +201,13 @@ pub async fn explain(
     let chat_broker = app.chat_broker.clone();
     let llm_broker = app.llm_broker.clone();
     let llm_tokenizer = app.llm_tokenizer.clone();
-    let file_content = app
-        .indexes
-        .file
-        .get_by_path(&relative_path, &repo_ref)
-        .await
-        .context("file retrieval failed")?
-        .context("requested file not found")?
-        .content;
 
     let mut previous_messages =
         ConversationMessage::load_from_db(app.sql.clone(), &repo_ref, thread_id)
             .await
             .expect("loading from db to never fail");
 
-    let snippet = file_content
-        .lines()
-        .skip(start_line.try_into().expect("conversion_should_not_fail"))
-        .take(
-            (end_line - start_line)
-                .try_into()
-                .expect("conversion_should_not_fail"),
-        )
-        .collect::<Vec<_>>()
-        .join("\n");
+    let snippet = "".to_owned();
 
     let mut conversation_message = ConversationMessage::explain_message(
         thread_id,

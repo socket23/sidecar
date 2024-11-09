@@ -18,6 +18,7 @@ use llm_prompts::{
 use once_cell::sync::OnceCell;
 use tracing::{debug, warn};
 
+use crate::repo::state::RepositoryPool;
 use crate::{
     agentic::{
         symbol::{identifier::LLMProperties, manager::SymbolManager, tool_box::ToolBox},
@@ -31,16 +32,10 @@ use crate::{
     db::sqlite::{self, SqlDb},
     inline_completion::{state::FillInMiddleState, symbols_tracker::SymbolTrackerInline},
     reporting::posthog::client::{posthog_client, PosthogClient},
-    semantic_search::client::SemanticClient,
     webserver::agentic::{AnchoredEditingTracker, ProbeRequestTracker},
 };
-use crate::{indexes::indexer::Indexes, repo::state::RepositoryPool};
 
-use super::{
-    background::{BoundSyncQueue, SyncQueue},
-    config::configuration::Configuration,
-    logging::tracing::tracing_subscribe,
-};
+use super::{config::configuration::Configuration, logging::tracing::tracing_subscribe};
 
 static LOGGER_INSTALLED: OnceCell<bool> = OnceCell::new();
 
@@ -50,11 +45,6 @@ pub struct Application {
     // for the application
     pub config: Arc<Configuration>,
     pub repo_pool: RepositoryPool,
-    pub indexes: Arc<Indexes>,
-    pub semantic_client: Option<SemanticClient>,
-    /// Background & maintenance tasks are executed on a separate
-    /// executor
-    pub sync_queue: SyncQueue,
     /// We also want to keep the language parsing functionality here
     pub language_parsing: Arc<TSLanguageParsing>,
     pub sql: SqlDb,
@@ -86,10 +76,8 @@ impl Application {
         debug!(?config, "configuration after loading");
         let repo_pool = config.state_source.initialize_pool()?;
         let config = Arc::new(config);
-        let sync_queue = SyncQueue::start(config.clone());
         let sql_db = Arc::new(sqlite::init(config.clone()).await?);
         let language_parsing = Arc::new(TSLanguageParsing::init());
-        let semantic_client = SemanticClient::new(config.clone(), language_parsing.clone()).await;
         let posthog_client = posthog_client(&config.user_id);
         let llm_broker =
             Arc::new(LLMBroker::new(LLMBrokerConfiguration::new(config.index_dir.clone())).await?);
@@ -139,17 +127,6 @@ impl Application {
         Ok(Self {
             config: config.clone(),
             repo_pool: repo_pool.clone(),
-            semantic_client: semantic_client.clone(),
-            indexes: Indexes::new(
-                repo_pool,
-                sql_db.clone(),
-                semantic_client,
-                config.clone(),
-                language_parsing.clone(),
-            )
-            .await?
-            .into(),
-            sync_queue,
             language_parsing,
             sql: sql_db,
             posthog_client: Arc::new(posthog_client),
@@ -199,10 +176,6 @@ impl Application {
                 .await
                 .expect("scratch_pad directory creation failed");
         }
-    }
-
-    pub fn write_index(&self) -> BoundSyncQueue {
-        self.sync_queue.bind(self.clone())
     }
 }
 

@@ -6,10 +6,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::routing::get;
 use axum::Extension;
 use clap::Parser;
-use sidecar::{
-    application::{application::Application, config::configuration::Configuration},
-    bg_poll::background_polling::poll_repo_updates,
-};
+use sidecar::application::{application::Application, config::configuration::Configuration};
 use std::net::SocketAddr;
 use tokio::signal;
 use tokio::sync::oneshot;
@@ -68,11 +65,6 @@ async fn main() -> Result<()> {
 
 pub async fn run(application: Application) -> Result<()> {
     let mut joins = tokio::task::JoinSet::new();
-
-    // Start background tasks here
-    if application.config.enable_background_polling {
-        tokio::spawn(poll_repo_updates(application.clone()));
-    }
 
     joins.spawn(start(application));
 
@@ -163,7 +155,6 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
             get(sidecar::webserver::config::reach_the_devs),
         )
         .route("/version", get(sidecar::webserver::config::version))
-        .nest("/repo", repo_router())
         .nest("/in_editor", in_editor_router())
         .nest("/tree_sitter", tree_sitter_router())
         .nest("/file", file_operations_router());
@@ -189,18 +180,6 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
         .await?;
 
     Ok(())
-}
-
-fn repo_router() -> Router {
-    use axum::routing::*;
-    Router::new()
-        // 127.0.0.1:42424/api/repo/sync?backend=local/{path_absolute}
-        .route("/sync", get(sidecar::webserver::repos::sync))
-        .route("/status", get(sidecar::webserver::repos::index_status))
-        // Gives back the status of the queue
-        .route("/queue", get(sidecar::webserver::repos::queue_status))
-        // Gives back the repos we know about
-        .route("/repo_list", get(sidecar::webserver::repos::repo_status))
 }
 
 fn plan_router() -> Router {

@@ -44,22 +44,6 @@ pub struct Configuration {
     /// Size of memory to use for file indexes
     pub buffer_size: usize,
 
-    /// Qdrant url here can be mentioned if we are running it remotely or have
-    /// it running on its own process
-    #[clap(long)]
-    #[serde(default = "default_qdrant_url")]
-    pub qdrant_url: String,
-
-    /// The folder where the qdrant binary is present so we can start the server
-    /// and power the qdrant client
-    #[clap(short, long)]
-    pub qdrant_binary_directory: Option<PathBuf>,
-
-    /// The location for the dylib directory where we have the runtime binaries
-    /// required for ort
-    #[clap(short, long)]
-    pub dylib_directory: PathBuf,
-
     /// Qdrant allows us to create collections and we need to provide it a default
     /// value to start with
     #[clap(short, long, default_value_t = default_collection_name())]
@@ -133,10 +117,6 @@ fn default_collection_name() -> String {
 
 fn interactive_batch_size() -> NonZeroUsize {
     NonZeroUsize::new(1).unwrap()
-}
-
-fn default_qdrant_url() -> String {
-    "http://127.0.0.1:6334".to_owned()
 }
 
 fn default_user_id() -> String {

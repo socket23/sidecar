@@ -3,7 +3,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
-    time::SystemTime,
 };
 
 use anyhow::Context;
@@ -227,13 +226,6 @@ impl Repository {
         }
     }
 
-    pub(crate) fn sync_done_with(&mut self, metadata: Arc<RepoMetadata>) {
-        self.last_index_unix_secs = get_unix_time(SystemTime::now());
-        self.last_commit_unix_secs = metadata.last_commit_unix_secs.unwrap_or(0);
-
-        self.sync_status = SyncStatus::Done;
-    }
-
     /// Pre-scan the repository to provide supporting metadata for a
     /// new indexing operation
     pub async fn get_repo_metadata(&self) -> Arc<RepoMetadata> {
@@ -254,12 +246,6 @@ impl Repository {
         }
         .into()
     }
-}
-
-fn get_unix_time(time: SystemTime) -> u64 {
-    time.duration_since(SystemTime::UNIX_EPOCH)
-        .expect("system time error")
-        .as_secs()
 }
 
 #[cfg(test)]

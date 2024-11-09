@@ -26,7 +26,6 @@ use crate::{
     application::application::Application,
     chunking::{editor_parsing::EditorParsing, text_document::Position},
     db::sqlite::SqlDb,
-    indexes::schema::QuickCodeSnippetDocument,
     repo::types::RepoRef,
     user_context::types::{
         UserContext, VariableInformation as UserContextVariableInformation,
@@ -692,20 +691,6 @@ impl CodeSpan {
         format!("{}:{}-{}", self.file_path, self.start_line, self.end_line)
     }
 
-    pub fn from_quick_code_snippet(
-        code_snippet_document: QuickCodeSnippetDocument,
-        path_alias: usize,
-    ) -> Self {
-        Self {
-            file_path: code_snippet_document.path,
-            alias: path_alias,
-            start_line: code_snippet_document.start_line,
-            end_line: code_snippet_document.end_line,
-            score: Some(code_snippet_document.score),
-            data: code_snippet_document.content,
-        }
-    }
-
     pub fn from_active_window(active_window_data: &ActiveWindowData, path_alias: usize) -> Self {
         let file_path = active_window_data.file_path.clone();
         let split_content = active_window_data.file_content.lines().collect::<Vec<_>>();
@@ -1051,16 +1036,6 @@ impl Agent {
             return Ok(Some(content));
         }
         debug!(%self.reporef, path, %self.session_id, "executing file search");
-        let file_reader = self
-            .application
-            .indexes
-            .file
-            .get_by_path(path, &self.reporef)
-            .await
-            .map(|file_document| file_document.map(|doc| doc.content));
-        if let Ok(Some(_)) = file_reader {
-            return file_reader;
-        }
         Ok(None)
     }
 

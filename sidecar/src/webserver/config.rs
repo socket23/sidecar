@@ -13,7 +13,6 @@ use super::types::ApiResponse;
 #[derive(Serialize, Debug)]
 pub(super) struct ConfigResponse {
     response: String,
-    model_dir: String,
 }
 
 #[derive(Serialize, Debug)]
@@ -32,10 +31,9 @@ impl ApiResponse for ReachTheDevsResponse {}
 
 impl ApiResponse for VersionResponse {}
 
-pub async fn get(State(app): State<Application>) -> impl IntoResponse {
+pub async fn get(State(_app): State<Application>) -> impl IntoResponse {
     json(ConfigResponse {
         response: "hello_skcd".to_owned(),
-        model_dir: app.config.model_dir.to_str().unwrap().to_owned(),
     })
 }
 

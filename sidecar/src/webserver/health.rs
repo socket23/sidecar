@@ -1,7 +1,19 @@
-use axum::Extension;
+use axum::{response::IntoResponse, Extension};
 
 use crate::application::application::Application;
 
-/// We send a HC check over here
+use super::types::Result;
+use super::types::{json, ApiResponse};
 
-pub async fn health(Extension(_app): Extension<Application>) {}
+/// We send a HC check over here
+///
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct HealthCheckResponse {
+    done: bool,
+}
+
+impl ApiResponse for HealthCheckResponse {}
+
+pub async fn health(Extension(_app): Extension<Application>) -> Result<impl IntoResponse> {
+    Ok(json(HealthCheckResponse { done: true }))
+}

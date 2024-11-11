@@ -106,6 +106,7 @@ use crate::agentic::tool::plan::generator::{StepGeneratorRequest, StepSenderEven
 use crate::agentic::tool::plan::plan_step::PlanStep;
 use crate::agentic::tool::plan::reasoning::ReasoningRequest;
 use crate::agentic::tool::session::chat::SessionChatMessage;
+use crate::agentic::tool::terminal::terminal::{TerminalInput, TerminalOutput};
 use crate::agentic::tool::r#type::Tool;
 use crate::agentic::tool::ref_filter::ref_filter::ReferenceFilterRequest;
 use crate::agentic::tool::session::exchange::SessionExchangeNewRequest;
@@ -6085,6 +6086,23 @@ FILEPATH: {fs_file_path}
             .await
             .map_err(|e| SymbolError::ToolError(e))?
             .get_lsp_diagnostics()
+            .ok_or(SymbolError::WrongToolOutput)
+    }
+
+    pub async fn use_terminal_command(
+        &self,
+        command: &str,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<TerminalOutput, SymbolError> {
+        let input = ToolInput::TerminalCommand(TerminalInput::new(
+            command.to_owned(),
+            message_properties.editor_url().to_owned(),
+        ));
+        self.tools
+            .invoke(input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .terminal_command()
             .ok_or(SymbolError::WrongToolOutput)
     }
 

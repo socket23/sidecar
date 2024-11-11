@@ -64,6 +64,7 @@ use super::{
         hot_streak::SessionHotStreakClient,
     },
     swe_bench::test_tool::SWEBenchTestTool,
+    terminal::terminal::TerminalTool,
 };
 
 pub struct ToolBrokerConfiguration {
@@ -439,6 +440,7 @@ impl ToolBroker {
             ToolType::ContextDriveHotStreakReply,
             Box::new(SessionHotStreakClient::new(llm_client)),
         );
+        tools.insert(ToolType::TerminalCommand, Box::new(TerminalTool::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

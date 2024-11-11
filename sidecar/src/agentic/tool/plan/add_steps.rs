@@ -315,4 +315,12 @@ impl Tool for PlanAddStepClient {
 
         Ok(ToolOutput::plan_add_step(parsed_response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

@@ -456,4 +456,12 @@ impl Tool for ToolBroker {
             result
         }
     }
+
+    fn tool_description(&self) -> String {
+        r#"The tool broker handles all the tools which are present and provides a common api to work on top of them"#.to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        r#"Notice that you could technically give a tool input over here, but we recommend NOT to do that and instead use individual tools if you are working with that"#.to_owned()
+    }
 }

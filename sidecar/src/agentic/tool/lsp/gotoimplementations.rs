@@ -82,4 +82,12 @@ impl Tool for LSPGoToImplementation {
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
         Ok(ToolOutput::go_to_implementation(response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

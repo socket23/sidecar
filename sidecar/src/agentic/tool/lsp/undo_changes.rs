@@ -71,4 +71,12 @@ impl Tool for UndoChangesMadeDuringExchange {
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
         Ok(ToolOutput::undo_changes_made_during_session(response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

@@ -188,4 +188,12 @@ impl Tool for PlanUpdaterClient {
 
         // damn, this is actually unfinished
     }
+
+    fn tool_description(&self) -> String {
+        "unfinished".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "missing_tool_input".to_owned()
+    }
 }

@@ -194,23 +194,24 @@ impl Tool for BigSearchBroker {
 
         let repository = self.create_repository(&root_directory).await?;
 
-        // let tree_string =
-        //     TreePrinter::to_string_stacked(Path::new(&root_directory)).map_err(|_| {
-        //         ToolError::FileImportantError(FileImportantError::PrintTreeError(root_directory))
-        //     })?;
-
-        // let tree_seed = IterativeSearchSeed::Tree(tree_string);
-
         let mut system = self.create_search_system(repository, &request)?;
 
-        let results = system.run().await.map_err(|e| {
-            dbg!(&e); // needs error logging at this level dude
-            ToolError::IterativeSearchError(e)
-        })?;
+        let results = system
+            .run()
+            .await
+            .map_err(|e| ToolError::IterativeSearchError(e))?;
 
         let duration = start.elapsed();
         println!("BigSearchBroker::invoke::duration: {:?}", duration);
 
         Ok(ToolOutput::BigSearch(results))
+    }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
     }
 }

@@ -221,4 +221,10 @@ impl std::fmt::Display for ToolType {
 #[async_trait]
 pub trait Tool {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError>;
+
+    /// Provides a verbose description for the tool and what it ends up doing
+    fn tool_description(&self) -> String;
+
+    /// Provides an XML format for the input expected by the tool
+    fn tool_input_format(&self) -> String;
 }

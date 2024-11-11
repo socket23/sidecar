@@ -50,6 +50,7 @@ use super::{
         inlay_hints::InlayHintsRequest,
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
+        search_file::SearchFileContentInput,
         undo_changes::UndoChangesMadeDuringExchangeRequest,
     },
     plan::{
@@ -169,6 +170,8 @@ pub enum ToolInput {
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRequest),
     // Context drive hot streak reply
     ContextDriveHotStreakReply(SessionHotStreakRequest),
+    // Search file content with regex
+    SearchFileContentWithRegex(SearchFileContentInput),
 }
 
 impl ToolInput {
@@ -245,6 +248,17 @@ impl ToolInput {
             ToolInput::NewExchangeDuringSession(_) => ToolType::NewExchangeDuringSession,
             ToolInput::UndoChangesMadeDuringSession(_) => ToolType::UndoChangesMadeDuringSession,
             ToolInput::ContextDriveHotStreakReply(_) => ToolType::ContextDriveHotStreakReply,
+            ToolInput::SearchFileContentWithRegex(_) => ToolType::SearchFileContentWithRegex,
+        }
+    }
+
+    pub fn is_search_file_content_with_regex(self) -> Result<SearchFileContentInput, ToolError> {
+        if let ToolInput::SearchFileContentWithRegex(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::SearchFileContentWithRegex,
+            ))
         }
     }
 

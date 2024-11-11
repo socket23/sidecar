@@ -48,6 +48,7 @@ use super::{
         inlay_hints::InlayHints,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
+        search_file::SearchFileContentClient,
         undo_changes::UndoChangesMadeDuringExchange,
     },
     output::ToolOutput,
@@ -438,6 +439,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::ContextDriveHotStreakReply,
             Box::new(SessionHotStreakClient::new(llm_client)),
+        );
+        tools.insert(
+            ToolType::SearchFileContentWithRegex,
+            Box::new(SearchFileContentClient::new()),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

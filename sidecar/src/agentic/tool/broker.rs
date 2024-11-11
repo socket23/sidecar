@@ -66,6 +66,7 @@ use super::{
         hot_streak::SessionHotStreakClient,
     },
     swe_bench::test_tool::SWEBenchTestTool,
+    terminal::terminal::TerminalTool,
 };
 
 pub struct ToolBrokerConfiguration {
@@ -441,6 +442,7 @@ impl ToolBroker {
             ToolType::ContextDriveHotStreakReply,
             Box::new(SessionHotStreakClient::new(llm_client)),
         );
+        tools.insert(ToolType::TerminalCommand, Box::new(TerminalTool::new()));
         tools.insert(
             ToolType::SearchFileContentWithRegex,
             Box::new(SearchFileContentClient::new()),

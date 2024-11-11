@@ -67,6 +67,7 @@ use super::{
         hot_streak::SessionHotStreakRequest,
     },
     swe_bench::test_tool::SWEBenchTestRequest,
+    terminal::terminal::TerminalInput,
 };
 
 #[derive(Debug, Clone)]
@@ -171,6 +172,8 @@ pub enum ToolInput {
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRequest),
     // Context drive hot streak reply
     ContextDriveHotStreakReply(SessionHotStreakRequest),
+    // Terminal command
+    TerminalCommand(TerminalInput),
     // Search file content with regex
     SearchFileContentWithRegex(SearchFileContentInput),
     // List out the files
@@ -251,6 +254,7 @@ impl ToolInput {
             ToolInput::NewExchangeDuringSession(_) => ToolType::NewExchangeDuringSession,
             ToolInput::UndoChangesMadeDuringSession(_) => ToolType::UndoChangesMadeDuringSession,
             ToolInput::ContextDriveHotStreakReply(_) => ToolType::ContextDriveHotStreakReply,
+            ToolInput::TerminalCommand(_) => ToolType::TerminalCommand,
             ToolInput::SearchFileContentWithRegex(_) => ToolType::SearchFileContentWithRegex,
             ToolInput::ListFiles(_) => ToolType::ListFiles,
         }
@@ -919,6 +923,14 @@ impl ToolInput {
             Ok(create_file)
         } else {
             Err(ToolError::WrongToolInput(ToolType::CreateFile))
+        }
+    }
+
+    pub fn is_terminal_command(self) -> Result<TerminalInput, ToolError> {
+        if let ToolInput::TerminalCommand(terminal_command) = self {
+            Ok(terminal_command)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::TerminalCommand))
         }
     }
 }

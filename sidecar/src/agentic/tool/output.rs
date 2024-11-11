@@ -57,6 +57,7 @@ use super::{
         hot_streak::SessionHotStreakResponse,
     },
     swe_bench::test_tool::SWEBenchTestRepsonse,
+    terminal::terminal::TerminalOutput,
 };
 
 #[derive(Debug)]
@@ -199,6 +200,8 @@ pub enum ToolOutput {
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRespnose),
     // context drive hot streak reply
     ContextDriveHotStreakReply(SessionHotStreakResponse),
+    // terminal command
+    TerminalCommand(TerminalOutput),
     // Formatted output after running ripgrep to search for a pattern
     SearchFileContentWithRegex(SearchFileContentWithRegexOutput),
     // Listed out files from a directory traversal
@@ -797,12 +800,20 @@ impl ToolOutput {
         }
     }
 
+    pub fn terminal_command(self) -> Option<TerminalOutput> {
+        match self {
+            ToolOutput::TerminalCommand(response) => Some(response),
+            _ => None,
+        }
+    }
+
     pub fn get_search_file_content_with_regex(self) -> Option<SearchFileContentWithRegexOutput> {
         match self {
             ToolOutput::SearchFileContentWithRegex(response) => Some(response),
             _ => None,
         }
     }
+
 
     pub fn get_list_files_directory(self) -> Option<ListFilesOutput> {
         match self {

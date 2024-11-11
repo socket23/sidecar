@@ -1203,6 +1203,15 @@ impl Session {
             let tool_box_clone = tool_box.clone();
             let message_properties_clone = message_properties.clone();
 
+            // uncomment to test terminal command
+            // let res = tool_box_clone
+            //     .use_terminal_command("ls", message_properties_clone.clone())
+            //     .await;
+            // println!(
+            //     "session::perform_plan_generation::terminal_command::res({:?})",
+            //     res
+            // );
+
             // Spawn the edit task
             let edit_task = tokio::spawn(async move {
                 let mut steps_up_until_now = 0;

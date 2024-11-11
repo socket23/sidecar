@@ -127,6 +127,8 @@ pub enum ToolType {
     UndoChangesMadeDuringSession,
     // context driven hot streak reply which looks at LSP errors
     ContextDriveHotStreakReply,
+    // Terminal command
+    TerminalCommand,
     // Searches the files given a regex pattern
     SearchFileContentWithRegex,
     // List files
@@ -218,6 +220,7 @@ impl std::fmt::Display for ToolType {
                 f,
                 "Context driven hot streak reply which looks at things out of scope"
             ),
+            ToolType::TerminalCommand => write!(f, "Terminal command"),
             ToolType::SearchFileContentWithRegex => write!(f, "Searches for files with a regex"),
             ToolType::ListFiles => write!(f, "List files"),
         }

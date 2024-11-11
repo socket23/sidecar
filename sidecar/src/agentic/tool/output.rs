@@ -46,6 +46,7 @@ use super::{
         inlay_hints::InlayHintsResponse,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
+        search_file::SearchFileContentWithRegexOutput,
         undo_changes::UndoChangesMadeDuringExchangeRespnose,
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
@@ -197,9 +198,15 @@ pub enum ToolOutput {
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRespnose),
     // context drive hot streak reply
     ContextDriveHotStreakReply(SessionHotStreakResponse),
+    // Formatted output after running ripgrep to search for a pattern
+    SearchFileContentWithRegex(SearchFileContentWithRegexOutput),
 }
 
 impl ToolOutput {
+    pub fn search_file_content_with_regex(response: SearchFileContentWithRegexOutput) -> Self {
+        ToolOutput::SearchFileContentWithRegex(response)
+    }
+
     pub fn context_driven_hot_streak_reply(response: SessionHotStreakResponse) -> Self {
         ToolOutput::ContextDriveHotStreakReply(response)
     }
@@ -787,10 +794,10 @@ impl ToolOutput {
         }
     }
 
-    // pub fn plan_updater_output(self) -> Option<_> {
-    //     match self {
-    //         ToolOutput::PlanUpdater(response) => Some(response),
-    //         _ => None,
-    //     }
-    // }
+    pub fn get_search_file_content_with_regex(self) -> Option<SearchFileContentWithRegexOutput> {
+        match self {
+            ToolOutput::SearchFileContentWithRegex(response) => Some(response),
+            _ => None,
+        }
+    }
 }

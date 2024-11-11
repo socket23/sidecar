@@ -74,4 +74,7 @@ pub enum ToolError {
 
     #[error("IO Error: {0}")]
     IOError(#[from] std::io::Error),
+
+    #[error("Output stream not present")]
+    OutputStreamNotPresent,
 }

@@ -44,6 +44,7 @@ use super::{
         gotoreferences::GoToReferencesResponse,
         grep_symbol::LSPGrepSymbolInCodebaseResponse,
         inlay_hints::InlayHintsResponse,
+        list_files::ListFilesOutput,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
         search_file::SearchFileContentWithRegexOutput,
@@ -200,6 +201,8 @@ pub enum ToolOutput {
     ContextDriveHotStreakReply(SessionHotStreakResponse),
     // Formatted output after running ripgrep to search for a pattern
     SearchFileContentWithRegex(SearchFileContentWithRegexOutput),
+    // Listed out files from a directory traversal
+    ListFiles(ListFilesOutput),
 }
 
 impl ToolOutput {
@@ -797,6 +800,13 @@ impl ToolOutput {
     pub fn get_search_file_content_with_regex(self) -> Option<SearchFileContentWithRegexOutput> {
         match self {
             ToolOutput::SearchFileContentWithRegex(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_list_files_directory(self) -> Option<ListFilesOutput> {
+        match self {
+            ToolOutput::ListFiles(response) => Some(response),
             _ => None,
         }
     }

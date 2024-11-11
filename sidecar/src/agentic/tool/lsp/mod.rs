@@ -11,6 +11,7 @@ pub mod gotoreferences;
 pub(crate) mod gototypedefinition;
 pub mod grep_symbol;
 pub mod inlay_hints;
+pub(crate) mod list_files;
 pub mod open_file;
 pub mod quick_fix;
 pub(crate) mod search_file;

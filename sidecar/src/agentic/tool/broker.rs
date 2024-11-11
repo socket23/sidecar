@@ -46,6 +46,7 @@ use super::{
         gototypedefinition::LSPGoToTypeDefinition,
         grep_symbol::GrepSymbolInCodebase,
         inlay_hints::InlayHints,
+        list_files::ListFilesClient,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
         search_file::SearchFileContentClient,
@@ -444,6 +445,7 @@ impl ToolBroker {
             ToolType::SearchFileContentWithRegex,
             Box::new(SearchFileContentClient::new()),
         );
+        tools.insert(ToolType::ListFiles, Box::new(ListFilesClient::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

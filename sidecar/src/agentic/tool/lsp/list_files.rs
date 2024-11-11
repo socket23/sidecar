@@ -180,6 +180,12 @@ pub struct ListFilesOutput {
     files: Vec<PathBuf>,
 }
 
+impl ListFilesOutput {
+    pub fn files(&self) -> &[PathBuf] {
+        self.files.as_slice()
+    }
+}
+
 pub struct ListFilesClient {}
 
 impl ListFilesClient {

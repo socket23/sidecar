@@ -85,6 +85,14 @@ impl Tool for LSPQuickFixClient {
 
         Ok(ToolOutput::quick_fix_list(quick_fix_list))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -147,5 +155,13 @@ impl Tool for LSPQuickFixInvocationClient {
             .await
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
         Ok(ToolOutput::quick_fix_invocation_result(quick_fix_list))
+    }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
     }
 }

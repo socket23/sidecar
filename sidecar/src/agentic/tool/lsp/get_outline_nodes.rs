@@ -434,6 +434,14 @@ impl Tool for OutlineNodesUsingEditorClient {
 
         Ok(ToolOutput::outline_nodes_using_editor(response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }
 
 #[cfg(test)]

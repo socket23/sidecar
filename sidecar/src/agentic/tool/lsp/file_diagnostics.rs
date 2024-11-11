@@ -93,4 +93,12 @@ impl Tool for FileDiagnostics {
 
         Ok(ToolOutput::file_diagnostics(diagnostics_response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

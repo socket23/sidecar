@@ -65,4 +65,12 @@ impl Tool for GoToPreviousWordClient {
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
         Ok(ToolOutput::GoToPreviousWord(response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

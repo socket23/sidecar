@@ -177,6 +177,14 @@ impl Tool for CodeSymbolImportantBroker {
         }
         Err(ToolError::WrongToolInput(ToolType::RequestImportantSymbols))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }
 
 #[derive(Clone, Debug)]

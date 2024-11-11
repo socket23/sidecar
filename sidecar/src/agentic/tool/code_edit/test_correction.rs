@@ -280,4 +280,12 @@ impl Tool for TestCorrection {
         let output = TestOuptutCorrectionResponse::parse_reponse(&response)?;
         Ok(ToolOutput::TestCorrectionOutput(output.corrected_code))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

@@ -1,9 +1,5 @@
-use std::env;
-use std::fmt::Display;
-use std::process::Command;
 use std::{path::PathBuf, sync::Arc};
 
-use llm_client::clients::types::{LLMClientCompletionRequest, LLMClientMessage};
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
@@ -14,17 +10,9 @@ use llm_client::{
     },
 };
 use sidecar::agentic::symbol::ui_event::UIEventWithID;
-use sidecar::agentic::tool::errors::ToolError;
 use sidecar::{
     agentic::{
-        symbol::{
-            events::{
-                input::{SymbolEventRequestId, SymbolInputEvent},
-                message_event::SymbolEventMessageProperties,
-            },
-            identifier::LLMProperties,
-            manager::SymbolManager,
-        },
+        symbol::{identifier::LLMProperties, manager::SymbolManager},
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
@@ -34,8 +22,6 @@ use sidecar::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
     user_context::types::UserContext,
 };
-
-use clap::{Parser, Subcommand};
 
 fn default_index_dir() -> PathBuf {
     match directories::ProjectDirs::from("ai", "codestory", "sidecar") {
@@ -54,7 +40,7 @@ async fn main() {
     println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
 
     // check this
-    let editor_url = "http://localhost:42427".to_owned();
+    let _editor_url = "http://localhost:42427".to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned()));
     let anthropic_llm_properties = LLMProperties::new(
         LLMType::ClaudeSonnet,
@@ -74,7 +60,7 @@ async fn main() {
         .await
         .expect("to initialize properly");
 
-    let llm_broker_clone = LLMBroker::new(LLMBrokerConfiguration::new(default_index_dir()))
+    let _llm_broker_clone = LLMBroker::new(LLMBrokerConfiguration::new(default_index_dir()))
         .await
         .expect("to initialize properly");
 
@@ -98,12 +84,12 @@ async fn main() {
            // ),
     ));
 
-    let user_context = UserContext::new(vec![], vec![], None, vec![]);
+    let _user_context = UserContext::new(vec![], vec![], None, vec![]);
 
     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
 
     // fill this
-    let access_token = String::from("");
+    let _access_token = String::from("");
 
     // let message_properties = SymbolEventMessageProperties::new(
     //     SymbolEventRequestId::new("".to_owned(), "".to_owned()),

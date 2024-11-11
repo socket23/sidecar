@@ -1175,15 +1175,6 @@ impl Session {
                 exchange_id.to_owned(),
             ));
 
-            let test_command = "ls".to_owned();
-            let _ = message_properties
-                .ui_sender()
-                .send(UIEventWithID::terminal_command(
-                    session_id.to_owned(),
-                    exchange_id.to_owned(),
-                    test_command.clone(),
-                ));
-
             let cloned_message_properties = message_properties.clone();
             let cloned_plan_service = plan_service.clone();
             let global_running_context = self.global_running_user_context.clone();
@@ -1211,6 +1202,15 @@ impl Session {
             let symbol_manager_clone = symbol_manager.clone();
             let tool_box_clone = tool_box.clone();
             let message_properties_clone = message_properties.clone();
+
+            // zi: to remove
+            // let res = tool_box_clone
+            //     .use_terminal_command("ls", message_properties_clone.clone())
+            //     .await;
+            // println!(
+            //     "session::perform_plan_generation::terminal_command::res({:?})",
+            //     res
+            // );
 
             // Spawn the edit task
             let edit_task = tokio::spawn(async move {

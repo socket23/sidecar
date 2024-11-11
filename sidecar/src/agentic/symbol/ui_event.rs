@@ -645,6 +645,16 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn terminal_command(session_id: String, exchange_id: String, command: String) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::ExchangeEvent(ExchangeMessageEvent::TerminalCommand(
+                TerminalCommandEvent::new(session_id, exchange_id, command),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1184,6 +1194,24 @@ pub enum FrameworkEvent {
     AgenticTopLevelThinking(String),
     AgenticSymbolLevelThinking(StepListItem),
     ReferencesUsed(FrameworkReferencesUsed),
+    TerminalCommand(TerminalCommandEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TerminalCommandEvent {
+    session_id: String,
+    exchange_id: String,
+    command: String,
+}
+
+impl TerminalCommandEvent {
+    pub fn new(session_id: String, exchange_id: String, command: String) -> Self {
+        Self {
+            session_id,
+            exchange_id,
+            command,
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1210,6 +1238,7 @@ pub enum ExchangeMessageEvent {
     EditsExchangeState(EditsExchangeStateEvent),
     PlansExchangeState(EditsExchangeStateEvent),
     ExecutionState(ExecutionExchangeStateEvent),
+    TerminalCommand(TerminalCommandEvent),
 }
 
 #[derive(Debug, serde::Serialize)]

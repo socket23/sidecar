@@ -1175,6 +1175,15 @@ impl Session {
                 exchange_id.to_owned(),
             ));
 
+            let test_command = "ls".to_owned();
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::terminal_command(
+                    session_id.to_owned(),
+                    exchange_id.to_owned(),
+                    test_command.clone(),
+                ));
+
             let cloned_message_properties = message_properties.clone();
             let cloned_plan_service = plan_service.clone();
             let global_running_context = self.global_running_user_context.clone();

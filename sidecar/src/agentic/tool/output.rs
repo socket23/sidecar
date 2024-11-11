@@ -55,6 +55,7 @@ use super::{
         hot_streak::SessionHotStreakResponse,
     },
     swe_bench::test_tool::SWEBenchTestRepsonse,
+    terminal::terminal::TerminalOutput,
 };
 
 #[derive(Debug)]
@@ -197,6 +198,8 @@ pub enum ToolOutput {
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRespnose),
     // context drive hot streak reply
     ContextDriveHotStreakReply(SessionHotStreakResponse),
+    // terminal command
+    TerminalCommand(TerminalOutput),
 }
 
 impl ToolOutput {
@@ -783,6 +786,13 @@ impl ToolOutput {
     pub fn get_context_driven_hot_streak_reply(self) -> Option<SessionHotStreakResponse> {
         match self {
             ToolOutput::ContextDriveHotStreakReply(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn terminal_command(self) -> Option<TerminalOutput> {
+        match self {
+            ToolOutput::TerminalCommand(response) => Some(response),
             _ => None,
         }
     }

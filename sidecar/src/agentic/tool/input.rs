@@ -65,6 +65,7 @@ use super::{
         hot_streak::SessionHotStreakRequest,
     },
     swe_bench::test_tool::SWEBenchTestRequest,
+    terminal::terminal::TerminalInput,
 };
 
 #[derive(Debug, Clone)]
@@ -169,6 +170,8 @@ pub enum ToolInput {
     UndoChangesMadeDuringSession(UndoChangesMadeDuringExchangeRequest),
     // Context drive hot streak reply
     ContextDriveHotStreakReply(SessionHotStreakRequest),
+    // Terminal command
+    TerminalCommand(TerminalInput),
 }
 
 impl ToolInput {
@@ -245,6 +248,7 @@ impl ToolInput {
             ToolInput::NewExchangeDuringSession(_) => ToolType::NewExchangeDuringSession,
             ToolInput::UndoChangesMadeDuringSession(_) => ToolType::UndoChangesMadeDuringSession,
             ToolInput::ContextDriveHotStreakReply(_) => ToolType::ContextDriveHotStreakReply,
+            ToolInput::TerminalCommand(_) => ToolType::TerminalCommand,
         }
     }
 
@@ -893,6 +897,14 @@ impl ToolInput {
             Ok(create_file)
         } else {
             Err(ToolError::WrongToolInput(ToolType::CreateFile))
+        }
+    }
+
+    pub fn is_terminal_command(self) -> Result<TerminalInput, ToolError> {
+        if let ToolInput::TerminalCommand(terminal_command) = self {
+            Ok(terminal_command)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::TerminalCommand))
         }
     }
 }

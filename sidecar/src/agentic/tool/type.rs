@@ -127,6 +127,8 @@ pub enum ToolType {
     UndoChangesMadeDuringSession,
     // context driven hot streak reply which looks at LSP errors
     ContextDriveHotStreakReply,
+    // Terminal command
+    TerminalCommand,
 }
 
 impl std::fmt::Display for ToolType {
@@ -214,6 +216,7 @@ impl std::fmt::Display for ToolType {
                 f,
                 "Context driven hot streak reply which looks at things out of scope"
             ),
+            ToolType::TerminalCommand => write!(f, "Terminal command"),
         }
     }
 }

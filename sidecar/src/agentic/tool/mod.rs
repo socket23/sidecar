@@ -36,4 +36,5 @@ pub mod rerank;
 pub mod search;
 pub mod session;
 pub mod swe_bench;
+pub mod terminal;
 pub mod r#type;

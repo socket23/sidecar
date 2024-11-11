@@ -48,8 +48,10 @@ use super::{
         gotoreferences::GoToReferencesRequest,
         grep_symbol::LSPGrepSymbolInCodebaseRequest,
         inlay_hints::InlayHintsRequest,
+        list_files::ListFilesInput,
         open_file::OpenFileRequest,
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
+        search_file::SearchFileContentInput,
         undo_changes::UndoChangesMadeDuringExchangeRequest,
     },
     plan::{
@@ -172,6 +174,10 @@ pub enum ToolInput {
     ContextDriveHotStreakReply(SessionHotStreakRequest),
     // Terminal command
     TerminalCommand(TerminalInput),
+    // Search file content with regex
+    SearchFileContentWithRegex(SearchFileContentInput),
+    // List out the files
+    ListFiles(ListFilesInput),
 }
 
 impl ToolInput {
@@ -249,6 +255,26 @@ impl ToolInput {
             ToolInput::UndoChangesMadeDuringSession(_) => ToolType::UndoChangesMadeDuringSession,
             ToolInput::ContextDriveHotStreakReply(_) => ToolType::ContextDriveHotStreakReply,
             ToolInput::TerminalCommand(_) => ToolType::TerminalCommand,
+            ToolInput::SearchFileContentWithRegex(_) => ToolType::SearchFileContentWithRegex,
+            ToolInput::ListFiles(_) => ToolType::ListFiles,
+        }
+    }
+
+    pub fn is_list_files(self) -> Result<ListFilesInput, ToolError> {
+        if let ToolInput::ListFiles(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::ListFiles))
+        }
+    }
+
+    pub fn is_search_file_content_with_regex(self) -> Result<SearchFileContentInput, ToolError> {
+        if let ToolInput::SearchFileContentWithRegex(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::SearchFileContentWithRegex,
+            ))
         }
     }
 

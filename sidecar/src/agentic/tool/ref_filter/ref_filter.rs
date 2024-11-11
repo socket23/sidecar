@@ -681,4 +681,12 @@ impl Tool for ReferenceFilterBroker {
 
         Ok(ToolOutput::ReferencesFilter(relevant_references))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

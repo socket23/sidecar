@@ -192,4 +192,11 @@ impl Tool for CodeCorrectnessBroker {
             ))
         }
     }
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

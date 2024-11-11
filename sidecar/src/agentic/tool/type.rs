@@ -129,6 +129,10 @@ pub enum ToolType {
     ContextDriveHotStreakReply,
     // Terminal command
     TerminalCommand,
+    // Searches the files given a regex pattern
+    SearchFileContentWithRegex,
+    // List files
+    ListFiles,
 }
 
 impl std::fmt::Display for ToolType {
@@ -217,6 +221,8 @@ impl std::fmt::Display for ToolType {
                 "Context driven hot streak reply which looks at things out of scope"
             ),
             ToolType::TerminalCommand => write!(f, "Terminal command"),
+            ToolType::SearchFileContentWithRegex => write!(f, "Searches for files with a regex"),
+            ToolType::ListFiles => write!(f, "List files"),
         }
     }
 }
@@ -224,4 +230,10 @@ impl std::fmt::Display for ToolType {
 #[async_trait]
 pub trait Tool {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError>;
+
+    /// Provides a verbose description for the tool and what it ends up doing
+    fn tool_description(&self) -> String;
+
+    /// Provides an XML format for the input expected by the tool
+    fn tool_input_format(&self) -> String;
 }

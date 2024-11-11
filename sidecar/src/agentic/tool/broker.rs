@@ -46,8 +46,10 @@ use super::{
         gototypedefinition::LSPGoToTypeDefinition,
         grep_symbol::GrepSymbolInCodebase,
         inlay_hints::InlayHints,
+        list_files::ListFilesClient,
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
+        search_file::SearchFileContentClient,
         undo_changes::UndoChangesMadeDuringExchange,
     },
     output::ToolOutput,
@@ -441,6 +443,11 @@ impl ToolBroker {
             Box::new(SessionHotStreakClient::new(llm_client)),
         );
         tools.insert(ToolType::TerminalCommand, Box::new(TerminalTool::new()));
+        tools.insert(
+            ToolType::SearchFileContentWithRegex,
+            Box::new(SearchFileContentClient::new()),
+        );
+        tools.insert(ToolType::ListFiles, Box::new(ListFilesClient::new()));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }
@@ -457,5 +464,13 @@ impl Tool for ToolBroker {
             let result = Err(ToolError::MissingTool);
             result
         }
+    }
+
+    fn tool_description(&self) -> String {
+        r#"The tool broker handles all the tools which are present and provides a common api to work on top of them"#.to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        r#"Notice that you could technically give a tool input over here, but we recommend NOT to do that and instead use individual tools if you are working with that"#.to_owned()
     }
 }

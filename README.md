@@ -32,7 +32,7 @@ Broadly speaking these are the following important bits in Sidecar:
 ## Getting Started
 1. Ensure you are using Rust 1.73
 2. Build the binary: `cargo build --bin webserver`
-3. Run the binary: `./target/debug/webserver --qdrant-binary-directory ./sidecar/qdrant --dylib-directory ./sidecar/onnxruntime/ --model-dir ./sidecar/models/all-MiniLM-L6-v2/ --qdrant-url http://127.0.0.1:6334`
+3. Run the binary: `./target/debug/webserver`
 4. Profit!
 
 ## Bonus on how to get your Aide editor to talk to Sidecar:

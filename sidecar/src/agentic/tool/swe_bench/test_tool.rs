@@ -61,4 +61,12 @@ impl Tool for SWEBenchTestTool {
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
         Ok(ToolOutput::swe_bench_test_output(response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

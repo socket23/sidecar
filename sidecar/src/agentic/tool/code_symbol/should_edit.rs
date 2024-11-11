@@ -152,4 +152,12 @@ impl Tool for ShouldEditCodeSymbol {
         let parsed_response = ShouldEditCodeSymbolResponse::parse_response(&response)?;
         Ok(ToolOutput::should_edit_code(parsed_response))
     }
+
+    fn tool_description(&self) -> String {
+        "".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

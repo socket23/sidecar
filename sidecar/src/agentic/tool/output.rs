@@ -44,8 +44,10 @@ use super::{
         gotoreferences::GoToReferencesResponse,
         grep_symbol::LSPGrepSymbolInCodebaseResponse,
         inlay_hints::InlayHintsResponse,
+        list_files::ListFilesOutput,
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
+        search_file::SearchFileContentWithRegexOutput,
         undo_changes::UndoChangesMadeDuringExchangeRespnose,
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
@@ -200,9 +202,17 @@ pub enum ToolOutput {
     ContextDriveHotStreakReply(SessionHotStreakResponse),
     // terminal command
     TerminalCommand(TerminalOutput),
+    // Formatted output after running ripgrep to search for a pattern
+    SearchFileContentWithRegex(SearchFileContentWithRegexOutput),
+    // Listed out files from a directory traversal
+    ListFiles(ListFilesOutput),
 }
 
 impl ToolOutput {
+    pub fn search_file_content_with_regex(response: SearchFileContentWithRegexOutput) -> Self {
+        ToolOutput::SearchFileContentWithRegex(response)
+    }
+
     pub fn context_driven_hot_streak_reply(response: SessionHotStreakResponse) -> Self {
         ToolOutput::ContextDriveHotStreakReply(response)
     }
@@ -797,10 +807,18 @@ impl ToolOutput {
         }
     }
 
-    // pub fn plan_updater_output(self) -> Option<_> {
-    //     match self {
-    //         ToolOutput::PlanUpdater(response) => Some(response),
-    //         _ => None,
-    //     }
-    // }
+    pub fn get_search_file_content_with_regex(self) -> Option<SearchFileContentWithRegexOutput> {
+        match self {
+            ToolOutput::SearchFileContentWithRegex(response) => Some(response),
+            _ => None,
+        }
+    }
+
+
+    pub fn get_list_files_directory(self) -> Option<ListFilesOutput> {
+        match self {
+            ToolOutput::ListFiles(response) => Some(response),
+            _ => None,
+        }
+    }
 }

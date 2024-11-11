@@ -1203,7 +1203,7 @@ impl Session {
             let tool_box_clone = tool_box.clone();
             let message_properties_clone = message_properties.clone();
 
-            // zi: to remove
+            // uncomment to test terminal command
             // let res = tool_box_clone
             //     .use_terminal_command("ls", message_properties_clone.clone())
             //     .await;

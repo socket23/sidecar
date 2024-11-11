@@ -23,22 +23,12 @@ impl TerminalInput {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TerminalOutput {
-    stdout: String,
-    stderr: String,
-    exit_code: i32,
+    output: String,
 }
 
 impl TerminalOutput {
-    pub fn stdout(&self) -> &str {
-        &self.stdout
-    }
-
-    pub fn stderr(&self) -> &str {
-        &self.stderr
-    }
-
-    pub fn exit_code(&self) -> i32 {
-        self.exit_code
+    pub fn output(&self) -> &str {
+        &self.output
     }
 }
 

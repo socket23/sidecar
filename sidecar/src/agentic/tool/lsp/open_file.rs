@@ -10,6 +10,16 @@ pub struct OpenFileRequestPartial {
     fs_file_path: String,
 }
 
+impl OpenFileRequestPartial {
+    pub fn new(fs_file_path: String) -> Self {
+        Self { fs_file_path }
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileRequest {
     fs_file_path: String,

@@ -24,12 +24,14 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::{models::broker::CodeEditBroker, types::CodeEditingPartialRequest},
-            input::ToolInputPartial,
+            input::{ToolInput, ToolInputPartial},
             lsp::{
-                file_diagnostics::WorkspaceDiagnosticsPartial, list_files::ListFilesInput,
-                open_file::OpenFileRequestPartial, search_file::SearchFileContentInputPartial,
+                file_diagnostics::WorkspaceDiagnosticsPartial,
+                list_files::ListFilesInput,
+                open_file::{OpenFileRequest, OpenFileRequestPartial},
+                search_file::SearchFileContentInputPartial,
             },
-            r#type::ToolType,
+            r#type::{Tool, ToolType},
             session::{
                 ask_followup_question::AskFollowupQuestionsRequest,
                 attempt_completion::AttemptCompletionClientRequest,
@@ -163,7 +165,13 @@ async fn main() {
                 ToolInputPartial::ListFiles(list_files) => {
                     println!("list files: {}", list_files.directory_path())
                 }
-                ToolInputPartial::OpenFile(open_file) => {}
+                ToolInputPartial::OpenFile(open_file) => {
+                    let open_file_path = open_file.fs_file_path().to_owned();
+                    let request = OpenFileRequest::new(open_file_path, editor_url.clone());
+                    let input = ToolInput::OpenFile(request);
+                    let response = tool_broker.invoke(input).await;
+                    println!("response: {:?}", response);
+                }
                 ToolInputPartial::SearchFileContentWithRegex(search_filex) => {}
                 ToolInputPartial::TerminalCommand(terminal_command) => {}
             },

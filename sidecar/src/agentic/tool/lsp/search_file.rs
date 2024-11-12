@@ -282,10 +282,32 @@ impl Tool for SearchFileContentClient {
     }
 
     fn tool_description(&self) -> String {
-        "".to_owned()
+        format!(
+            r#"Request to perform a regex search across files in a specified directory, providing context-rich results.
+This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context."#
+        )
     }
 
     fn tool_input_format(&self) -> String {
-        "".to_owned()
+        format!(
+            r#"Parameters:
+- directory_path: (required) The absolute path of the directory to search in. This directory will be recursively searched.
+- regex_pattern: (required) The regular expression pattern to search for. Uses Rust regex syntax.
+- file_pattern: (optional) Glob pattern to filter files (e.g., '*.ts' for TypeScript files). If not provided, it will search all files (*).
+
+Usage:
+<search_files>
+<directory_path>
+Directory path here
+</directory_path>
+<regex_pattern>
+Your regex pattern here
+</regex_pattern>
+<file_pattern>
+file pattern here (optional)
+</file_pattern>
+</search_files>
+"#
+        )
     }
 }

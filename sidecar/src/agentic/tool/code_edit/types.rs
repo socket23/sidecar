@@ -461,11 +461,26 @@ impl Tool for CodeEditingTool {
     }
 
     fn tool_description(&self) -> String {
-        "".to_owned()
+        "Edit a file. The tool is able to edit the file precisely based on instruction. If the file doesn't exist, it will be created. The tool will automatically create any directories needed to write the file.".to_owned()
     }
 
     fn tool_input_format(&self) -> String {
-        "".to_owned()
+        format!(
+            r#"Parameters: 
+- fs_file_path: (required) The absolute path of the file to write to.
+- instruction: (required) The edit instruction.
+
+Usage:
+<code_edit_input>
+<fs_file_path>
+File path here
+</fs_file_path>
+<instruction>
+Edit instruction here
+</instruction>
+</code_edit_input>
+"#
+        )
     }
 }
 

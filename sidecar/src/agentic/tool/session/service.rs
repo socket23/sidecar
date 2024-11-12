@@ -461,7 +461,12 @@ impl SessionService {
 
         // Now we can start editing the selection over here
         session = session
-            .perform_anchored_edit(exchange_id, scratch_pad_agent, message_properties)
+            .perform_anchored_edit(
+                exchange_id,
+                scratch_pad_agent,
+                self.tool_box.clone(),
+                message_properties,
+            )
             .await?;
 
         // save the session to the disk

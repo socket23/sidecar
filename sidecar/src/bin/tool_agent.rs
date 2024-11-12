@@ -178,7 +178,7 @@ async fn main() {
     loop {
         let parent_exchange_id = exchange_id;
         exchange_id = exchange_id + 1;
-        let tool_to_use = session
+        let (tool_to_use, session_new) = session
             .clone()
             .get_tool_to_use(
                 tool_box.clone(),
@@ -190,6 +190,7 @@ async fn main() {
                 parent_exchange_id.to_string(),
             )
             .await;
+        session = session_new;
         // okay now that we have the right thing we want to keep running this as a loop
         // and see what comes out of it
         match tool_to_use {

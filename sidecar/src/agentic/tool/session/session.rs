@@ -914,7 +914,7 @@ impl Session {
         default_shell: String,
         exchange_id: String,
         parent_exchange_id: String,
-    ) -> Option<ToolInputPartial> {
+    ) -> (Option<ToolInputPartial>, Self) {
         // figure out what to do over here given the state of the session
         let mut converted_messages = vec![];
         for previous_message in self.exchanges.iter() {
@@ -957,11 +957,11 @@ impl Session {
                     tool_type,
                     thinking,
                 ));
-                return Some(tool_input_partial);
+                return (Some(tool_input_partial), self);
             }
             _ => {}
         }
-        None
+        (None, self)
     }
 
     /// This reacts to the last message and generates the reply for the user to handle

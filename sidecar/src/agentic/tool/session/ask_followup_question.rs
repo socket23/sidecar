@@ -14,12 +14,16 @@ impl AskFollowupQuestions {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AskFollowupQuestionsRequest {
-    user_question: String,
+    question: String,
 }
 
 impl AskFollowupQuestionsRequest {
-    pub fn new(user_question: String) -> Self {
-        Self { user_question }
+    pub fn new(question: String) -> Self {
+        Self { question }
+    }
+
+    pub fn question(&self) -> &str {
+        &self.question
     }
 }
 
@@ -44,15 +48,20 @@ impl AskFollowupQuestionsResponse {
 impl Tool for AskFollowupQuestions {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {
         let context = input.is_ask_followup_questions()?;
-        let response = AskFollowupQuestionsResponse::new(context.user_question);
+        let response = AskFollowupQuestionsResponse::new(context.question);
         Ok(ToolOutput::AskFollowupQuestions(response))
     }
 
     fn tool_description(&self) -> String {
-        "".to_owned()
+        r#"Ask the user a question to gather additional information needed to complete the task. This tool should be used when you encounter ambiguities, need clarification, or require more details to proceed effectively. It allows for interactive problem-solving by enabling direct communication with the user. Use this tool judiciously to maintain a balance between gathering necessary information and avoiding excessive back-and-forth."#.to_owned()
     }
 
     fn tool_input_format(&self) -> String {
-        "".to_owned()
+        r#"Parameters:
+- question: (required) The question to ask the user. This should be a clear, specific question that addresses the information you need.
+Usage:
+<ask_followup_question>
+<question>Your question here</question>
+</ask_followup_question>"#.to_owned()
     }
 }

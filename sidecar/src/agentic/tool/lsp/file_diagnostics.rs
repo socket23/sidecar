@@ -20,6 +20,12 @@ pub struct FileDiagnostics {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WorkspaceDiagnosticsPartial {}
 
+impl WorkspaceDiagnosticsPartial {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FileDiagnosticsInput {
     fs_file_path: String,

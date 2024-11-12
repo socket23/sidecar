@@ -175,6 +175,12 @@ pub struct ListFilesInput {
     recursive: bool,
 }
 
+impl ListFilesInput {
+    pub fn directory_path(&self) -> &str {
+        &self.directory_path
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ListFilesOutput {
     files: Vec<PathBuf>,

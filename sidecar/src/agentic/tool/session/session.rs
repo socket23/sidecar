@@ -541,6 +541,7 @@ pub struct Session {
     exchanges: Vec<Exchange>,
     storage_path: String,
     global_running_user_context: UserContext,
+    tools: Vec<ToolType>,
 }
 
 impl Session {
@@ -550,6 +551,7 @@ impl Session {
         repo_ref: RepoRef,
         storage_path: String,
         global_running_user_context: UserContext,
+        tools: Vec<ToolType>,
     ) -> Self {
         Self {
             session_id,
@@ -558,6 +560,7 @@ impl Session {
             exchanges: vec![],
             storage_path,
             global_running_user_context,
+            tools,
         }
     }
 
@@ -855,6 +858,25 @@ impl Session {
                 message_properties.request_id_str().to_owned(),
             ));
         Ok(self)
+    }
+
+    /// Toolformer, this just use the tools in a loop and uses a custom system prompt
+    /// Runs totally via auto-approval flow and waits for no input from the user today
+    pub async fn tool_former(mut self, user_query: String) -> Result<(), SymbolError> {
+        let mut exchange_id = 0;
+        self.exchanges.push(Exchange::human_chat(
+            exchange_id.to_string(),
+            user_query,
+            UserContext::new(vec![], vec![], None, vec![]),
+            self.project_labels.clone(),
+            self.repo_ref.clone(),
+        ));
+
+        // increment the exchange_id over here
+        exchange_id = exchange_id + 1;
+        loop {
+            // now we want it to choose the tools based on the custom system message
+        }
     }
 
     /// This reacts to the last message and generates the reply for the user to handle

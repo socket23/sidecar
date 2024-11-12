@@ -12,7 +12,7 @@ use crate::{
             manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
             ui_event::UIEventWithID,
         },
-        tool::plan::service::PlanService,
+        tool::{plan::service::PlanService, r#type::ToolType},
     },
     chunking::text_document::Range,
     repo::types::RepoRef,
@@ -60,6 +60,24 @@ impl SessionService {
             .map(|cancellation_token| cancellation_token.clone())
     }
 
+    fn create_new_session_with_tools(
+        &self,
+        session_id: &str,
+        project_labels: Vec<String>,
+        repo_ref: RepoRef,
+        storage_path: String,
+        tools: Vec<ToolType>,
+    ) -> Session {
+        Session::new(
+            session_id.to_owned(),
+            project_labels,
+            repo_ref,
+            storage_path,
+            UserContext::default(),
+            tools,
+        )
+    }
+
     fn create_new_session(
         &self,
         session_id: String,
@@ -74,6 +92,7 @@ impl SessionService {
             repo_ref,
             storage_path,
             global_user_context,
+            vec![],
         )
     }
 

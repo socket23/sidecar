@@ -156,6 +156,27 @@ impl SearchFileContentInputPartial {
     pub fn file_pattern(&self) -> Option<&str> {
         self.file_pattern.as_deref()
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<search_files>
+<directory_path>
+{}
+</directory_path>
+<regex_pattern>
+{}
+</regex_pattern>
+<file_pattern>
+{}
+</file_pattern>
+</search_files>"#,
+            self.directory_path,
+            self.regex_pattern,
+            self.file_pattern
+                .clone()
+                .unwrap_or("not provided".to_owned())
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

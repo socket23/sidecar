@@ -179,6 +179,20 @@ impl ListFilesInput {
     pub fn directory_path(&self) -> &str {
         &self.directory_path
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<list_files>
+<directory_path>
+{}
+</directory_path>
+<recursive>
+{}
+</recursive>
+</list_files>"#,
+            self.directory_path, self.recursive
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

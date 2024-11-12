@@ -40,6 +40,20 @@ impl CodeEditingPartialRequest {
     pub fn instruction(&self) -> &str {
         &self.instruction
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<code_edit_input>
+<fs_file_path>
+{}
+</fs_file_path>
+<instruction>
+{}
+</instruction>
+</code_edit_input>"#,
+            self.fs_file_path, self.instruction
+        )
+    }
 }
 
 #[derive(Clone, Debug)]

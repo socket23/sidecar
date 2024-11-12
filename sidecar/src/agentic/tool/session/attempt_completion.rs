@@ -22,6 +22,23 @@ impl AttemptCompletionClientRequest {
     pub fn new(result: String, command: Option<String>) -> Self {
         Self { result, command }
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<attempt_completion>
+<result>
+{}
+</result>
+<command>
+{}
+</command>
+</attempt_completion>"#,
+            self.result,
+            self.command
+                .clone()
+                .unwrap_or("no command provided".to_owned())
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

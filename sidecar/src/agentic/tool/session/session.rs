@@ -504,12 +504,8 @@ impl Exchange {
 my reason for using this is:
 {thinking}
 my inputs for the tool are:
-{:#?}"#,
-                            // this is a big hack, we should convert it properly
-                            // lets try it out
-                            // TODO(codestory): We should write a good function to format the input over here
-                            // in the same format which we have in the system message
-                            &tool_input_parameters
+{}"#,
+                            tool_input_parameters.to_string()
                         ))
                     }
                 }

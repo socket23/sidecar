@@ -25,6 +25,17 @@ impl AskFollowupQuestionsRequest {
     pub fn question(&self) -> &str {
         &self.question
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<ask_followup_question>
+<question>
+{}
+</question>
+</ask_followup_question>"#,
+            self.question
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

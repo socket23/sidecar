@@ -98,6 +98,21 @@ impl ToolInputPartial {
             Self::AttemptCompletion(_) => ToolType::AttemptCompletion,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::CodeEditing(code_editing) => code_editing.to_string(),
+            Self::ListFiles(list_files) => list_files.to_string(),
+            Self::SearchFileContentWithRegex(search_file_content_with_regex) => {
+                search_file_content_with_regex.to_string()
+            }
+            Self::OpenFile(open_file) => open_file.to_string(),
+            Self::LSPDiagnostics(lsp_diagnostics) => lsp_diagnostics.to_string(),
+            Self::TerminalCommand(terminal_command) => terminal_command.to_string(),
+            Self::AskFollowupQuestions(ask_followup_question) => ask_followup_question.to_string(),
+            Self::AttemptCompletion(attempt_completion) => attempt_completion.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

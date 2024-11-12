@@ -18,6 +18,17 @@ impl OpenFileRequestPartial {
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<read_file>
+<fs_file_path>
+{}
+</fs_file_path>
+</read_file>"#,
+            &self.fs_file_path
+        )
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

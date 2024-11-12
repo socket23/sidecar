@@ -24,6 +24,16 @@ impl WorkspaceDiagnosticsPartial {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<get_diagnostics>
+<fs_file_path>
+{{full workspace}}
+</fs_file_path>
+</get_diagnostics>"#
+        )
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -7,6 +7,8 @@ use llm_client::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::agentic::symbol::identifier::LLMProperties;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LLMClientConfig {
     pub slow_model: LLMType,
@@ -24,6 +26,25 @@ pub struct LLMClientLoggingConfig {
 }
 
 impl LLMClientConfig {
+    /// Grabs the llm provider which is given by the user input
+    pub fn llm_properties_for_slow_model(&self) -> Option<LLMProperties> {
+        let model = self.models.get(&self.slow_model);
+        if model.is_none() {
+            return None;
+        }
+        let model = model.expect("is_none above to hold");
+        let provider = &model.provider;
+        let provider_api_keys = self.providers.iter().find(|p| p.key(provider).is_some());
+        if let Some(provider_api_keys) = provider_api_keys {
+            Some(LLMProperties::new(
+                self.slow_model.clone(),
+                provider.clone(),
+                provider_api_keys.clone(),
+            ))
+        } else {
+            None
+        }
+    }
     pub fn provider_for_slow_model(&self) -> Option<&LLMProviderAPIKeys> {
         // we first need to get the model configuration for the slow model
         // which will give us the model and the context around it

@@ -214,13 +214,17 @@ Do not use this tool to confirm the existence of files you may have created, as 
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters:
-- path: (required) The path of the directory to list contents for (relative to the current working directory {})
+- directory_path: (required) The path of the directory to list contents for (relative to the current working directory {})
 - recursive: (optional) Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.
 
 Usage:
 <list_files>
-<path>Directory path here</path>
-<recursive>true or false (optional)</recursive>
+<directory_path>
+Directory path here
+</directory_path>
+<recursive>
+true or false (optional)
+</recursive>
 </list_files>
 "#,
             std::env::current_dir().unwrap().to_str().unwrap()

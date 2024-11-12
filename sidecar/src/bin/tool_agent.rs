@@ -37,7 +37,7 @@ use sidecar::{
                 attempt_completion::AttemptCompletionClientRequest,
                 tool_use_agent::{ToolUseAgent, ToolUseAgentInput},
             },
-            terminal::terminal::TerminalInputPartial,
+            terminal::terminal::{TerminalInput, TerminalInputPartial},
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
@@ -166,6 +166,7 @@ async fn main() {
                     println!("list files: {}", list_files.directory_path())
                 }
                 ToolInputPartial::OpenFile(open_file) => {
+                    println!("open file: {}", open_file.fs_file_path());
                     let open_file_path = open_file.fs_file_path().to_owned();
                     let request = OpenFileRequest::new(open_file_path, editor_url.clone());
                     let input = ToolInput::OpenFile(request);
@@ -173,7 +174,14 @@ async fn main() {
                     println!("response: {:?}", response);
                 }
                 ToolInputPartial::SearchFileContentWithRegex(search_filex) => {}
-                ToolInputPartial::TerminalCommand(terminal_command) => {}
+                ToolInputPartial::TerminalCommand(terminal_command) => {
+                    println!("terminal command: {}", terminal_command.command());
+                    let command = terminal_command.command().to_owned();
+                    let request = TerminalInput::new(command, editor_url.clone());
+                    let input = ToolInput::TerminalCommand(request);
+                    let response = tool_broker.invoke(input).await;
+                    println!("response: {:?}", response);
+                }
             },
         }
     }

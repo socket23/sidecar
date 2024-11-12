@@ -154,6 +154,9 @@ async fn main() {
             Some(tool_input_partial) => match tool_input_partial {
                 ToolInputPartial::AskFollowupQuestions(followup_question) => {
                     println!("Ask followup question: {}", followup_question.question());
+                    let input = ToolInput::AskFollowupQuestions(followup_question);
+                    let response = tool_broker.invoke(input).await;
+                    println!("response: {:?}", response);
                 }
                 ToolInputPartial::AttemptCompletion(_attempt_completion) => {
                     break;
@@ -161,7 +164,9 @@ async fn main() {
                 ToolInputPartial::CodeEditing(code_editing) => {
                     println!("Code editing: {}", code_editing.fs_file_path());
                 }
-                ToolInputPartial::LSPDiagnostics(diagnostics) => {}
+                ToolInputPartial::LSPDiagnostics(diagnostics) => {
+                    println!("LSP diagnostics: {:?}", diagnostics);
+                }
                 ToolInputPartial::ListFiles(list_files) => {
                     println!("list files: {}", list_files.directory_path());
                     let input = ToolInput::ListFiles(list_files);

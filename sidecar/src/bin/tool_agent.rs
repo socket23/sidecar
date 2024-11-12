@@ -166,7 +166,7 @@ async fn main() {
 
     let mut exchange_id = 0;
     let initial_query =
-        "whats the current directory I am working on, can you use the terminal".to_owned();
+        "make a new tool, that implements the Tool trait. Name it Manchester.".to_owned();
     session = session.human_message(
         exchange_id.to_string(),
         initial_query,

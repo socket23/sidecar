@@ -495,33 +495,22 @@ impl Exchange {
                         }
                     }
                     ExchangeReplyAgent::Tool(tool_input) => {
-                        // figure out what to do over here
-                        let tool_description =
-                            tool_broker.get_tool_description(&tool_input.tool_type);
                         let tool_input_parameters = &tool_input.tool_input_partial;
                         let thinking = &tool_input.thinking;
-                        match tool_description {
-                            Some(tool_description) => SessionChatMessage::assistant(format!(
-                                r#"I want to use the following tool:
-{tool_description}
+                        let tool_type = &tool_input.tool_type;
+                        SessionChatMessage::assistant(format!(
+                            r#"I want to use the following tool:
+{tool_type}
 my reason for using this is:
 {thinking}
 my inputs for the tool are:
 {:#?}"#,
-                                tool_input_parameters
-                            )),
-                            None => {
-                                let tool_type = &tool_input.tool_type;
-                                SessionChatMessage::assistant(format!(
-                                    r#"I want to use the follownig tool:
-{tool_type}
-my inputs for the tool are:
-{:#?}
-"#,
-                                    tool_input_parameters
-                                ))
-                            }
-                        }
+                            // this is a big hack, we should convert it properly
+                            // lets try it out
+                            // TODO(codestory): We should write a good function to format the input over here
+                            // in the same format which we have in the system message
+                            &tool_input_parameters
+                        ))
                     }
                 }
             }

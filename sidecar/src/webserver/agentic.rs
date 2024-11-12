@@ -979,6 +979,9 @@ pub struct AgentSessionChatRequest {
     codebase_search: bool,
     access_token: String,
     model_configuration: LLMClientConfig,
+    all_files: Vec<String>,
+    open_files: Vec<String>,
+    shell: String,
 }
 
 /// Handles the agent session and either creates it or appends to it
@@ -999,6 +1002,9 @@ pub async fn agent_session_chat(
         codebase_search: _codebase_search,
         access_token,
         model_configuration,
+        all_files: _all_files,
+        open_files: _open_files,
+        shell: _shell,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_provider = model_configuration
@@ -1105,6 +1111,9 @@ pub async fn agent_session_edit_anchored(
         codebase_search: _codebase_search,
         access_token,
         model_configuration,
+        open_files: _open_files,
+        all_files: _all_files,
+        shell: _shell,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_provider = model_configuration
@@ -1222,6 +1231,9 @@ pub async fn agent_session_edit_agentic(
         codebase_search,
         access_token,
         model_configuration,
+        all_files: _all_files,
+        open_files: _open_files,
+        shell: _shell,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_provider = model_configuration
@@ -1340,6 +1352,9 @@ pub async fn agent_session_plan_iterate(
         codebase_search,
         access_token,
         model_configuration,
+        all_files: _all_files,
+        open_files: _open_files,
+        shell: _shell,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_provider = model_configuration
@@ -1458,6 +1473,9 @@ pub async fn agent_session_plan(
         codebase_search,
         access_token,
         model_configuration,
+        all_files: _all_files,
+        open_files: _open_files,
+        shell: _shell,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_provider = model_configuration

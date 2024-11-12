@@ -325,6 +325,12 @@ pub struct CodestoryAccessToken {
     pub access_token: String,
 }
 
+impl CodestoryAccessToken {
+    pub fn new(access_token: String) -> Self {
+        Self { access_token }
+    }
+}
+
 impl AnthropicAPIKey {
     pub fn new(api_key: String) -> Self {
         Self { api_key }

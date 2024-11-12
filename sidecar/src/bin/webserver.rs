@@ -185,21 +185,8 @@ pub async fn start(app: Application) -> anyhow::Result<()> {
 fn plan_router() -> Router {
     use axum::routing::*;
     Router::new()
-        // Probe request routes
-        // These routes handle starting and stopping probe requests
-        .route(
-            "/execute",
-            post(sidecar::webserver::agent::execute_plan_until),
-        )
-        .route("/drop", post(sidecar::webserver::agent::drop_plan_from))
-        .route(
-            "/append",
-            post(sidecar::webserver::agent::handle_append_plan),
-        )
-        .route(
-            "/check_references",
-            post(sidecar::webserver::agent::handle_check_references),
-        )
+    // Probe request routes
+    // These routes handle starting and stopping probe requests
 }
 
 // Define routes for agentic operations
@@ -208,29 +195,13 @@ fn plan_router() -> Router {
 fn agentic_router() -> Router {
     use axum::routing::*;
     Router::new()
-        // Probe request routes
-        // These routes handle starting and stopping probe requests
-        .route(
-            "/probe_request",
-            post(sidecar::webserver::agentic::probe_request),
-        )
         .route(
             "/probe_request_stop",
             post(sidecar::webserver::agentic::probe_request_stop),
         )
-        // Code editing and sculpting routes
-        // These routes handle various AI-assisted code modification operations
-        .route(
-            "/code_editing",
-            post(sidecar::webserver::agentic::code_editing),
-        )
         .route(
             "/code_sculpting_followup",
             post(sidecar::webserver::agentic::code_sculpting),
-        )
-        .route(
-            "/code_sculpting_warmup",
-            post(sidecar::webserver::agentic::code_sculpting_warmup),
         )
         .route(
             "/code_sculpting_heal",
@@ -240,10 +211,6 @@ fn agentic_router() -> Router {
         .route(
             "/diagnostics",
             post(sidecar::webserver::agentic::push_diagnostics),
-        )
-        .route(
-            "/context_recording",
-            post(sidecar::webserver::agentic::context_recording),
         )
         // SWE bench route
         // This route is for software engineering benchmarking

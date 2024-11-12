@@ -944,7 +944,7 @@ impl Session {
         }
 
         let exchange_id = message_properties.request_id_str().to_owned();
-        let access_token = message_properties.access_token().to_owned();
+        let llm_properties = message_properties.llm_properties().clone();
 
         let tool_input = SessionChatClientRequest::new(
             tool_box
@@ -958,7 +958,7 @@ impl Session {
             exchange_id.to_owned(),
             message_properties.ui_sender(),
             message_properties.cancellation_token(),
-            access_token,
+            llm_properties,
         );
         let chat_output = tool_box
             .tools()
@@ -1310,7 +1310,7 @@ impl Session {
                             edit_done_sender,
                             message_properties_clone.cancellation_token(),
                             message_properties_clone.editor_url(),
-                            message_properties_clone.access_token().to_owned(),
+                            message_properties_clone.llm_properties().clone(),
                         ));
                         println!("session::perform_plan_generation::edit_event::hub_sender::send");
                         let _ = edit_done_receiver.await;
@@ -1733,7 +1733,7 @@ impl Session {
                     message_properties.request_id_str().to_owned(),
                     message_properties.ui_sender().clone(),
                     message_properties.cancellation_token().clone(),
-                    message_properties.access_token().to_owned(),
+                    message_properties.llm_properties().clone(),
                 ),
             ))
             .await

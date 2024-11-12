@@ -6,7 +6,7 @@ use std::time::Instant;
 use futures::{stream, StreamExt};
 use llm_client::clients::types::LLMType;
 use llm_client::provider::{
-    AnthropicAPIKey, CodeStoryLLMTypes, CodestoryAccessToken, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys
+    AnthropicAPIKey, FireworksAPIKey, GoogleAIStudioKey, LLMProvider, LLMProviderAPIKeys
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -19,7 +19,6 @@ use crate::agentic::tool::code_edit::filter_edit::{
 use crate::agentic::tool::code_edit::search_and_replace::SearchAndReplaceEditingRequest;
 use crate::agentic::tool::code_edit::test_correction::TestOutputCorrectionRequest;
 use crate::agentic::tool::code_edit::types::CodeEdit;
-use crate::agentic::tool::code_symbol::apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest;
 use crate::agentic::tool::code_symbol::correctness::{
     CodeCorrectnessAction, CodeCorrectnessRequest,
 };
@@ -4305,7 +4304,7 @@ Please update this code to accommodate these changes. Consider:
                             sender,
                             message_properties.cancellation_token(),
                             message_properties.editor_url(),
-                            message_properties.access_token().to_owned(),
+                            message_properties.llm_properties().clone(),
                         );
                         let _ = hub_sender.send(event);
                         // Figure out what to do with the receiver over here
@@ -5496,21 +5495,8 @@ FILEPATH: {fs_file_path}
 
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
-        let access_token = message_properties.access_token().to_owned();
+        let llm_properties = message_properties.llm_properties().clone();
         println!("code_editing_with_search_and_replace::session_id({})::exchange_id({})", &session_id, &exchange_id);
-
-        let codestory_access_token = CodestoryAccessToken {
-            access_token,
-        };
-        // can't be haiku yet, we need to prompt it better
-        let llm_type = LLMType::ClaudeSonnet;
-        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
-
-        let llm_properties = LLMProperties::new(
-            llm_type,
-            llm_provider,
-            LLMProviderAPIKeys::CodeStory(codestory_access_token),
-        );
 
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
@@ -5566,171 +5552,6 @@ FILEPATH: {fs_file_path}
         Ok(updated_code.to_owned())
     }
 
-    /// This uses a more powerful LLM to plan out the changes and generate
-    /// an outline of the edits which need to happen and then a weaker model
-    /// to apply those edits to the range we are interested in
-    ///
-    /// - Use anything >= GPT-4 level intelligence to make the changes over here
-    /// - Use a weaker model to start applying the changes
-    pub async fn code_edit_outline(
-        &self,
-        sub_symbol: &SymbolToEdit,
-        symbol_identifier: &SymbolIdentifier,
-        fs_file_path: &str,
-        file_content: &str,
-        selection_range: &Range,
-        extra_context: String,
-        instruction: String,
-        llm_properties: LLMProperties,
-        symbol_to_edit: Option<String>,
-        symbols_edited_list: Option<Vec<SymbolEditedItem>>,
-        // if the outline edit is an addition, this implies that we can directly
-        // stream the output from the slow-llm instead of waiting on the slow
-        // llm to rewrite the whole block
-        is_addition: bool,
-        message_properties: SymbolEventMessageProperties,
-    ) -> Result<String, SymbolError> {
-        println!("============tool_box::code_edit_outline============");
-        println!("tool_box::code_edit_outline::fs_file_path:{}", fs_file_path);
-        println!(
-            "tool_box::code_edit_outline::selection_range:{:?}",
-            selection_range
-        );
-        println!("============");
-        let language = self
-            .editor_parsing
-            .for_file_path(fs_file_path)
-            .map(|language_config| language_config.get_language())
-            .flatten()
-            .unwrap_or("".to_owned());
-        let (above, below, mut in_range_selection) =
-            split_file_content_into_parts(file_content, selection_range);
-        in_range_selection = self
-            .apply_inlay_hints(
-                fs_file_path,
-                &in_range_selection,
-                selection_range,
-                message_properties.clone(),
-            )
-            .await?;
-        let symbols_to_edit = symbols_edited_list.map(|symbols| {
-            symbols
-                .into_iter()
-                .filter(|symbol| symbol.is_new())
-                .map(|symbol| {
-                    let fs_file_path = symbol.fs_file_path();
-                    let symbol_name = symbol.name();
-                    format!(
-                        r#"<symbol>
-FILEPATH: {fs_file_path}
-{symbol_name}
-</symbol>"#
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        });
-        let session_id = message_properties.root_request_id().to_owned();
-        let exchange_id = message_properties.request_id_str().to_owned();
-        let access_token = message_properties.access_token().to_owned();
-        let request = ToolInput::CodeEditing(CodeEdit::new(
-            above,
-            below,
-            fs_file_path.to_owned(),
-            in_range_selection.to_owned(),
-            extra_context,
-            language.to_owned(),
-            instruction.to_owned(),
-            llm_properties.llm().clone(),
-            llm_properties.api_key().clone(),
-            llm_properties.provider().clone(),
-            false,
-            symbol_to_edit,
-            // pass the symbol which we want to edit over here
-            if sub_symbol.is_new() {
-                Some(sub_symbol.symbol_name().to_owned())
-            } else {
-                None
-            },
-            message_properties.root_request_id().to_owned(),
-            selection_range.clone(),
-            // we want an outline edit
-            true,
-            symbols_to_edit,
-            // if its addition then we should stream the code edits at this point
-            is_addition,
-            symbol_identifier.clone(),
-            message_properties.ui_sender().clone(),
-            true, // disable thinking by default
-            None,
-            session_id.to_owned(),
-            exchange_id.to_owned(),
-            access_token,
-        ));
-        println!(
-            "tool_box::code_edit_outline::start::symbol_name({})",
-            sub_symbol.symbol_name()
-        );
-        let start = Instant::now();
-        let response = self
-            .tools
-            .invoke(request)
-            .await
-            .map_err(|e| SymbolError::ToolError(e))?
-            .get_code_edit_output()
-            .ok_or(SymbolError::WrongToolOutput)?;
-
-        println!("code_edit_outline::time: {:?}", start.elapsed());
-        println!(
-            "tool_box::code_edit_outline::finish::symbol_name({})",
-            sub_symbol.symbol_name()
-        );
-
-        println!(
-            "tool_box::code_edit_outline::apply_outline_edit_to_range::start::({})",
-            sub_symbol.symbol_name()
-        );
-        if is_addition {
-            Ok(response)
-        } else {
-            let request = ToolInput::ApplyOutlineEditToRange(ApplyOutlineEditsToRangeRequest::new(
-                instruction,
-                symbol_identifier.clone(),
-                fs_file_path.to_owned(),
-                in_range_selection,
-                response,
-                message_properties.root_request_id().to_owned(),
-                selection_range.clone(),
-                LLMProperties::new(
-                    // why are we using gpt4omini over here which is slow as shit, lets at the very
-                    // least move over to gemini-flash
-                    LLMType::GeminiProFlash,
-                    LLMProvider::GoogleAIStudio,
-                    LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                        "".to_owned(),
-                    )),
-                ),
-                // this is the special request id sent along with every edit which we want to make
-                uuid::Uuid::new_v4().to_string(),
-                message_properties.ui_sender(),
-                session_id.to_owned(),
-                exchange_id.to_owned(),
-            ));
-            let response = self
-                .tools
-                .invoke(request)
-                .await
-                .map_err(|e| SymbolError::ToolError(e))?
-                .get_apply_edits_to_range_response()
-                .ok_or(SymbolError::WrongToolOutput)?;
-            println!(
-                "tool_box::code_edit_outline::apply_outline_edit_to_range::finish::({})",
-                sub_symbol.symbol_name()
-            );
-            Ok(response.code())
-        }
-    }
-
     pub async fn code_edit(
         &self,
         fs_file_path: &str,
@@ -5738,9 +5559,6 @@ FILEPATH: {fs_file_path}
         selection_range: &Range,
         extra_context: String,
         instruction: String,
-        llm: LLMType,
-        provider: LLMProvider,
-        api_keys: LLMProviderAPIKeys,
         swe_bench_initial_edit: bool,
         symbol_to_edit: Option<String>,
         is_new_sub_symbol: Option<String>,
@@ -5763,7 +5581,6 @@ FILEPATH: {fs_file_path}
         let (above, below, in_range_selection) =
             split_file_content_into_parts(file_content, selection_range);
         
-        let access_token = message_properties.access_token().to_owned();
         let new_symbols_edited = symbol_edited_list.map(|symbol_list| {
             symbol_list
                 .into_iter()
@@ -5783,6 +5600,7 @@ FILEPATH: {fs_file_path}
         });
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
+        let llm_properties = message_properties.llm_properties().clone();
         let request = ToolInput::CodeEditing(CodeEdit::new(
             above,
             below,
@@ -5791,9 +5609,7 @@ FILEPATH: {fs_file_path}
             extra_context,
             language.to_owned(),
             instruction,
-            llm,
-            api_keys,
-            provider,
+            llm_properties.clone(),
             swe_bench_initial_edit,
             symbol_to_edit,
             is_new_sub_symbol,
@@ -5810,7 +5626,6 @@ FILEPATH: {fs_file_path}
             user_provided_context,
             session_id,
             exchange_id,
-            access_token,
         ));
         self.tools
             .invoke(request)
@@ -9540,7 +9355,7 @@ FILEPATH: {fs_file_path}
             message_properties.ui_sender(),
             step_sender,
             message_properties.cancellation_token(),
-            message_properties.access_token().to_owned(),
+            message_properties.llm_properties().clone(),
         )
         .with_user_context(user_context);
         println!("tool_box::generate_plan::start");

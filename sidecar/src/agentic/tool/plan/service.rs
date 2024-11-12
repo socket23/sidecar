@@ -508,7 +508,7 @@ impl PlanService {
             edit_done_sender,
             tokio_util::sync::CancellationToken::new(),
             message_properties.editor_url(),
-            message_properties.access_token().to_owned(),
+            message_properties.llm_properties().clone(),
         ));
 
         // await on the edit to finish happening

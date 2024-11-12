@@ -23,8 +23,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -75,7 +74,7 @@ pub struct SessionChatClientRequest {
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     cancellation_token: tokio_util::sync::CancellationToken,
-    access_token: String,
+    llm_properties: LLMProperties,
 }
 
 impl SessionChatClientRequest {
@@ -89,7 +88,7 @@ impl SessionChatClientRequest {
         exchange_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
         cancellation_token: tokio_util::sync::CancellationToken,
-        access_token: String,
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             diff_recent_edits,
@@ -101,7 +100,7 @@ impl SessionChatClientRequest {
             project_labels,
             ui_sender,
             cancellation_token,
-            access_token,
+            llm_properties,
         }
     }
 }
@@ -237,18 +236,7 @@ impl Tool for SessionChatClient {
         let system_message = LLMClientMessage::system(self.system_message(&context)).cache_point();
 
         // so now chat will be routed through codestory provider
-        let codestory_access_token = CodestoryAccessToken {
-            access_token: context.access_token.clone(),
-        };
-
-        let llm_type = LLMType::ClaudeSonnet;
-        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
-
-        let llm_properties = LLMProperties::new(
-            llm_type,
-            llm_provider,
-            LLMProviderAPIKeys::CodeStory(codestory_access_token),
-        );
+        let llm_properties = context.llm_properties.clone();
 
         let user_messages = self.user_message(context).await;
         let mut messages = vec![system_message];

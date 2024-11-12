@@ -13,20 +13,11 @@ use crate::agent::types::AgentAction;
 use crate::agent::types::CodeSpan;
 use crate::agent::types::ConversationMessage;
 use crate::agent::types::{Agent, VariableInformation as AgentVariableInformation};
-use crate::agentic::symbol::events::input::SymbolEventRequestId;
-use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
-use crate::agentic::tool::plan::service::PlanService;
 use crate::application::application::Application;
 use crate::chunking::text_document::Position as DocumentPosition;
 use crate::repo::types::RepoRef;
 use crate::reporting::posthog::client::PosthogEvent;
 use crate::user_context::types::{UserContext, VariableInformation, VariableType};
-use crate::webserver::agentic::AgenticReasoningThreadCreationResponse;
-use crate::webserver::plan::{
-    append_to_plan, check_plan_storage_path, create_plan, drop_plan,
-    handle_check_references_and_stream, handle_create_plan, handle_execute_plan_until,
-    plan_storage_directory,
-};
 
 use super::types::ApiResponse;
 use super::types::Result;
@@ -446,94 +437,6 @@ pub struct Range {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ExecutePlanUntilRequest {
-    execution_until: usize,
-    self_feedback: bool,
-    thread_id: uuid::Uuid,
-    editor_url: String,
-    access_token: String,
-}
-
-// handler that executes plan until a given index
-pub async fn execute_plan_until(
-    Extension(app): Extension<Application>,
-    Json(ExecutePlanUntilRequest {
-        execution_until,
-        self_feedback,
-        thread_id,
-        editor_url,
-        access_token,
-    }): Json<ExecutePlanUntilRequest>,
-) -> Result<impl IntoResponse> {
-    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        app.symbol_manager.clone(),
-        plan_storage_directory,
-    );
-    let plan_storage_path =
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
-
-    println!("webserver::agent::execute_plan_until({})", &execution_until);
-
-    handle_execute_plan_until(
-        execution_until,
-        self_feedback,
-        thread_id,
-        plan_storage_path,
-        editor_url,
-        plan_service,
-        access_token,
-    )
-    .await
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DropPlanFromRequest {
-    drop_from: usize,
-    thread_id: uuid::Uuid,
-}
-
-pub async fn drop_plan_from(
-    Extension(app): Extension<Application>,
-    Json(DropPlanFromRequest {
-        drop_from,
-        thread_id,
-    }): Json<DropPlanFromRequest>,
-) -> Result<impl IntoResponse> {
-    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        app.symbol_manager.clone(),
-        plan_storage_directory,
-    );
-    let plan_storage_path =
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
-
-    // todo(zi): override, remove
-    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04".to_owned();
-
-    println!("webserver::agent::drop_plan_from({})", &drop_from);
-
-    let result = drop_plan(thread_id, plan_storage_path, plan_service, drop_from).await;
-
-    let response = match result {
-        Ok(plan) => AgenticReasoningThreadCreationResponse {
-            plan: Some(plan),
-            success: true,
-            error_if_any: None,
-        },
-        Err(e) => AgenticReasoningThreadCreationResponse {
-            plan: None,
-            success: false,
-            error_if_any: Some(format!("{:?}", e)),
-        },
-    };
-
-    Ok(json(response))
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppendPlanRequest {
     user_query: String,
     thread_id: uuid::Uuid,
@@ -544,149 +447,6 @@ pub struct AppendPlanRequest {
     #[serde(default)]
     with_lsp_enrichment: bool,
     access_token: String,
-}
-
-/// Checks the references on a file with the user context
-pub async fn handle_check_references(
-    Extension(app): Extension<Application>,
-    Json(AppendPlanRequest {
-        user_query,
-        thread_id,
-        editor_url,
-        user_context,
-        is_deep_reasoning,
-        with_lsp_enrichment: _with_lsp_enrichment,
-        access_token,
-    }): Json<AppendPlanRequest>,
-) -> Result<impl IntoResponse> {
-    println!("webserver::agent::handle_check_references({})", &user_query);
-    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        app.symbol_manager.clone(),
-        plan_storage_directory,
-    );
-
-    // reinstate this after override
-    let plan_storage_path =
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
-
-    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
-
-    // so here, if we have a plan, we append. Else, we create a new plan.
-    let plan_result = match plan_service.load_plan(&plan_storage_path).await {
-        // if a plan is loaded, we append.
-        Ok(plan) => {
-            println!("webserver::agent::handle_check_references::load_plan(Ok)");
-            handle_check_references_and_stream(
-                user_query,
-                user_context,
-                plan,
-                editor_url,
-                thread_id,
-                plan_service,
-                is_deep_reasoning,
-                access_token,
-            )
-            .await
-        }
-        // else, we create
-        Err(_err) => {
-            unimplemented!("we have not implemented this branch")
-        }
-    };
-    plan_result
-}
-
-pub async fn handle_append_plan(
-    Extension(app): Extension<Application>,
-    Json(AppendPlanRequest {
-        user_query,
-        thread_id,
-        editor_url,
-        user_context,
-        is_deep_reasoning,
-        with_lsp_enrichment,
-        access_token,
-    }): Json<AppendPlanRequest>,
-) -> Result<impl IntoResponse> {
-    println!("webserver::agent::append_plan({})", &user_query);
-    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        app.symbol_manager.clone(),
-        plan_storage_directory,
-    );
-
-    // reinstate this after override
-    let plan_storage_path =
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await;
-
-    // let plan_storage_path = "/Users/zi/Library/Application Support/ai.codestory.sidecar/plans/17585f44-cfdd-445e-9142-04342d010a04";
-
-    // so here, if we have a plan, we append. Else, we create a new plan.
-    let plan_result = match plan_service.load_plan(&plan_storage_path).await {
-        // if a plan is loaded, we append.
-        Ok(plan) => {
-            println!("webserver::agent::handle_append_plan::load_plan(Ok)");
-
-            // we don't use the id
-            let plan_id = thread_id;
-            let message_properties = SymbolEventMessageProperties::new(
-                SymbolEventRequestId::new(plan_id.to_string(), plan_id.to_string()),
-                tokio::sync::mpsc::unbounded_channel().0, // Dummy sender, as we're not using streaming
-                editor_url,
-                tokio_util::sync::CancellationToken::new(),
-                access_token,
-            );
-
-            append_to_plan(
-                plan_id,
-                plan,
-                plan_service,
-                user_query,
-                user_context,
-                message_properties,
-                is_deep_reasoning,
-                with_lsp_enrichment,
-            )
-            .await
-        }
-        // else, we create
-        Err(err) => {
-            println!("webserver::agent::append_plan::load_plan::err({:?})", err);
-
-            let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-
-            create_plan(
-                user_query,
-                user_context,
-                editor_url,
-                thread_id,
-                plan_storage_path.to_owned(),
-                plan_service,
-                is_deep_reasoning,
-                sender,
-                access_token,
-            )
-            .await
-        }
-    };
-
-    let response = match plan_result {
-        Ok(plan) => AgenticReasoningThreadCreationResponse {
-            plan: Some(plan),
-            success: true,
-            error_if_any: None,
-        },
-        Err(e) => AgenticReasoningThreadCreationResponse {
-            plan: None,
-            success: false,
-            error_if_any: Some(format!("{:?}", e)),
-        },
-    };
-
-    Ok(json(response))
 }
 
 pub async fn followup_chat(
@@ -701,9 +461,9 @@ pub async fn followup_chat(
         model_config,
         system_instruction,
         editor_url,
-        is_deep_reasoning,
+        is_deep_reasoning: _,
         with_lsp_enrichment: _,
-        access_token,
+        access_token: _,
     }): Json<FollowupChatRequest>,
 ) -> Result<impl IntoResponse> {
     let session_id = uuid::Uuid::new_v4();
@@ -719,47 +479,6 @@ pub async fn followup_chat(
         user_context.is_plan_generation()
     );
 
-    // short-circuit over here:
-    // check if we are in the process of generating a plan and the editor url is present
-    if editor_url.is_some() && (user_context.is_plan_generation_flow()) {
-        println!("followup_chat::plan_generation_flow");
-        let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-        let plan_service = PlanService::new(
-            app.tool_box.clone(),
-            app.symbol_manager.clone(),
-            plan_storage_directory,
-        );
-        if let Some(execution_until) = user_context.is_plan_execution_until() {
-            // logic here
-            return handle_execute_plan_until(
-                execution_until,
-                false,
-                thread_id,
-                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                editor_url.clone().expect("is_some to hold"), // why is this needed?
-                plan_service,
-                access_token.clone(),
-            )
-            .await;
-        } else if user_context.is_plan_drop_from().is_some() {
-            // logic WAS here
-        } else if user_context.is_plan_append() {
-            // logic WAS here
-        } else {
-            return handle_create_plan(
-                query,
-                user_context,
-                editor_url.clone().expect("is_some to hold"),
-                thread_id,
-                check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-                plan_service,
-                is_deep_reasoning,
-                access_token,
-            )
-            .await;
-        }
-        // generate the plan over here
-    }
     // Here we do something special, if the user is asking a followup question
     // we just look at the previous conversation message the thread belonged
     // to and use that as context for grounding the agent response. In the future

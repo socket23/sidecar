@@ -6,11 +6,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use llm_client::{
-    broker::LLMBroker,
-    clients::types::LLMType,
-    provider::{LLMProvider, LLMProviderAPIKeys},
-};
+use llm_client::{broker::LLMBroker, clients::types::LLMType};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -40,10 +36,8 @@ pub struct CodeEdit {
     code_to_edit: String,
     extra_context: String,
     language: String,
-    model: LLMType,
     instruction: String,
-    api_key: LLMProviderAPIKeys,
-    provider: LLMProvider,
+    llm_properties: LLMProperties,
     is_swe_bench_initial_edit: bool,
     symbol_to_edit: Option<String>,
     is_new_symbol_request: Option<String>,
@@ -67,7 +61,6 @@ pub struct CodeEdit {
     session_id: String,
     // The exchange id to which the edit belongs
     exchange_id: String,
-    access_token: String,
 }
 
 impl CodeEdit {
@@ -79,9 +72,7 @@ impl CodeEdit {
         extra_context: String,
         language: String,
         instruction: String,
-        model: LLMType,
-        api_key: LLMProviderAPIKeys,
-        provider: LLMProvider,
+        llm_properties: LLMProperties,
         is_swe_bench_initial_edit: bool,
         symbol_to_edit: Option<String>,
         is_new_symbol_request: Option<String>,
@@ -96,7 +87,6 @@ impl CodeEdit {
         user_provided_context: Option<String>,
         session_id: String,
         exchange_id: String,
-        access_token: String,
     ) -> Self {
         Self {
             code_above,
@@ -105,10 +95,8 @@ impl CodeEdit {
             code_to_edit,
             extra_context,
             language,
-            model,
+            llm_properties,
             instruction,
-            api_key,
-            provider,
             is_swe_bench_initial_edit,
             symbol_to_edit,
             is_new_symbol_request,
@@ -123,12 +111,7 @@ impl CodeEdit {
             user_provided_context,
             session_id,
             exchange_id,
-            access_token,
         }
-    }
-
-    pub fn access_token(&self) -> &str {
-        &self.access_token
     }
 }
 
@@ -247,7 +230,7 @@ impl CodeEdit {
     }
 
     pub fn model(&self) -> &LLMType {
-        &self.model
+        self.llm_properties.llm()
     }
 
     pub fn is_new_sub_symbol(&self) -> Option<String> {
@@ -309,18 +292,18 @@ impl Tool for CodeEditingTool {
                     )
                 } else {
                     (
-                        code_edit_context.model.clone(),
-                        code_edit_context.api_key.clone(),
-                        code_edit_context.provider.clone(),
+                        code_edit_context.llm_properties.llm().clone(),
+                        code_edit_context.llm_properties.api_key().clone(),
+                        code_edit_context.llm_properties.provider().clone(),
                     )
                 }
             // if this is the special swe bench initial edit, then keep the llm properties
             // as they are being sent from the invoker
             } else {
                 (
-                    code_edit_context.model.clone(),
-                    code_edit_context.api_key.clone(),
-                    code_edit_context.provider.clone(),
+                    code_edit_context.llm_properties.llm().clone(),
+                    code_edit_context.llm_properties.api_key().clone(),
+                    code_edit_context.llm_properties.provider().clone(),
                 )
             };
         llm_message = llm_message.set_llm(request_llm.clone());

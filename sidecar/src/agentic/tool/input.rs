@@ -71,6 +71,18 @@ use super::{
     terminal::terminal::TerminalInput,
 };
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ToolInputPartial {
+    CodeEditing(),
+    ListFiles(),
+    SearchFileContentWithRegex(),
+    OpenFile(),
+    LSPDiagnostics(),
+    TerminalCommand(),
+    AskFollowupQuestions(),
+    AttemptCompletion(),
+}
+
 #[derive(Debug, Clone)]
 pub enum ToolInput {
     CodeEditing(CodeEdit),

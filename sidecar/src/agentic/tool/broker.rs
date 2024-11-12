@@ -460,6 +460,14 @@ impl ToolBroker {
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }
+
+    pub fn get_tool_description(&self, tool_type: &ToolType) -> Option<String> {
+        if let Some(tool) = self.tools.get(tool_type) {
+            Some(tool.tool_description())
+        } else {
+            None
+        }
+    }
 }
 
 #[async_trait]

@@ -24,13 +24,14 @@ use crate::{
             ui_event::UIEventWithID,
         },
         tool::{
-            input::ToolInput,
+            broker::ToolBroker,
+            input::{ToolInput, ToolInputPartial},
             lsp::file_diagnostics::DiagnosticMap,
             plan::{
                 generator::{Step, StepSenderEvent},
                 service::PlanService,
             },
-            r#type::Tool,
+            r#type::{Tool, ToolType},
         },
     },
     chunking::text_document::Range,
@@ -153,10 +154,20 @@ pub struct ExchangeReplyAgentEdit {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeReplyAgentTool {
+    tool_type: ToolType,
+    // we need some kind of partial tool input over here as well so we can parse
+    // the data out properly
+    // for now, I am leaving things here until I can come up with a proper API for that
+    tool_input_partial: ToolInputPartial,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ExchangeReplyAgent {
     Plan(ExchangeReplyAgentPlan),
     Chat(ExchangeReplyAgentChat),
     Edit(ExchangeReplyAgentEdit),
+    Tool(ExchangeReplyAgentTool),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -375,7 +386,7 @@ impl Exchange {
     ///
     /// We can have consecutive human messages now on every API so this is no
     /// longer a big worry
-    async fn to_conversation_message(&self) -> SessionChatMessage {
+    async fn to_conversation_message(&self, tool_broker: Arc<ToolBroker>) -> SessionChatMessage {
         match &self.exchange_type {
             ExchangeType::HumanChat(ref chat_message) => {
                 // TODO(skcd): Figure out caching etc later on
@@ -439,6 +450,32 @@ impl Exchange {
                                 "I came up with the plan below and the user was happy
 {plan_steps}"
                             ))
+                        }
+                    }
+                    ExchangeReplyAgent::Tool(tool_input) => {
+                        // figure out what to do over here
+                        let tool_description =
+                            tool_broker.get_tool_description(&tool_input.tool_type);
+                        let tool_input_parameters = &tool_input.tool_input_partial;
+                        match tool_description {
+                            Some(tool_description) => SessionChatMessage::assistant(format!(
+                                r#"I want to use the following tool:
+{tool_description}
+my inputs for the tool are:
+{:#?}"#,
+                                tool_input_parameters
+                            )),
+                            None => {
+                                let tool_type = &tool_input.tool_type;
+                                SessionChatMessage::assistant(format!(
+                                    r#"I want to use the follownig tool:
+{tool_type}
+my inputs for the tool are:
+{:#?}
+"#,
+                                    tool_input_parameters
+                                ))
+                            }
                         }
                     }
                 }
@@ -738,6 +775,7 @@ impl Session {
                                 ExchangeReplyAgent::Chat(chat_step) => {
                                     ExchangeReplyAgent::Chat(chat_step)
                                 }
+                                ExchangeReplyAgent::Tool(tools) => ExchangeReplyAgent::Tool(tools),
                             };
                             Exchange {
                                 exchange_id: exchange_id.to_owned(),
@@ -765,6 +803,7 @@ impl Session {
                     ExchangeReplyAgent::Chat(_) => None,
                     ExchangeReplyAgent::Edit(_) => Some(AideAgentMode::Edit),
                     ExchangeReplyAgent::Plan(_) => Some(AideAgentMode::Plan),
+                    ExchangeReplyAgent::Tool(_) => None,
                 },
                 _ => None,
             })
@@ -897,7 +936,11 @@ impl Session {
         // reply to
         let mut converted_messages = vec![];
         for previous_message in self.exchanges.iter() {
-            converted_messages.push(previous_message.to_conversation_message().await);
+            converted_messages.push(
+                previous_message
+                    .to_conversation_message(tool_box.tools().clone())
+                    .await,
+            );
         }
 
         let exchange_id = message_properties.request_id_str().to_owned();
@@ -1132,7 +1175,11 @@ impl Session {
             // reply to
             let mut converted_messages = vec![];
             for previous_message in self.exchanges.iter() {
-                converted_messages.push(previous_message.to_conversation_message().await);
+                converted_messages.push(
+                    previous_message
+                        .to_conversation_message(tool_box.tools().clone())
+                        .await,
+                );
             }
             let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
             let mut stream_receiver =
@@ -1422,6 +1469,7 @@ impl Session {
         mut self,
         parent_exchange_id: String,
         scratch_pad_agent: ScratchPadAgent,
+        tool_box: Arc<ToolBox>,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         let last_exchange = self.last_exchange().cloned();
@@ -1443,7 +1491,11 @@ impl Session {
         {
             let mut converted_messages = vec![];
             for previous_message in self.exchanges.iter() {
-                converted_messages.push(previous_message.to_conversation_message().await);
+                converted_messages.push(
+                    previous_message
+                        .to_conversation_message(tool_box.tools().clone())
+                        .await,
+                );
             }
             // send a message over that the inference will start in a bit
             let _ = message_properties
@@ -1589,7 +1641,11 @@ impl Session {
 
         let mut converted_messages = vec![];
         for previous_message in self.exchanges.iter() {
-            converted_messages.push(previous_message.to_conversation_message().await);
+            converted_messages.push(
+                previous_message
+                    .to_conversation_message(tool_box.tools().clone())
+                    .await,
+            );
         }
         let (diagnostics, mut extra_variables) = tool_box
             .grab_workspace_diagnostics(message_properties.clone())

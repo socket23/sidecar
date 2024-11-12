@@ -53,8 +53,8 @@ use super::{
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
     session::{
-        chat::SessionChatClientResponse, exchange::SessionExchangeNewResponse,
-        hot_streak::SessionHotStreakResponse,
+        ask_followup_question::AskFollowupQuestionsResponse, chat::SessionChatClientResponse,
+        exchange::SessionExchangeNewResponse, hot_streak::SessionHotStreakResponse,
     },
     swe_bench::test_tool::SWEBenchTestRepsonse,
     terminal::terminal::TerminalOutput,
@@ -206,6 +206,8 @@ pub enum ToolOutput {
     SearchFileContentWithRegex(SearchFileContentWithRegexOutput),
     // Listed out files from a directory traversal
     ListFiles(ListFilesOutput),
+    // ask question followup response
+    AskFollowupQuestions(AskFollowupQuestionsResponse),
 }
 
 impl ToolOutput {
@@ -813,7 +815,6 @@ impl ToolOutput {
             _ => None,
         }
     }
-
 
     pub fn get_list_files_directory(self) -> Option<ListFilesOutput> {
         match self {

@@ -62,8 +62,8 @@ use super::{
     rerank::base::ReRankBroker,
     search::big_search::BigSearchBroker,
     session::{
-        chat::SessionChatClient, exchange::SessionExchangeClient,
-        hot_streak::SessionHotStreakClient,
+        ask_followup_question::AskFollowupQuestions, chat::SessionChatClient,
+        exchange::SessionExchangeClient, hot_streak::SessionHotStreakClient,
     },
     swe_bench::test_tool::SWEBenchTestTool,
     terminal::terminal::TerminalTool,
@@ -448,6 +448,10 @@ impl ToolBroker {
             Box::new(SearchFileContentClient::new()),
         );
         tools.insert(ToolType::ListFiles, Box::new(ListFilesClient::new()));
+        tools.insert(
+            ToolType::AskFollowupQuestions,
+            Box::new(AskFollowupQuestions::new()),
+        );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

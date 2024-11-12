@@ -133,6 +133,8 @@ pub enum ToolType {
     SearchFileContentWithRegex,
     // List files
     ListFiles,
+    // Ask for followup questions
+    AskFollowupQuestions,
 }
 
 impl std::fmt::Display for ToolType {
@@ -223,6 +225,7 @@ impl std::fmt::Display for ToolType {
             ToolType::TerminalCommand => write!(f, "Terminal command"),
             ToolType::SearchFileContentWithRegex => write!(f, "Searches for files with a regex"),
             ToolType::ListFiles => write!(f, "List files"),
+            ToolType::AskFollowupQuestions => write!(f, "Ask followup questions"),
         }
     }
 }

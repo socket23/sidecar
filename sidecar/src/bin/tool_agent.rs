@@ -162,7 +162,8 @@ async fn main() {
     );
 
     let mut exchange_id = 0;
-    let initial_query = "What are we doing with the ToolInput".to_owned();
+    let initial_query =
+        "whats the current directory I am working on, can you use the terminal".to_owned();
     session = session.human_message(
         exchange_id.to_string(),
         initial_query,

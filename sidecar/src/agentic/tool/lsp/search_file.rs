@@ -242,7 +242,7 @@ impl Tool for SearchFileContentClient {
             return Err(ToolError::OutputStreamNotPresent);
         }
 
-        let stdout = child.stdout.take().expect("Failed to capture stdout");
+        let stdout = stdout.expect("Failed to capture stdout");
         let reader = BufReader::new(stdout).lines();
 
         let mut output = String::new();

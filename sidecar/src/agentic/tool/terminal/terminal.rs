@@ -61,4 +61,12 @@ impl Tool for TerminalTool {
 
         Ok(ToolOutput::TerminalCommand(terminal_response))
     }
+
+    fn tool_description(&self) -> String {
+        "Execute a terminal command".to_owned()
+    }
+
+    fn tool_input_format(&self) -> String {
+        "".to_owned()
+    }
 }

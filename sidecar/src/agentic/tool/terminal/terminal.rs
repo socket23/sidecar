@@ -63,7 +63,7 @@ impl Tool for TerminalTool {
     }
 
     fn tool_description(&self) -> String {
-        "".to_owned()
+        "Execute a terminal command".to_owned()
     }
 
     fn tool_input_format(&self) -> String {

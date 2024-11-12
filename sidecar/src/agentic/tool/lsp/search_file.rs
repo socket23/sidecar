@@ -132,12 +132,54 @@ pub struct SearchFileContentInputPartial {
     file_pattern: Option<String>,
 }
 
+impl SearchFileContentInputPartial {
+    pub fn new(
+        directory_path: String,
+        regex_pattern: String,
+        file_pattern: Option<String>,
+    ) -> Self {
+        Self {
+            directory_path,
+            regex_pattern,
+            file_pattern,
+        }
+    }
+
+    pub fn directory_path(&self) -> &str {
+        &self.directory_path
+    }
+
+    pub fn regex_pattern(&self) -> &str {
+        &self.regex_pattern
+    }
+
+    pub fn file_pattern(&self) -> Option<&str> {
+        self.file_pattern.as_deref()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchFileContentInput {
     directory_path: String,
     regex_pattern: String,
     file_pattern: Option<String>,
     editor_url: String,
+}
+
+impl SearchFileContentInput {
+    pub fn new(
+        directory_path: String,
+        regex_pattern: String,
+        file_pattern: Option<String>,
+        editor_url: String,
+    ) -> Self {
+        Self {
+            directory_path,
+            regex_pattern,
+            file_pattern,
+            editor_url,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

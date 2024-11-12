@@ -29,7 +29,7 @@ use sidecar::{
                 file_diagnostics::WorkspaceDiagnosticsPartial,
                 list_files::ListFilesInput,
                 open_file::{OpenFileRequest, OpenFileRequestPartial},
-                search_file::SearchFileContentInputPartial,
+                search_file::{SearchFileContentInput, SearchFileContentInputPartial},
             },
             r#type::{Tool, ToolType},
             session::{
@@ -176,7 +176,18 @@ async fn main() {
                     let response = tool_broker.invoke(input).await;
                     println!("response: {:?}", response);
                 }
-                ToolInputPartial::SearchFileContentWithRegex(search_filex) => {}
+                ToolInputPartial::SearchFileContentWithRegex(search_file) => {
+                    println!("search file: {}", search_file.directory_path());
+                    let request = SearchFileContentInput::new(
+                        search_file.directory_path().to_owned(),
+                        search_file.regex_pattern().to_owned(),
+                        search_file.file_pattern().map(|s| s.to_owned()),
+                        editor_url.clone(),
+                    );
+                    let input = ToolInput::SearchFileContentWithRegex(request);
+                    let response = tool_broker.invoke(input).await;
+                    println!("response: {:?}", response);
+                }
                 ToolInputPartial::TerminalCommand(terminal_command) => {
                     println!("terminal command: {}", terminal_command.command());
                     let command = terminal_command.command().to_owned();

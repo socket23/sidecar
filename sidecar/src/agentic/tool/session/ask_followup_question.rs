@@ -72,7 +72,9 @@ impl Tool for AskFollowupQuestions {
 - question: (required) The question to ask the user. This should be a clear, specific question that addresses the information you need.
 Usage:
 <ask_followup_question>
-<question>Your question here</question>
+<question>
+Your question here
+</question>
 </ask_followup_question>"#.to_owned()
     }
 }

@@ -85,7 +85,9 @@ Usage:
 <result>
 Your final result description here
 </result>
-<command>Command to demonstrate result (optional)</command>
+<command>
+Command to demonstrate result (optional)
+</command>
 </attempt_completion>"#.to_owned()
     }
 }

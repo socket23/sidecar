@@ -175,6 +175,7 @@ async fn main() {
         let parent_exchange_id = exchange_id;
         exchange_id = exchange_id + 1;
         let tool_to_use = session
+            .clone()
             .get_tool_to_use(
                 tool_box.clone(),
                 llm_client.clone(),

@@ -163,7 +163,10 @@ async fn main() {
                 }
                 ToolInputPartial::LSPDiagnostics(diagnostics) => {}
                 ToolInputPartial::ListFiles(list_files) => {
-                    println!("list files: {}", list_files.directory_path())
+                    println!("list files: {}", list_files.directory_path());
+                    let input = ToolInput::ListFiles(list_files);
+                    let response = tool_broker.invoke(input).await;
+                    println!("response: {:?}", response);
                 }
                 ToolInputPartial::OpenFile(open_file) => {
                     println!("open file: {}", open_file.fs_file_path());

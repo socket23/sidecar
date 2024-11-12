@@ -94,11 +94,25 @@ impl Tool for FileDiagnostics {
         Ok(ToolOutput::file_diagnostics(diagnostics_response))
     }
 
+    // identical to sidecar/src/agentic/tool/lsp/diagnostics.rs
     fn tool_description(&self) -> String {
-        "".to_owned()
+        "Get LSP diagnostics for a file".to_owned()
     }
 
+    // identical to sidecar/src/agentic/tool/lsp/diagnostics.rs
     fn tool_input_format(&self) -> String {
-        "".to_owned()
+        format!(
+            r#"Parameters: 
+- path: (required) The path of the file to get diagnostics for (relative to the current working directory {})
+
+Usage:
+<get_diagnostics>
+<path>
+File path here
+</path>
+</get_diagnostics>
+"#,
+            std::env::current_dir().unwrap().to_str().unwrap()
+        )
     }
 }

@@ -53,7 +53,8 @@ use super::{
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
     rerank::base::ReRankEntriesForBroker,
     session::{
-        ask_followup_question::AskFollowupQuestionsResponse, chat::SessionChatClientResponse,
+        ask_followup_question::AskFollowupQuestionsResponse,
+        attempt_completion::AttemptCompletionClientResponse, chat::SessionChatClientResponse,
         exchange::SessionExchangeNewResponse, hot_streak::SessionHotStreakResponse,
     },
     swe_bench::test_tool::SWEBenchTestRepsonse,
@@ -208,6 +209,8 @@ pub enum ToolOutput {
     ListFiles(ListFilesOutput),
     // ask question followup response
     AskFollowupQuestions(AskFollowupQuestionsResponse),
+    // attempt completion
+    AttemptCompletion(AttemptCompletionClientResponse),
 }
 
 impl ToolOutput {

@@ -5,6 +5,7 @@
 //! working on top of
 
 pub(crate) mod ask_followup_question;
+pub(crate) mod attempt_completion;
 pub(crate) mod chat;
 pub(crate) mod exchange;
 pub(crate) mod hot_streak;

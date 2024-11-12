@@ -135,6 +135,8 @@ pub enum ToolType {
     ListFiles,
     // Ask for followup questions
     AskFollowupQuestions,
+    // Attempt completion
+    AttemptCompletion,
 }
 
 impl std::fmt::Display for ToolType {
@@ -226,6 +228,7 @@ impl std::fmt::Display for ToolType {
             ToolType::SearchFileContentWithRegex => write!(f, "Searches for files with a regex"),
             ToolType::ListFiles => write!(f, "List files"),
             ToolType::AskFollowupQuestions => write!(f, "Ask followup questions"),
+            ToolType::AttemptCompletion => write!(f, "Attempt completion"),
         }
     }
 }

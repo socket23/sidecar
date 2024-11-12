@@ -63,7 +63,8 @@ use super::{
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
     session::{
-        ask_followup_question::AskFollowupQuestionsRequest, chat::SessionChatClientRequest,
+        ask_followup_question::AskFollowupQuestionsRequest,
+        attempt_completion::AttemptCompletionClientRequest, chat::SessionChatClientRequest,
         exchange::SessionExchangeNewRequest, hot_streak::SessionHotStreakRequest,
     },
     swe_bench::test_tool::SWEBenchTestRequest,
@@ -180,6 +181,8 @@ pub enum ToolInput {
     ListFiles(ListFilesInput),
     // Ask the user some question
     AskFollowupQuestions(AskFollowupQuestionsRequest),
+    // Attempt completion of a task
+    AttemptCompletion(AttemptCompletionClientRequest),
 }
 
 impl ToolInput {
@@ -260,6 +263,15 @@ impl ToolInput {
             ToolInput::SearchFileContentWithRegex(_) => ToolType::SearchFileContentWithRegex,
             ToolInput::ListFiles(_) => ToolType::ListFiles,
             ToolInput::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
+            ToolInput::AttemptCompletion(_) => ToolType::AttemptCompletion,
+        }
+    }
+
+    pub fn is_attempt_completion(self) -> Result<AttemptCompletionClientRequest, ToolError> {
+        if let ToolInput::AttemptCompletion(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::AttemptCompletion))
         }
     }
 

@@ -4,6 +4,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
+use llm_client::broker::LLMBroker;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
                 human::HumanAgenticRequest,
                 message_event::{SymbolEventMessage, SymbolEventMessageProperties},
             },
-            identifier::SymbolIdentifier,
+            identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
             scratch_pad::ScratchPadAgent,
             tool_box::ToolBox,
@@ -42,6 +43,7 @@ use crate::{
 use super::{
     chat::{SessionChatClientRequest, SessionChatMessage},
     hot_streak::SessionHotStreakRequest,
+    tool_use_agent::{ToolUseAgent, ToolUseAgentInput},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -160,6 +162,7 @@ pub struct ExchangeReplyAgentTool {
     // the data out properly
     // for now, I am leaving things here until I can come up with a proper API for that
     tool_input_partial: ToolInputPartial,
+    thinking: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -200,6 +203,22 @@ impl ExchangeTypeAgent {
             reply: ExchangeReplyAgent::Edit(ExchangeReplyAgentEdit {
                 edits_made_diff: edits_made,
                 accepted: false,
+            }),
+            parent_exchange_id,
+        }
+    }
+
+    fn tool_use(
+        tool_input_partial: ToolInputPartial,
+        tool_type: ToolType,
+        thinking: String,
+        parent_exchange_id: String,
+    ) -> Self {
+        Self {
+            reply: ExchangeReplyAgent::Tool(ExchangeReplyAgentTool {
+                tool_type,
+                tool_input_partial,
+                thinking,
             }),
             parent_exchange_id,
         }
@@ -347,6 +366,25 @@ impl Exchange {
         }
     }
 
+    fn agent_tool_use(
+        parent_exchange_id: String,
+        exchange_id: String,
+        tool_input: ToolInputPartial,
+        tool_type: ToolType,
+        thinking: String,
+    ) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::tool_use(
+                tool_input,
+                tool_type,
+                thinking,
+                parent_exchange_id,
+            )),
+            exchange_state: ExchangeState::Running,
+        }
+    }
+
     fn set_completion_status(mut self, accetped: bool) -> Self {
         if accetped {
             self.exchange_state = ExchangeState::Accepted;
@@ -386,7 +424,7 @@ impl Exchange {
     ///
     /// We can have consecutive human messages now on every API so this is no
     /// longer a big worry
-    async fn to_conversation_message(&self, tool_broker: Arc<ToolBroker>) -> SessionChatMessage {
+    async fn to_conversation_message(&self, _tool_broker: Arc<ToolBroker>) -> SessionChatMessage {
         match &self.exchange_type {
             ExchangeType::HumanChat(ref chat_message) => {
                 // TODO(skcd): Figure out caching etc later on
@@ -453,30 +491,15 @@ impl Exchange {
                         }
                     }
                     ExchangeReplyAgent::Tool(tool_input) => {
-                        // figure out what to do over here
-                        let tool_description =
-                            tool_broker.get_tool_description(&tool_input.tool_type);
                         let tool_input_parameters = &tool_input.tool_input_partial;
-                        match tool_description {
-                            Some(tool_description) => SessionChatMessage::assistant(format!(
-                                r#"I want to use the following tool:
-{tool_description}
-my inputs for the tool are:
-{:#?}"#,
-                                tool_input_parameters
-                            )),
-                            None => {
-                                let tool_type = &tool_input.tool_type;
-                                SessionChatMessage::assistant(format!(
-                                    r#"I want to use the follownig tool:
-{tool_type}
-my inputs for the tool are:
-{:#?}
-"#,
-                                    tool_input_parameters
-                                ))
-                            }
-                        }
+                        let thinking = &tool_input.thinking;
+                        SessionChatMessage::assistant(format!(
+                            r#"<thinking>
+{thinking}
+</thinking>
+{}"#,
+                            tool_input_parameters.to_string()
+                        ))
                     }
                 }
             }
@@ -541,6 +564,7 @@ pub struct Session {
     exchanges: Vec<Exchange>,
     storage_path: String,
     global_running_user_context: UserContext,
+    tools: Vec<ToolType>,
 }
 
 impl Session {
@@ -550,6 +574,7 @@ impl Session {
         repo_ref: RepoRef,
         storage_path: String,
         global_running_user_context: UserContext,
+        tools: Vec<ToolType>,
     ) -> Self {
         Self {
             session_id,
@@ -558,6 +583,7 @@ impl Session {
             exchanges: vec![],
             storage_path,
             global_running_user_context,
+            tools,
         }
     }
 
@@ -855,6 +881,62 @@ impl Session {
                 message_properties.request_id_str().to_owned(),
             ));
         Ok(self)
+    }
+
+    pub async fn get_tool_to_use(
+        mut self,
+        tool_box: Arc<ToolBox>,
+        llm_client: Arc<LLMBroker>,
+        working_directory: String,
+        operating_system: String,
+        default_shell: String,
+        exchange_id: String,
+        parent_exchange_id: String,
+        llm_properties: LLMProperties,
+    ) -> (Option<ToolInputPartial>, Self) {
+        // figure out what to do over here given the state of the session
+        let mut converted_messages = vec![];
+        for previous_message in self.exchanges.iter() {
+            converted_messages.push(
+                previous_message
+                    .to_conversation_message(tool_box.tools().clone())
+                    .await,
+            );
+        }
+
+        // Now we can create the input for the tool use agent
+        let tool_use_agent_input = ToolUseAgentInput::new(
+            converted_messages,
+            self.tools
+                .to_vec()
+                .into_iter()
+                .filter_map(|tool_type| tool_box.tools().get_tool_description(&tool_type))
+                .collect(),
+            llm_properties,
+            working_directory,
+            operating_system,
+            default_shell,
+        );
+
+        let tool_use_agent = ToolUseAgent::new(llm_client);
+
+        // now we can invoke the tool use agent over here and get the parsed input and store it
+        let output = tool_use_agent.invoke(tool_use_agent_input).await;
+        match output {
+            Ok((Some(tool_input_partial), Some(thinking))) => {
+                let tool_type = tool_input_partial.to_tool_type();
+                self.exchanges.push(Exchange::agent_tool_use(
+                    parent_exchange_id,
+                    exchange_id,
+                    tool_input_partial.clone(),
+                    tool_type,
+                    thinking,
+                ));
+                return (Some(tool_input_partial), self);
+            }
+            _ => {}
+        }
+        (None, self)
     }
 
     /// This reacts to the last message and generates the reply for the user to handle

@@ -25,7 +25,31 @@ use super::models::broker::CodeEditBroker;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CodeEditingPartialRequest {
     fs_file_path: String,
-    edits_to_be_made: String,
+    instruction: String,
+}
+
+impl CodeEditingPartialRequest {
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn instruction(&self) -> &str {
+        &self.instruction
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<code_edit_input>
+<fs_file_path>
+{}
+</fs_file_path>
+<instruction>
+{}
+</instruction>
+</code_edit_input>"#,
+            self.fs_file_path, self.instruction
+        )
+    }
 }
 
 #[derive(Clone, Debug)]

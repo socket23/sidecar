@@ -463,7 +463,12 @@ impl ToolBroker {
 
     pub fn get_tool_description(&self, tool_type: &ToolType) -> Option<String> {
         if let Some(tool) = self.tools.get(tool_type) {
-            Some(tool.tool_description())
+            let tool_description = tool.tool_description();
+            let tool_format = tool.tool_input_format();
+            Some(format!(
+                r#"{tool_description}
+{tool_format}"#
+            ))
         } else {
             None
         }

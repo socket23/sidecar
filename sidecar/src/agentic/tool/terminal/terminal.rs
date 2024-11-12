@@ -11,6 +11,27 @@ pub struct TerminalInputPartial {
     command: String,
 }
 
+impl TerminalInputPartial {
+    pub fn new(command: String) -> Self {
+        Self { command }
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<execute_command>
+<command>
+{}
+</command>
+</execute_command>"#,
+            self.command
+        )
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct TerminalInput {
     command: String,

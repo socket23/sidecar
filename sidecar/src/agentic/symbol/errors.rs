@@ -1,3 +1,4 @@
+use llm_client::clients::types::LLMClientError;
 use thiserror::Error;
 use tokio::sync::{mpsc::error::SendError, oneshot::error::RecvError};
 
@@ -81,4 +82,7 @@ pub enum SymbolError {
 
     #[error("Plan service error")]
     PlanServiceError,
+
+    #[error("LLM Client error: {0}")]
+    LLMClientError(LLMClientError),
 }

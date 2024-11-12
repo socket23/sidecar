@@ -132,12 +132,75 @@ pub struct SearchFileContentInputPartial {
     file_pattern: Option<String>,
 }
 
+impl SearchFileContentInputPartial {
+    pub fn new(
+        directory_path: String,
+        regex_pattern: String,
+        file_pattern: Option<String>,
+    ) -> Self {
+        Self {
+            directory_path,
+            regex_pattern,
+            file_pattern,
+        }
+    }
+
+    pub fn directory_path(&self) -> &str {
+        &self.directory_path
+    }
+
+    pub fn regex_pattern(&self) -> &str {
+        &self.regex_pattern
+    }
+
+    pub fn file_pattern(&self) -> Option<&str> {
+        self.file_pattern.as_deref()
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<search_files>
+<directory_path>
+{}
+</directory_path>
+<regex_pattern>
+{}
+</regex_pattern>
+<file_pattern>
+{}
+</file_pattern>
+</search_files>"#,
+            self.directory_path,
+            self.regex_pattern,
+            self.file_pattern
+                .clone()
+                .unwrap_or("not provided".to_owned())
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchFileContentInput {
     directory_path: String,
     regex_pattern: String,
     file_pattern: Option<String>,
     editor_url: String,
+}
+
+impl SearchFileContentInput {
+    pub fn new(
+        directory_path: String,
+        regex_pattern: String,
+        file_pattern: Option<String>,
+        editor_url: String,
+    ) -> Self {
+        Self {
+            directory_path,
+            regex_pattern,
+            file_pattern,
+            editor_url,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -188,6 +251,8 @@ impl Tool for SearchFileContentClient {
             &context.directory_path,
         ];
 
+        println!("search_files::args::({:?})", args);
+
         let mut child = Command::new(binary_path)
             .args(&args)
             .stdout(Stdio::piped())
@@ -197,10 +262,11 @@ impl Tool for SearchFileContentClient {
         // now we can read the output from the child line by line and parse it out properly
         let stdout = child.stdout.take();
         if let None = stdout {
+            println!("stdout is empty over here");
             return Err(ToolError::OutputStreamNotPresent);
         }
 
-        let stdout = child.stdout.take().expect("Failed to capture stdout");
+        let stdout = stdout.expect("Failed to capture stdout");
         let reader = BufReader::new(stdout).lines();
 
         let mut output = String::new();
@@ -218,10 +284,11 @@ impl Tool for SearchFileContentClient {
             line_count += 1;
         }
 
-        let status = child.wait().await?;
-        if !status.success() {
-            return Err(ToolError::OutputStreamNotPresent);
-        }
+        let _status = child.wait().await?;
+        // even if there were errors we still want to read from this
+        // if !status.success() {
+        //     return Err(ToolError::OutputStreamNotPresent);
+        // }
 
         let mut results: Vec<SearchResult> = Vec::new();
         let mut current_result: Option<SearchResult> = None;
@@ -232,8 +299,7 @@ impl Tool for SearchFileContentClient {
             }
             let parsed: RipgrepEvent = match serde_json::from_str(line) {
                 Ok(event) => event,
-                Err(err) => {
-                    eprintln!("Error parsing ripgrep output: {}", err);
+                Err(_err) => {
                     continue;
                 }
             };

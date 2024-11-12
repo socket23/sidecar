@@ -10,6 +10,27 @@ pub struct OpenFileRequestPartial {
     fs_file_path: String,
 }
 
+impl OpenFileRequestPartial {
+    pub fn new(fs_file_path: String) -> Self {
+        Self { fs_file_path }
+    }
+
+    pub fn fs_file_path(&self) -> &str {
+        &self.fs_file_path
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            r#"<read_file>
+<fs_file_path>
+{}
+</fs_file_path>
+</read_file>"#,
+            &self.fs_file_path
+        )
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileRequest {
     fs_file_path: String,
@@ -32,6 +53,23 @@ pub struct OpenFileResponse {
     exists: bool,
     // TODO(skcd): This might break
     language: String,
+}
+
+impl OpenFileResponse {
+    pub fn to_string(&self) -> String {
+        let fs_file_path = &self.fs_file_path;
+        let content = &self.file_contents;
+        let language = &self.language;
+        format!(
+            r#"<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<content>
+```{language}
+{content}
+</content>"#
+        )
+    }
 }
 
 impl OpenFileResponse {

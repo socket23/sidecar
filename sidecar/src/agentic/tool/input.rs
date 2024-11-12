@@ -63,8 +63,8 @@ use super::{
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
     session::{
-        chat::SessionChatClientRequest, exchange::SessionExchangeNewRequest,
-        hot_streak::SessionHotStreakRequest,
+        ask_followup_question::AskFollowupQuestionsRequest, chat::SessionChatClientRequest,
+        exchange::SessionExchangeNewRequest, hot_streak::SessionHotStreakRequest,
     },
     swe_bench::test_tool::SWEBenchTestRequest,
     terminal::terminal::TerminalInput,
@@ -178,6 +178,8 @@ pub enum ToolInput {
     SearchFileContentWithRegex(SearchFileContentInput),
     // List out the files
     ListFiles(ListFilesInput),
+    // Ask the user some question
+    AskFollowupQuestions(AskFollowupQuestionsRequest),
 }
 
 impl ToolInput {
@@ -257,6 +259,15 @@ impl ToolInput {
             ToolInput::TerminalCommand(_) => ToolType::TerminalCommand,
             ToolInput::SearchFileContentWithRegex(_) => ToolType::SearchFileContentWithRegex,
             ToolInput::ListFiles(_) => ToolType::ListFiles,
+            ToolInput::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
+        }
+    }
+
+    pub fn is_ask_followup_questions(self) -> Result<AskFollowupQuestionsRequest, ToolError> {
+        if let ToolInput::AskFollowupQuestions(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::AskFollowupQuestions))
         }
     }
 

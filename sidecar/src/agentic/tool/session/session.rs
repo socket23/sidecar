@@ -4,11 +4,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
-use llm_client::{
-    broker::LLMBroker,
-    clients::types::LLMType,
-    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
-};
+use llm_client::broker::LLMBroker;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -428,7 +424,7 @@ impl Exchange {
     ///
     /// We can have consecutive human messages now on every API so this is no
     /// longer a big worry
-    async fn to_conversation_message(&self, tool_broker: Arc<ToolBroker>) -> SessionChatMessage {
+    async fn to_conversation_message(&self, _tool_broker: Arc<ToolBroker>) -> SessionChatMessage {
         match &self.exchange_type {
             ExchangeType::HumanChat(ref chat_message) => {
                 // TODO(skcd): Figure out caching etc later on
@@ -497,13 +493,10 @@ impl Exchange {
                     ExchangeReplyAgent::Tool(tool_input) => {
                         let tool_input_parameters = &tool_input.tool_input_partial;
                         let thinking = &tool_input.thinking;
-                        let tool_type = &tool_input.tool_type;
                         SessionChatMessage::assistant(format!(
-                            r#"I want to use the following tool:
-{tool_type}
-my reason for using this is:
+                            r#"<thinking>
 {thinking}
-my inputs for the tool are:
+</thinking>
 {}"#,
                             tool_input_parameters.to_string()
                         ))
@@ -899,6 +892,7 @@ impl Session {
         default_shell: String,
         exchange_id: String,
         parent_exchange_id: String,
+        llm_properties: LLMProperties,
     ) -> (Option<ToolInputPartial>, Self) {
         // figure out what to do over here given the state of the session
         let mut converted_messages = vec![];
@@ -918,11 +912,7 @@ impl Session {
                 .into_iter()
                 .filter_map(|tool_type| tool_box.tools().get_tool_description(&tool_type))
                 .collect(),
-            LLMProperties::new(
-                LLMType::ClaudeSonnet,
-                LLMProvider::Anthropic,
-                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
-            ),
+            llm_properties,
             working_directory,
             operating_system,
             default_shell,

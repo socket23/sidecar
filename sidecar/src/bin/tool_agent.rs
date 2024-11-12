@@ -13,8 +13,7 @@ use sidecar::{
     agentic::{
         symbol::{
             events::{
-                edit::SymbolToEdit,
-                input::{SymbolEventRequestId, SymbolInputEvent},
+                edit::SymbolToEdit, input::SymbolEventRequestId,
                 message_event::SymbolEventMessageProperties,
             },
             identifier::{LLMProperties, SymbolIdentifier},
@@ -25,20 +24,10 @@ use sidecar::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
             input::{ToolInput, ToolInputPartial},
-            lsp::{
-                file_diagnostics::WorkspaceDiagnosticsPartial,
-                list_files::ListFilesInput,
-                open_file::{OpenFileRequest, OpenFileRequestPartial},
-                search_file::{SearchFileContentInput, SearchFileContentInputPartial},
-            },
+            lsp::{open_file::OpenFileRequest, search_file::SearchFileContentInput},
             r#type::{Tool, ToolType},
-            session::{
-                ask_followup_question::AskFollowupQuestionsRequest,
-                attempt_completion::AttemptCompletionClientRequest,
-                service::SessionService,
-                tool_use_agent::{ToolUseAgent, ToolUseAgentInput},
-            },
-            terminal::terminal::{TerminalInput, TerminalInputPartial},
+            session::service::SessionService,
+            terminal::terminal::TerminalInput,
         },
     },
     chunking::{
@@ -66,7 +55,7 @@ async fn main() {
         r#"https://app.parea.ai/logs?colViz=%7B%220%22%3Afalse%2C%221%22%3Afalse%2C%222%22%3Afalse%2C%223%22%3Afalse%2C%22error%22%3Afalse%2C%22deployment_id%22%3Afalse%2C%22feedback_score%22%3Afalse%2C%22time_to_first_token%22%3Afalse%2C%22scores%22%3Afalse%2C%22start_timestamp%22%3Afalse%2C%22user%22%3Afalse%2C%22session_id%22%3Afalse%2C%22target%22%3Afalse%2C%22experiment_uuid%22%3Afalse%2C%22dataset_references%22%3Afalse%2C%22in_dataset%22%3Afalse%2C%22event_type%22%3Afalse%2C%22request_type%22%3Afalse%2C%22evaluation_metric_names%22%3Afalse%2C%22request%22%3Afalse%2C%22calling_node%22%3Afalse%2C%22edges%22%3Afalse%2C%22metadata_evaluation_metric_names%22%3Afalse%2C%22metadata_event_type%22%3Afalse%2C%22metadata_0%22%3Afalse%2C%22metadata_calling_node%22%3Afalse%2C%22metadata_edges%22%3Afalse%2C%22metadata_root_id%22%3Afalse%7D&filter=%7B%22filter_field%22%3A%22meta_data%22%2C%22filter_operator%22%3A%22equals%22%2C%22filter_key%22%3A%22root_id%22%2C%22filter_value%22%3A%22{request_id_str}%22%7D&page=1&page_size=50&time_filter=1m"#
     );
     println!("===========================================\nRequest ID: {}\nParea AI: {}\n===========================================", request_id.to_string(), parea_url);
-    let editor_url = "http://localhost:42430".to_owned();
+    let editor_url = "http://localhost:42427".to_owned();
     let anthropic_api_keys = LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned()));
     let anthropic_llm_properties = LLMProperties::new(
         LLMType::ClaudeSonnet,
@@ -188,6 +177,7 @@ async fn main() {
                 "zsh".to_owned(),
                 exchange_id.to_string(),
                 parent_exchange_id.to_string(),
+                anthropic_llm_properties.clone(),
             )
             .await;
         session = session_new;

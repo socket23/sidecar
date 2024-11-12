@@ -309,7 +309,7 @@ fn parse_out_tool_input(input: &str) -> (Option<ToolInputPartial>, Option<String
             }
             "get_diagnostics" => {
                 // Step 3: Parse the XML content
-                let xml_content = format!("<root>{}</root>", content);
+                let _xml_content = format!("<root>{}</root>", content);
 
                 return (
                     Some(ToolInputPartial::LSPDiagnostics(

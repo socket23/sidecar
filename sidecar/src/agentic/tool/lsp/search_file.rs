@@ -251,6 +251,8 @@ impl Tool for SearchFileContentClient {
             &context.directory_path,
         ];
 
+        println!("search_files::args::({:?})", args);
+
         let mut child = Command::new(binary_path)
             .args(&args)
             .stdout(Stdio::piped())

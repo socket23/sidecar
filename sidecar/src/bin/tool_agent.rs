@@ -90,13 +90,7 @@ async fn main() {
             LLMType::Gpt4O,
             LLMProvider::OpenAI,
             LLMProviderAPIKeys::OpenAI(OpenAIProvider::new("".to_owned())),
-        ), // LLMProperties::new(
-           //     LLMType::GeminiPro,
-           //     LLMProvider::GoogleAIStudio,
-           //     LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-           //         "".to_owned(),
-           //     )),
-           // ),
+        ),
     ));
 
     let tool_box = Arc::new(ToolBox::new(

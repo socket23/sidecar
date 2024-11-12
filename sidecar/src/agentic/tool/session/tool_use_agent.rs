@@ -79,7 +79,8 @@ impl ToolUseAgent {
 
 TOOL USE
 
-You have access to a set of tools that are executed upon the user's approval. You can use one tool per message, and will receive the result of that tool use in the user's response. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use.
+You have access to a set of tools. You can use one tool per message (and only one), and you will receive the result of the tool use from the user. You should use the tools step-by-step to accomplish the user task.
+You use the previous information which you get from using the tools to inform your next tool usage.
 
 # Tool Use Formatting
 
@@ -88,18 +89,18 @@ Tool use is formatted using XML-style tags. The tool name is enclosed in opening
 <tool_name>
 <parameter1_name>value1</parameter1_name>
 <parameter2_name>value2</parameter2_name>
-...
+{{rest of the parameters}}
 </tool_name>
 
-For example:
+As an example:
 
 <read_file>
 <path>
-src/main.js
+bin/main.rs
 </path>
 </read_file>
 
-Always adhere to this format for the tool use to ensure proper parsing and execution.
+Always adhere to this format for the tool use to ensure proper parsing and execution from the tool use.
 
 # Tools
 

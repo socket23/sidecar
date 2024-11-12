@@ -114,10 +114,6 @@ async fn main() {
             .expect("directory creation to not fail");
     }
     session_path = session_path.join(session_id.to_owned());
-    session_path
-        .to_str()
-        .expect("path conversion to work on all platforms")
-        .to_owned();
 
     let symbol_tracker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
 
@@ -154,8 +150,7 @@ async fn main() {
     );
 
     let mut exchange_id = 0;
-    let initial_query =
-        "make a new tool, that implements the Tool trait. Name it Manchester.".to_owned();
+    let initial_query = "Can you find all structs which implement the Tool trait.".to_owned();
     session = session.human_message(
         exchange_id.to_string(),
         initial_query,

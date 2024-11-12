@@ -262,6 +262,7 @@ impl Tool for SearchFileContentClient {
         // now we can read the output from the child line by line and parse it out properly
         let stdout = child.stdout.take();
         if let None = stdout {
+            println!("stdout is empty over here");
             return Err(ToolError::OutputStreamNotPresent);
         }
 
@@ -283,10 +284,11 @@ impl Tool for SearchFileContentClient {
             line_count += 1;
         }
 
-        let status = child.wait().await?;
-        if !status.success() {
-            return Err(ToolError::OutputStreamNotPresent);
-        }
+        let _status = child.wait().await?;
+        // even if there were errors we still want to read from this
+        // if !status.success() {
+        //     return Err(ToolError::OutputStreamNotPresent);
+        // }
 
         let mut results: Vec<SearchResult> = Vec::new();
         let mut current_result: Option<SearchResult> = None;
@@ -297,8 +299,7 @@ impl Tool for SearchFileContentClient {
             }
             let parsed: RipgrepEvent = match serde_json::from_str(line) {
                 Ok(event) => event,
-                Err(err) => {
-                    eprintln!("Error parsing ripgrep output: {}", err);
+                Err(_err) => {
                     continue;
                 }
             };

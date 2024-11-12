@@ -207,15 +207,15 @@ impl Tool for ListFilesClient {
     fn tool_description(&self) -> String {
         r#"Request to list files and directories within the specified directory.
 If recursive is true, it will list all files and directories recursively.
-If recursive is false or not provided, it will only list the top-level contents.
+If recursive is false, it will only list the top-level contents.
 Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not."#.to_owned()
     }
 
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters:
-- directory_path: (required) The path of the directory to list contents for (relative to the current working directory {})
-- recursive: (optional) Whether to list files recursively. Use true for recursive listing, false or omit for top-level only.
+- directory_path: (required) The absolute path of the directory to list contents for.
+- recursive: (required) Whether to list files recursively. Use true for recursive listing, false for top-level only.
 
 Usage:
 <list_files>
@@ -223,11 +223,10 @@ Usage:
 Directory path here
 </directory_path>
 <recursive>
-true or false (optional)
+true or false
 </recursive>
 </list_files>
-"#,
-            std::env::current_dir().unwrap().to_str().unwrap()
+"#
         )
     }
 }

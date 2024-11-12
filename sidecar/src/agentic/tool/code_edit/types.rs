@@ -461,7 +461,7 @@ impl Tool for CodeEditingTool {
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters: 
-- fs_file_path: (required) The path of the file to write to (relative to the current working directory {})
+- fs_file_path: (required) The absolute path of the file to write to.
 - instruction: (required) The edit instruction.
 
 Usage:
@@ -473,8 +473,7 @@ File path here
 Edit instruction here
 </instruction>
 </code_edit_input>
-"#,
-            std::env::current_dir().unwrap().to_str().unwrap()
+"#
         )
     }
 }

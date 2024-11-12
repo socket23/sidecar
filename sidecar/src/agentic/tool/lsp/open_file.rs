@@ -167,7 +167,7 @@ May not be suitable for other types of binary files, as it returns the raw conte
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters:
-- fs_file_path: (required) The path of the file to read (relative to the current working directory {})
+- fs_file_path: (required) The absolute path of the file to read.
 
 Usage:
 <read_file>
@@ -175,8 +175,7 @@ Usage:
 File path here
 </fs_file_path>
 </read_file>
-"#,
-            std::env::current_dir().unwrap().to_str().unwrap()
+"#
         )
     }
 }

@@ -211,7 +211,7 @@ impl Tool for LSPDiagnostics {
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters: 
-- fs_file_path: (required) The path of the file to get diagnostics for (relative to the current working directory {})
+- fs_file_path: (required) The absolute path of the file to get diagnostics for.
 
 Usage:
 <get_diagnostics>
@@ -219,8 +219,7 @@ Usage:
 File path here
 </fs_file_path>
 </get_diagnostics>
-"#,
-            std::env::current_dir().unwrap().to_str().unwrap()
+"#
         )
     }
 }

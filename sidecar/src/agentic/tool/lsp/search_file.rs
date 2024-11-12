@@ -284,7 +284,7 @@ This tool searches for patterns or specific content across multiple files, displ
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters:
-- directory_path: (required) The path of the directory to search in (relative to the current working directory {}). This directory will be recursively searched.
+- directory_path: (required) The absolute path of the directory to search in. This directory will be recursively searched.
 - regex_pattern: (required) The regular expression pattern to search for. Uses Rust regex syntax.
 - file_pattern: (optional) Glob pattern to filter files (e.g., '*.ts' for TypeScript files). If not provided, it will search all files (*).
 
@@ -300,8 +300,7 @@ Your regex pattern here
 file pattern here (optional)
 </file_pattern>
 </search_files>
-"#,
-            std::env::current_dir().unwrap().to_str().unwrap()
+"#
         )
     }
 }

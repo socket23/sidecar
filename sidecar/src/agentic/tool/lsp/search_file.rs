@@ -125,6 +125,13 @@ impl SearchFileContentWithRegexOutput {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SearchFileContentInputPartial {
+    directory_path: String,
+    regex_pattern: String,
+    file_pattern: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchFileContentInput {
     directory_path: String,

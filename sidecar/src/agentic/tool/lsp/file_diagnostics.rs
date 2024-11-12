@@ -18,6 +18,9 @@ pub struct FileDiagnostics {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WorkspaceDiagnosticsPartial {}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FileDiagnosticsInput {
     fs_file_path: String,
     editor_url: String,

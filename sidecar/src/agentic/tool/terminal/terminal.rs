@@ -6,6 +6,11 @@ pub struct TerminalTool {
     client: reqwest::Client,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct TerminalInputPartial {
+    command: String,
+}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct TerminalInput {
     command: String,

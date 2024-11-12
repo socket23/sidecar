@@ -6,6 +6,11 @@ use async_trait::async_trait;
 use gix::bstr::ByteSlice;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpenFileRequestPartial {
+    fs_file_path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenFileRequest {
     fs_file_path: String,
     editor_url: String,

@@ -26,6 +26,12 @@ use crate::{
 
 use super::models::broker::CodeEditBroker;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CodeEditingPartialRequest {
+    fs_file_path: String,
+    edits_to_be_made: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct CodeEdit {
     code_above: Option<String>,

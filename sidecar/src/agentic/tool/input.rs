@@ -1,8 +1,10 @@
 use super::{
     code_edit::{
-        filter_edit::FilterEditOperationRequest, find::FindCodeSelectionInput,
+        filter_edit::FilterEditOperationRequest,
+        find::FindCodeSelectionInput,
         search_and_replace::SearchAndReplaceEditingRequest,
-        test_correction::TestOutputCorrectionRequest, types::CodeEdit,
+        test_correction::TestOutputCorrectionRequest,
+        types::{CodeEdit, CodeEditingPartialRequest},
     },
     code_symbol::{
         apply_outline_edit_to_range::ApplyOutlineEditsToRangeRequest,
@@ -40,7 +42,7 @@ use super::{
     lsp::{
         create_file::CreateFileRequest,
         diagnostics::LSPDiagnosticsInput,
-        file_diagnostics::FileDiagnosticsInput,
+        file_diagnostics::{FileDiagnosticsInput, WorkspaceDiagnosticsPartial},
         get_outline_nodes::OutlineNodesUsingEditorRequest,
         go_to_previous_word::GoToPreviousWordRequest,
         gotodefintion::GoToDefinitionRequest,
@@ -49,9 +51,9 @@ use super::{
         grep_symbol::LSPGrepSymbolInCodebaseRequest,
         inlay_hints::InlayHintsRequest,
         list_files::ListFilesInput,
-        open_file::OpenFileRequest,
+        open_file::{OpenFileRequest, OpenFileRequestPartial},
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
-        search_file::SearchFileContentInput,
+        search_file::{SearchFileContentInput, SearchFileContentInputPartial},
         undo_changes::UndoChangesMadeDuringExchangeRequest,
     },
     plan::{
@@ -68,19 +70,19 @@ use super::{
         exchange::SessionExchangeNewRequest, hot_streak::SessionHotStreakRequest,
     },
     swe_bench::test_tool::SWEBenchTestRequest,
-    terminal::terminal::TerminalInput,
+    terminal::terminal::{TerminalInput, TerminalInputPartial},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ToolInputPartial {
-    CodeEditing(),
-    ListFiles(),
-    SearchFileContentWithRegex(),
-    OpenFile(),
-    LSPDiagnostics(),
-    TerminalCommand(),
-    AskFollowupQuestions(),
-    AttemptCompletion(),
+    CodeEditing(CodeEditingPartialRequest),
+    ListFiles(ListFilesInput),
+    SearchFileContentWithRegex(SearchFileContentInputPartial),
+    OpenFile(OpenFileRequestPartial),
+    LSPDiagnostics(WorkspaceDiagnosticsPartial),
+    TerminalCommand(TerminalInputPartial),
+    AskFollowupQuestions(AskFollowupQuestionsRequest),
+    AttemptCompletion(AttemptCompletionClientRequest),
 }
 
 #[derive(Debug, Clone)]

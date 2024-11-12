@@ -12,7 +12,7 @@ impl AttemptCompletionClient {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttemptCompletionClientRequest {
     completion_reply: String,
 }

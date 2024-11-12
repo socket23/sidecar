@@ -169,7 +169,7 @@ fn list_files(dir_path: &Path, recursive: bool, limit: usize) -> (Vec<PathBuf>, 
     (results, limit_reached)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ListFilesInput {
     directory_path: String,
     recursive: bool,

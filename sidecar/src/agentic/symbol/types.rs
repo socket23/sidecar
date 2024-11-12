@@ -1006,9 +1006,7 @@ impl Symbol {
                     LLMProperties::new(
                         LLMType::GeminiPro,
                         LLMProvider::GoogleAIStudio,
-                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                            "".to_owned(),
-                        )),
+                        LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("".to_owned())),
                     ),
                     original_request,
                     query,
@@ -1108,9 +1106,7 @@ impl Symbol {
                 responses,
                 LLMType::GeminiPro,
                 LLMProvider::GoogleAIStudio,
-                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new(
-                    "".to_owned(),
-                )),
+                LLMProviderAPIKeys::GoogleAIStudio(GoogleAIStudioKey::new("".to_owned())),
                 message_properties.root_request_id().to_owned(),
             );
             let result = self.tools.probing_results_summarize(request).await;
@@ -1700,7 +1696,7 @@ Satisfy the requirement either by making edits or gathering the required informa
             )
             .await?;
         let content = symbol_to_edit.content().to_owned();
-        let (llm_properties, swe_bench_initial_edit) =
+        let (_llm_properties, swe_bench_initial_edit) =
             if let Some(llm_properties) = self.tool_properties.get_swe_bench_code_editing_llm() {
                 // if the symbol is extremely long which we want to edit, fallback
                 // to an llm with a bigger context window, in this case we use gpt4-32k
@@ -1734,9 +1730,6 @@ Satisfy the requirement either by making edits or gathering the required informa
                 symbol_to_edit.range(),
                 context.join("\n"),
                 sub_symbol.instructions().join("\n"),
-                llm_properties.llm().clone(),
-                llm_properties.provider().clone(),
-                llm_properties.api_key().clone(),
                 swe_bench_initial_edit,
                 Some(symbol_to_edit.name().to_owned()),
                 None,

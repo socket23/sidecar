@@ -68,7 +68,7 @@ impl SymbolLocker {
         let tool_properties_ref = &tool_properties;
         let request_id = request_event.request_id_data();
         let message_properties = request_event.get_properties().clone();
-        let access_token = request_event.access_token().to_owned();
+        let llm_properties = request_event.llm_properties().clone();
         let sender = request_event.remove_response_sender();
         let symbol_identifier = request.symbol().clone();
         let does_exist = {
@@ -156,7 +156,7 @@ impl SymbolLocker {
                     sender,
                     message_properties.cancellation_token(),
                     message_properties.editor_url(),
-                    access_token,
+                    llm_properties,
                 )) {
                     Ok(_) => {}
                     Err(err) => {

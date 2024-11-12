@@ -10,8 +10,7 @@ use tokio_stream::StreamExt;
 
 use llm_client::{
     broker::LLMBroker,
-    clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
+    clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
 
 use crate::{
@@ -60,7 +59,7 @@ pub struct SessionHotStreakRequest {
     exchange_id: String,
     ui_sender: UnboundedSender<UIEventWithID>,
     cancellation_token: tokio_util::sync::CancellationToken,
-    access_token: String,
+    llm_properties: LLMProperties,
 }
 
 impl SessionHotStreakRequest {
@@ -75,7 +74,7 @@ impl SessionHotStreakRequest {
         exchange_id: String,
         ui_sender: UnboundedSender<UIEventWithID>,
         cancellation_token: tokio_util::sync::CancellationToken,
-        access_token: String,
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             diff_recent_edits,
@@ -88,7 +87,7 @@ impl SessionHotStreakRequest {
             exchange_id,
             ui_sender,
             cancellation_token,
-            access_token,
+            llm_properties,
         }
     }
 }
@@ -274,20 +273,11 @@ impl Tool for SessionHotStreakClient {
         let cancellation_token = context.cancellation_token.clone();
         let ui_sender = context.ui_sender.clone();
         let root_id = context.session_id.to_owned();
-        let access_token = context.access_token.to_owned();
         let exchange_id = context.exchange_id.to_owned();
+        let llm_properties = context.llm_properties.clone();
         let system_message = LLMClientMessage::system(self.system_message(&context));
         let user_messages = self.user_message(context).await;
-        let codestory_access_token = CodestoryAccessToken { access_token };
 
-        let llm_type = LLMType::ClaudeSonnet;
-        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
-
-        let llm_properties = LLMProperties::new(
-            llm_type,
-            llm_provider,
-            LLMProviderAPIKeys::CodeStory(codestory_access_token),
-        );
         let mut messages = vec![system_message];
         messages.extend(user_messages);
 

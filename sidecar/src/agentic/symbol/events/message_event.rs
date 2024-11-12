@@ -2,6 +2,7 @@
 //! Keeps all the events which are sending intact
 
 use crate::agentic::symbol::{
+    identifier::LLMProperties,
     types::{SymbolEventRequest, SymbolEventResponse},
     ui_event::UIEventWithID,
 };
@@ -18,7 +19,7 @@ pub struct SymbolEventMessageProperties {
     // with this cancellation token (this is not for the full session but the current
     // event which we are processing)
     cancellation_token: tokio_util::sync::CancellationToken,
-    access_token: String,
+    llm_properties: LLMProperties,
 }
 
 impl SymbolEventMessageProperties {
@@ -27,19 +28,19 @@ impl SymbolEventMessageProperties {
         ui_sender: tokio::sync::mpsc::UnboundedSender<UIEventWithID>,
         editor_url: String,
         cancellation_token: tokio_util::sync::CancellationToken,
-        access_token: String,
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             request_id,
             ui_sender,
             editor_url,
             cancellation_token,
-            access_token,
+            llm_properties,
         }
     }
 
-    pub fn access_token(&self) -> &str {
-        &self.access_token
+    pub fn llm_properties(&self) -> &LLMProperties {
+        &self.llm_properties
     }
 
     pub fn editor_url(&self) -> String {
@@ -98,7 +99,7 @@ impl SymbolEventMessage {
         response_sender: tokio::sync::oneshot::Sender<SymbolEventResponse>,
         cancellation_token: tokio_util::sync::CancellationToken,
         editor_url: String,
-        access_token: String, // this is necessary if it expects to make any LLM calls (since now all will be routed through codestory provider)
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             symbol_event_request,
@@ -107,15 +108,14 @@ impl SymbolEventMessage {
                 ui_sender,
                 editor_url,
                 cancellation_token,
-                access_token,
+                llm_properties,
             ),
             response_sender,
         }
     }
 
-    /// convenience
-    pub fn access_token(&self) -> &str {
-        &self.properties.access_token
+    pub fn llm_properties(&self) -> &LLMProperties {
+        &self.properties.llm_properties
     }
 
     pub fn get_properties(&self) -> &SymbolEventMessageProperties {

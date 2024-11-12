@@ -6,6 +6,10 @@ use super::types::json as json_result;
 use axum::response::{sse, IntoResponse, Sse};
 use axum::{extract::Query as axumQuery, Extension, Json};
 use futures::{stream, StreamExt};
+use llm_client::clients::types::LLMType;
+use llm_client::provider::{
+    CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys,
+};
 use serde_json::json;
 use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
@@ -15,10 +19,7 @@ use tokio::task::JoinHandle;
 
 use super::types::Result;
 use crate::agentic::symbol::anchored::AnchoredSymbol;
-use crate::agentic::symbol::events::agent::AgentMessage;
-use crate::agentic::symbol::events::context_event::ContextGatheringEvent;
 use crate::agentic::symbol::events::environment_event::{EnvironmentEvent, EnvironmentEventType};
-use crate::agentic::symbol::events::human::{HumanAgenticRequest, HumanMessage};
 use crate::agentic::symbol::events::input::SymbolEventRequestId;
 use crate::agentic::symbol::events::lsp::LSPDiagnosticError;
 use crate::agentic::symbol::events::message_event::SymbolEventMessageProperties;
@@ -29,13 +30,12 @@ use crate::agentic::symbol::tool_properties::ToolProperties;
 use crate::agentic::symbol::toolbox::helpers::SymbolChangeSet;
 use crate::agentic::symbol::ui_event::{RelevantReference, UIEventWithID};
 use crate::agentic::tool::lsp::open_file::OpenFileResponse;
-use crate::agentic::tool::plan::plan::Plan;
 use crate::agentic::tool::plan::service::PlanService;
 use crate::agentic::tool::session::session::AideAgentMode;
 use crate::chunking::text_document::Range;
 use crate::repo::types::RepoRef;
 use crate::webserver::plan::{
-    check_plan_storage_path, check_scratch_pad_path, create_plan, plan_storage_directory,
+    check_plan_storage_path, check_scratch_pad_path, plan_storage_directory,
 };
 use crate::{application::application::Application, user_context::types::UserContext};
 
@@ -57,19 +57,6 @@ impl ProbeRequestTracker {
         Self {
             running_requests: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    async fn track_new_request(
-        &self,
-        request_id: &str,
-        cancellation_token: tokio_util::sync::CancellationToken,
-        join_handle: JoinHandle<()>,
-    ) {
-        let mut running_requests = self.running_requests.lock().await;
-        running_requests.insert(
-            request_id.to_owned(),
-            (cancellation_token, Some(join_handle)),
-        );
     }
 
     async fn cancel_request(&self, request_id: &str) {
@@ -112,28 +99,6 @@ struct AnchoredEditingMetadata {
 }
 
 impl AnchoredEditingMetadata {
-    pub fn new(
-        message_properties: SymbolEventMessageProperties,
-        anchored_symbols: Vec<AnchoredSymbol>,
-        previous_file_content: HashMap<String, String>,
-        references: Vec<RelevantReference>,
-        user_context_string: Option<String>,
-        scratch_pad_agent: ScratchPadAgent,
-        environment_event_sender: UnboundedSender<EnvironmentEvent>,
-        cancellation_token: tokio_util::sync::CancellationToken,
-    ) -> Self {
-        Self {
-            message_properties,
-            anchored_symbols,
-            previous_file_content,
-            references,
-            user_context_string,
-            scratch_pad_agent,
-            environment_event_sender,
-            cancellation_token,
-        }
-    }
-
     pub fn references(&self) -> &[RelevantReference] {
         &self.references
     }
@@ -195,68 +160,10 @@ impl AnchoredEditingTracker {
         }
     }
 
-    async fn track_new_request(
-        &self,
-        request_id: &str,
-        join_handle: Option<JoinHandle<()>>, // Optional to allow asynchronous composition of requests
-        editing_metadata: Option<AnchoredEditingMetadata>, // Optional to allow asynchronous composition of requests
-    ) {
-        {
-            let mut running_requests = self.running_requests.lock().await;
-            if let Some(join_handle) = join_handle {
-                running_requests.insert(request_id.to_owned(), join_handle);
-            }
-        }
-        {
-            println!(
-                "anchored_editing_tracker::tracking_request::({})",
-                request_id
-            );
-            let mut running_request_properties = self.running_requests_properties.lock().await;
-            if let Some(metadata) = editing_metadata {
-                running_request_properties.insert(request_id.to_owned(), metadata);
-            }
-        }
-    }
-
     pub async fn override_running_request(&self, request_id: &str, join_handle: JoinHandle<()>) {
         {
             let mut running_requests = self.running_requests.lock().await;
             running_requests.insert(request_id.to_owned(), join_handle);
-        }
-    }
-
-    // pub async fn send_diagnostics_event(&self, diagnostics: Vec<LSPDiagnosticError>) {
-    //     let environment_senders;
-    //     {
-    //         let running_request_properties = self.running_requests_properties.lock().await;
-    //         environment_senders = running_request_properties
-    //             .iter()
-    //             .map(|running_properties| running_properties.1.environment_event_sender.clone())
-    //             .collect::<Vec<_>>();
-    //     }
-    //     environment_senders
-    //         .into_iter()
-    //         .for_each(|environment_sender| {
-    //             let _ = environment_sender.send(EnvironmentEventType::LSP(LSPSignal::diagnostics(
-    //                 diagnostics.to_vec(),
-    //             )));
-    //         })
-    // }
-
-    /// Updates the ongoing cancellation request for this event
-    async fn update_cancellation_token(
-        &self,
-        request_id: &str,
-        cancellation_token: tokio_util::sync::CancellationToken,
-    ) {
-        if let Some(properties) = self
-            .running_requests_properties
-            .lock()
-            .await
-            .get_mut(request_id)
-        {
-            properties.cancellation_token = cancellation_token;
         }
     }
 
@@ -327,17 +234,6 @@ pub struct ProbeRequestActiveWindow {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProbeRequest {
-    request_id: String,
-    editor_url: String,
-    model_config: LLMClientConfig,
-    user_context: UserContext,
-    query: String,
-    active_window_data: Option<ProbeRequestActiveWindow>,
-    access_token: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProbeStopRequest {
     request_id: String,
 }
@@ -357,79 +253,6 @@ pub async fn probe_request_stop(
     let anchored_editing_tracker = app.anchored_request_tracker.clone();
     let _ = anchored_editing_tracker.cancel_request(&request_id).await;
     Ok(Json(ProbeStopResponse { done: true }))
-}
-
-pub async fn probe_request(
-    Extension(app): Extension<Application>,
-    Json(ProbeRequest {
-        request_id,
-        editor_url,
-        model_config,
-        mut user_context,
-        query,
-        active_window_data,
-        access_token,
-    }): Json<ProbeRequest>,
-) -> Result<impl IntoResponse> {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let probe_request_tracker = app.probe_request_tracker.clone();
-    if let Some(active_window_data) = active_window_data {
-        user_context = user_context.update_file_content_map(
-            active_window_data.file_path,
-            active_window_data.file_content,
-            active_window_data.language,
-        );
-    }
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let provider_keys = model_config
-        .provider_for_slow_model()
-        .map(|provider| provider.clone())
-        .ok_or(anyhow::anyhow!("missing provider for slow model"))?;
-    let _provider_type = provider_keys.provider_type();
-    let event_message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
-        sender.clone(),
-        editor_url,
-        cancellation_token.clone(),
-        access_token,
-    );
-
-    let symbol_manager = app.symbol_manager.clone();
-
-    // spawn a background thread to keep polling the probe_request future
-    let join_handle = tokio::spawn(async move {
-        let _ = symbol_manager
-            .probe_request_from_user_context(query, user_context, event_message_properties.clone())
-            .await;
-    });
-
-    let _ = probe_request_tracker
-        .track_new_request(&request_id, cancellation_token, join_handle)
-        .await;
-
-    // Now we want to poll the future of the probe request we are sending
-    // along with the ui events so we can return the channel properly
-    // how do go about doing that?
-    let event_stream = Sse::new(
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
-            sse::Event::default()
-                .json_data(event)
-                .map_err(anyhow::Error::new)
-        }),
-    );
-
-    // return the stream as a SSE event stream over here
-    Ok(event_stream.keep_alive(
-        sse::KeepAlive::new()
-            .interval(Duration::from_secs(3))
-            .event(
-                sse::Event::default()
-                    .json_data(json!({
-                        "keep_alive": "alive"
-                    }))
-                    .expect("json to not fail in keep alive"),
-            ),
-    ))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -563,76 +386,6 @@ pub struct CodeSculptingWarmup {
     grab_import_nodes: bool,
     editor_url: String,
     access_token: String,
-}
-
-/// Response structure for the code sculpting warmup operation.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CodeSculptingWarmupResponse {
-    done: bool,
-}
-
-impl ApiResponse for CodeSculptingWarmupResponse {}
-
-pub async fn code_sculpting_warmup(
-    Extension(app): Extension<Application>,
-    Json(CodeSculptingWarmup {
-        file_paths,
-        grab_import_nodes,
-        editor_url,
-        access_token,
-    }): Json<CodeSculptingWarmup>,
-) -> Result<impl IntoResponse> {
-    println!("webserver::code_sculpting_warmup");
-    println!(
-        "webserver::code_sculpting_warmup::file_paths({})",
-        file_paths.to_vec().join(",")
-    );
-    let warmup_request_id = "warmup_request_id".to_owned();
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(warmup_request_id.to_owned(), warmup_request_id.to_owned()),
-        sender,
-        editor_url,
-        tokio_util::sync::CancellationToken::new(),
-        access_token,
-    );
-    let files_already_in_cache;
-    {
-        files_already_in_cache = app
-            .anchored_request_tracker
-            .cache_right_now
-            .lock()
-            .await
-            .iter()
-            .map(|open_file_response| open_file_response.fs_file_path().to_owned())
-            .collect::<Vec<_>>();
-    }
-    // if the order of files which we are tracking is the same and there is no difference
-    // then we should not update our cache
-    if files_already_in_cache == file_paths {
-        return Ok(json_result(CodeSculptingWarmupResponse { done: true }));
-    }
-    let mut file_cache_vec = vec![];
-    for file_path in file_paths.into_iter() {
-        let file_content = app
-            .tool_box
-            .file_open(file_path, message_properties.clone())
-            .await;
-        if let Ok(file_content) = file_content {
-            file_cache_vec.push(file_content);
-        }
-    }
-
-    // Now we put this in our cache over here
-    {
-        let mut file_caches = app.anchored_request_tracker.cache_right_now.lock().await;
-        *file_caches = file_cache_vec.to_vec();
-    }
-    let _ = app
-        .tool_box
-        .warmup_context(file_cache_vec, grab_import_nodes, message_properties)
-        .await;
-    Ok(json_result(CodeSculptingWarmupResponse { done: true }))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -871,208 +624,6 @@ pub async fn code_sculpting(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticCodeEditing {
-    user_query: String,
-    editor_url: String,
-    request_id: String,
-    user_context: UserContext,
-    active_window_data: Option<ProbeRequestActiveWindow>,
-    root_directory: String,
-    codebase_search: bool,
-    // If we are editing based on an anchor position
-    anchor_editing: bool,
-    enable_import_nodes: bool,
-    // should we do deep reasoning
-    deep_reasoning: bool,
-    access_token: String,
-}
-
-pub async fn code_editing(
-    Extension(app): Extension<Application>,
-    Json(AgenticCodeEditing {
-        user_query,
-        editor_url,
-        request_id,
-        mut user_context,
-        active_window_data,
-        root_directory,
-        codebase_search,
-        anchor_editing,
-        enable_import_nodes: _enable_import_nodes,
-        deep_reasoning,
-        access_token,
-    }): Json<AgenticCodeEditing>,
-) -> Result<impl IntoResponse> {
-    println!("webserver::code_editing_start::request_id({})", &request_id);
-    println!("webserver::code_editing_start::user_query({})", &user_query);
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    if let Some(active_window_data) = active_window_data {
-        user_context = user_context.update_file_content_map(
-            active_window_data.file_path,
-            active_window_data.file_content,
-            active_window_data.language,
-        );
-    }
-
-    let cached_content = app.anchored_request_tracker.cached_content().await;
-    println!(
-        "webserver::code_editing::cached_content::{}",
-        cached_content.len()
-    );
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-
-    // we want to pass this message_properties everywhere and not the previous one
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(request_id.to_owned(), request_id.to_owned()),
-        sender.clone(),
-        editor_url,
-        cancellation_token.clone(),
-        access_token,
-    );
-
-    println!(
-        "webserver::code_editing_flow::endpoint_hit::anchor_editing({})",
-        anchor_editing
-    );
-
-    let (_scratch_pad_agent, environment_sender) = if let Some(scratch_pad_agent) = app
-        .anchored_request_tracker
-        .scratch_pad_agent(&request_id)
-        .await
-    {
-        app.anchored_request_tracker
-            .update_cancellation_token(&request_id, cancellation_token)
-            .await;
-        println!("webserver::code_editing_flow::same_request_id");
-        scratch_pad_agent
-    } else {
-        println!(
-            "webserver::code_editing_flow::anchor_editing::new::request_id({})::({})",
-            &request_id, anchor_editing
-        );
-        // the storage unit for the scratch pad path
-        // create this file path before we start editing it
-        // every anchored edit also has a reference followup action which happens
-        // this is also critical since we want to figure out whats the next action for fixes
-        // which we should take
-        let mut scratch_pad_file_path = app.config.scratch_pad().join(request_id.to_owned());
-        scratch_pad_file_path.set_extension("md");
-        let (scratch_pad_agent, environment_sender) = ScratchPadAgent::start_scratch_pad(
-            scratch_pad_file_path,
-            app.tool_box.clone(),
-            app.symbol_manager.hub_sender(),
-            message_properties.clone(),
-            Some(cached_content.to_owned()),
-        )
-        .await;
-        let _ = app
-            .anchored_request_tracker
-            .track_new_request(
-                &request_id,
-                None,
-                Some(AnchoredEditingMetadata::new(
-                    message_properties.clone(),
-                    vec![],
-                    Default::default(),
-                    vec![],
-                    None,
-                    scratch_pad_agent.clone(),
-                    environment_sender.clone(),
-                    cancellation_token,
-                )),
-            )
-            .await;
-        (scratch_pad_agent, environment_sender)
-    };
-
-    if anchor_editing {
-        println!(
-            "webserver::code_editing_flow::anchor_editing::({})",
-            anchor_editing
-        );
-
-        println!("tracked new request");
-
-        let symbols_to_anchor = app
-            .tool_box
-            .symbols_to_anchor(&user_context, message_properties.clone())
-            .await
-            .unwrap_or_default();
-
-        if !symbols_to_anchor.is_empty() {
-            // end of async task
-
-            // no way to monitor the speed of response over here, which sucks but
-            // we can figure that out later
-            let cloned_environment_sender = environment_sender.clone();
-
-            let _ = cloned_environment_sender.send(EnvironmentEvent::event(
-                EnvironmentEventType::Agent(AgentMessage::user_intent_for_references(
-                    user_query.to_owned(),
-                    symbols_to_anchor.to_vec(),
-                )),
-                message_properties.clone(),
-            ));
-
-            let _ = cloned_environment_sender.send(EnvironmentEvent::event(
-                EnvironmentEventType::human_anchor_request(
-                    user_query,
-                    symbols_to_anchor,
-                    // not sure about this???
-                    Some(cached_content.to_owned()),
-                ),
-                message_properties.clone(),
-            ));
-
-            let properties_present = app
-                .anchored_request_tracker
-                .get_properties(&request_id)
-                .await;
-
-            println!(
-                "webserver::anchored_edits::request_id({})::properties_present({})",
-                &request_id,
-                properties_present.is_some()
-            );
-        }
-    } else {
-        println!("webserver::code_editing_flow::agentic_editing");
-
-        let _ = environment_sender.send(EnvironmentEvent::event(
-            EnvironmentEventType::Human(HumanMessage::Agentic(HumanAgenticRequest::new(
-                user_query,
-                root_directory,
-                codebase_search,
-                user_context,
-                deep_reasoning,
-            ))),
-            message_properties,
-        ));
-    }
-
-    let event_stream = Sse::new(
-        tokio_stream::wrappers::UnboundedReceiverStream::new(receiver).map(|event| {
-            sse::Event::default()
-                .json_data(event)
-                .map_err(anyhow::Error::new)
-        }),
-    );
-
-    // return the stream as a SSE event stream over here
-    Ok(event_stream.keep_alive(
-        sse::KeepAlive::new()
-            .interval(Duration::from_secs(3))
-            .event(
-                sse::Event::default()
-                    .json_data(json!({
-                        "keep_alive": "alive"
-                    }))
-                    .expect("json to not fail in keep alive"),
-            ),
-    ))
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticDiagnosticData {
     message: String,
     range: Range,
@@ -1126,125 +677,6 @@ pub async fn push_diagnostics(
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticContextGathering {
-    context_events: Vec<ContextGatheringEvent>,
-    editor_url: String,
-    access_token: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticContextGatheringResponse {
-    done: bool,
-}
-
-impl ApiResponse for AgenticContextGatheringResponse {}
-
-pub async fn context_recording(
-    Extension(app): Extension<Application>,
-    Json(AgenticContextGathering {
-        context_events,
-        editor_url,
-        access_token,
-    }): Json<AgenticContextGathering>,
-) -> Result<impl IntoResponse> {
-    println!("webserver::endpoint::context_recording");
-    println!("context_events::{:?}", &context_events);
-    // we can also print out the prompt which we will be generating from our recording over here
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let message_properties = SymbolEventMessageProperties::new(
-        SymbolEventRequestId::new(
-            "context_recording".to_owned(),
-            "context_recording".to_owned(),
-        ),
-        sender,
-        editor_url,
-        cancellation_token,
-        access_token,
-    );
-    let context_recording_to_prompt = app
-        .tool_box
-        .context_recording_to_prompt(context_events, message_properties)
-        .await;
-    println!(
-        "context_recording_to_prompt::({:?})",
-        &context_recording_to_prompt
-    );
-    Ok(json_result(AgenticContextGatheringResponse { done: true }))
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticReasoningThreadCreationRequest {
-    query: String,
-    thread_id: uuid::Uuid,
-    editor_url: String,
-    user_context: UserContext,
-    #[serde(default)]
-    is_deep_reasoning: bool,
-    access_token: String,
-}
-
-// this is PlanResponse on IDE. using pub here cuz lazy
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AgenticReasoningThreadCreationResponse {
-    pub plan: Option<Plan>,
-    pub success: bool,
-    pub error_if_any: Option<String>,
-}
-
-impl ApiResponse for AgenticReasoningThreadCreationResponse {}
-
-pub async fn reasoning_thread_create(
-    Extension(app): Extension<Application>,
-    Json(AgenticReasoningThreadCreationRequest {
-        query,
-        thread_id,
-        editor_url,
-        user_context,
-        is_deep_reasoning,
-        access_token,
-    }): Json<AgenticReasoningThreadCreationRequest>,
-) -> Result<impl IntoResponse> {
-    println!("webserver::agentic::reasoning_thread_create");
-    println!(
-        "webserver::agentic::reasoning_thread_create::user_context::({:?})",
-        &user_context
-    );
-    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        app.symbol_manager.clone(),
-        plan_storage_directory,
-    );
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    let plan_output = create_plan(
-        query,
-        user_context,
-        editor_url,
-        thread_id,
-        check_plan_storage_path(app.config.clone(), thread_id.to_string()).await,
-        plan_service,
-        is_deep_reasoning,
-        sender,
-        access_token,
-    )
-    .await;
-    let response = match plan_output {
-        Ok(plan) => AgenticReasoningThreadCreationResponse {
-            plan: Some(plan),
-            success: true,
-            error_if_any: None,
-        },
-        Err(e) => AgenticReasoningThreadCreationResponse {
-            plan: None,
-            success: false,
-            error_if_any: Some(format!("{:?}", e)),
-        },
-    };
-    Ok(json_result(response))
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AgenticEditFeedbackExchange {
     exchange_id: String,
     session_id: String,
@@ -1252,6 +684,7 @@ pub struct AgenticEditFeedbackExchange {
     editor_url: String,
     accepted: bool,
     access_token: String,
+    model_configuration: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1306,9 +739,16 @@ pub async fn user_feedback_on_exchange(
         editor_url,
         accepted,
         access_token,
+        model_configuration,
     }): Json<AgenticEditFeedbackExchange>,
 ) -> Result<impl IntoResponse> {
-    // bring this back later
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
     // give this as feedback to the agent to make sure that it can react to it (ideally)
     // for now we are gonig to close the exchange if it was not closed already
     println!("webserver::agent_session::feedback_on_exchange::hit");
@@ -1323,7 +763,7 @@ pub async fn user_feedback_on_exchange(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
 
     let session_storage_path =
@@ -1393,6 +833,7 @@ pub struct AgenticCancelRunningExchange {
     session_id: String,
     editor_url: String,
     access_token: String,
+    model_configuration: LLMClientConfig,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1410,8 +851,17 @@ pub async fn cancel_running_exchange(
         session_id,
         editor_url,
         access_token,
+        model_configuration,
     }): Json<AgenticCancelRunningExchange>,
 ) -> Result<impl IntoResponse> {
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
+
     println!(
         "cancel_running_exchange::session_id({})::exchange_id({})",
         session_id, exchange_id
@@ -1424,7 +874,7 @@ pub async fn cancel_running_exchange(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
     if let Some(cancellation_token) = session_service
         .get_cancellation_token(&session_id, &exchange_id)
@@ -1528,7 +978,7 @@ pub struct AgentSessionChatRequest {
     #[serde(default)]
     codebase_search: bool,
     access_token: String,
-    llm_properties: Option<LLMProperties>,
+    model_configuration: LLMClientConfig,
 }
 
 /// Handles the agent session and either creates it or appends to it
@@ -1548,10 +998,16 @@ pub async fn agent_session_chat(
         root_directory: _root_directory,
         codebase_search: _codebase_search,
         access_token,
-        llm_properties: _llm_properties,
+        model_configuration,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
-    dbg!(&access_token);
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
     // bring this back later
     let agent_mode = AideAgentMode::Chat;
     println!("webserver::agent_session::chat::hit");
@@ -1566,7 +1022,7 @@ pub async fn agent_session_chat(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
 
     let session_storage_path =
@@ -1648,9 +1104,16 @@ pub async fn agent_session_edit_anchored(
         root_directory: _root_directory,
         codebase_search: _codebase_search,
         access_token,
-        llm_properties: _llm_properties,
+        model_configuration,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
     // bring this back later
     let _agent_mode = AideAgentMode::Edit;
     println!("webserver::agent_session::anchored_edit::hit");
@@ -1665,7 +1128,7 @@ pub async fn agent_session_edit_anchored(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
 
     let session_storage_path =
@@ -1758,9 +1221,16 @@ pub async fn agent_session_edit_agentic(
         root_directory,
         codebase_search,
         access_token,
-        llm_properties: _llm_properties,
+        model_configuration,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
     // bring this back later
     let _agent_mode = AideAgentMode::Edit;
     println!("webserver::agent_session::agentic_edit::hit");
@@ -1775,7 +1245,7 @@ pub async fn agent_session_edit_agentic(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
 
     let session_storage_path =
@@ -1869,9 +1339,16 @@ pub async fn agent_session_plan_iterate(
         root_directory,
         codebase_search,
         access_token,
-        llm_properties: _llm_properties,
+        model_configuration,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
     // bring this back later
     let _agent_mode = AideAgentMode::Edit;
     println!("webserver::agent_session::plan::iteration::hit");
@@ -1886,7 +1363,7 @@ pub async fn agent_session_plan_iterate(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
 
     let session_storage_path =
@@ -1980,9 +1457,16 @@ pub async fn agent_session_plan(
         root_directory,
         codebase_search,
         access_token,
-        llm_properties: _llm_properties,
+        model_configuration,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
     // bring this back later
     let _agent_mode = AideAgentMode::Edit;
     println!("webserver::agent_session::plan::hit");
@@ -1997,7 +1481,7 @@ pub async fn agent_session_plan(
         sender.clone(),
         editor_url,
         cancellation_token.clone(),
-        access_token,
+        llm_provider,
     );
 
     let session_storage_path =

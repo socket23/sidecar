@@ -9,7 +9,6 @@ use uuid::Uuid;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage, LLMType},
-    provider::{CodeStoryLLMTypes, CodestoryAccessToken, LLMProvider, LLMProviderAPIKeys},
 };
 
 use crate::{
@@ -160,7 +159,7 @@ pub struct StepGeneratorRequest {
     // this
     stream_steps: Option<UnboundedSender<StepSenderEvent>>,
     cancellation_token: tokio_util::sync::CancellationToken,
-    access_token: String,
+    llm_properties: LLMProperties,
 }
 
 impl StepGeneratorRequest {
@@ -175,7 +174,7 @@ impl StepGeneratorRequest {
         ui_event: UnboundedSender<UIEventWithID>,
         stream_steps: Option<UnboundedSender<StepSenderEvent>>,
         cancellation_token: tokio_util::sync::CancellationToken,
-        access_token: String,
+        llm_properties: LLMProperties,
     ) -> Self {
         Self {
             user_query,
@@ -190,7 +189,7 @@ impl StepGeneratorRequest {
             ui_event,
             stream_steps,
             cancellation_token,
-            access_token,
+            llm_properties,
         }
     }
 
@@ -200,10 +199,6 @@ impl StepGeneratorRequest {
 
     pub fn previous_queries(&self) -> &[String] {
         self.previous_queries.as_slice()
-    }
-
-    pub fn access_token(&self) -> &str {
-        &self.access_token
     }
 
     pub fn root_request_id(&self) -> &str {
@@ -534,24 +529,7 @@ impl Tool for StepGeneratorClient {
             LLMClientCompletionRequest::new(LLMType::ClaudeSonnet, messages, 0.2, None)
         };
 
-        let llm_provider = LLMProvider::CodeStory(CodeStoryLLMTypes::new());
-        let codestory_access_token = CodestoryAccessToken {
-            access_token: context.access_token.clone(),
-        };
-
-        let llm_properties = if is_deep_reasoning {
-            LLMProperties::new(
-                LLMType::O1Preview,
-                llm_provider,
-                LLMProviderAPIKeys::CodeStory(codestory_access_token),
-            )
-        } else {
-            LLMProperties::new(
-                LLMType::ClaudeSonnet,
-                llm_provider,
-                LLMProviderAPIKeys::CodeStory(codestory_access_token),
-            )
-        };
+        let llm_properties = context.llm_properties.clone();
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let start_time = Instant::now();

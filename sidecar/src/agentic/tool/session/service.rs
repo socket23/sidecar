@@ -341,6 +341,40 @@ impl SessionService {
         Ok(())
     }
 
+    /// TODO(skcd): Pick up the integration from here for the tool use
+    pub async fn tool_use_agentic(
+        &self,
+        session_id: String,
+        storage_path: String,
+        exchange_id: String,
+        all_files: Vec<String>,
+        open_files: Vec<String>,
+        shell: String,
+        project_labels: Vec<String>,
+        repo_ref: RepoRef,
+        root_directory: String,
+        mut message_properties: SymbolEventMessageProperties,
+    ) -> Result<(), SymbolError> {
+        println!("session_service::tool_use_agentic::start");
+        let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
+        {
+            println!(
+                "session_service::load_from_storage_ok::session_id({})",
+                &session_id
+            );
+            session
+        } else {
+            self.create_new_session(
+                session_id.to_owned(),
+                project_labels.to_vec(),
+                repo_ref.clone(),
+                storage_path,
+                UserContext::default(),
+            )
+        };
+        Ok(())
+    }
+
     pub async fn code_edit_agentic(
         &self,
         session_id: String,

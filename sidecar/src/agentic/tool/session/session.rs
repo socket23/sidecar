@@ -716,6 +716,41 @@ impl Session {
         self
     }
 
+    pub fn human_message_agentic(
+        mut self,
+        exchange_id: String,
+        human_message: String,
+        all_files: Vec<String>,
+        open_files: Vec<String>,
+        _shell: String,
+    ) -> Session {
+        let user_message = format!(
+            r#"<editor_status>
+<open_files>
+{}
+</open_files>
+<visible_files>
+{}
+</visible_files>
+</editor_status>
+<user_query>
+{}
+</user_query>"#,
+            all_files.join("\n"),
+            open_files.join("\n"),
+            human_message
+        );
+        let exchange = Exchange::human_chat(
+            exchange_id,
+            user_message,
+            UserContext::default(),
+            self.project_labels.to_vec(),
+            self.repo_ref.clone(),
+        );
+        self.exchanges.push(exchange);
+        self
+    }
+
     pub fn human_message(
         mut self,
         exchange_id: String,

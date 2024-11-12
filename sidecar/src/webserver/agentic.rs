@@ -1337,6 +1337,124 @@ pub async fn agent_session_edit_agentic(
     Ok(Sse::new(Box::pin(stream)))
 }
 
+pub async fn agent_tool_use(
+    Extension(app): Extension<Application>,
+    Json(AgentSessionChatRequest {
+        session_id,
+        exchange_id,
+        editor_url,
+        query,
+        user_context,
+        // agent_mode,
+        repo_ref,
+        project_labels,
+        root_directory,
+        codebase_search,
+        access_token,
+        model_configuration,
+        all_files: _all_files,
+        open_files: _open_files,
+        shell: _shell,
+    }): Json<AgentSessionChatRequest>,
+) -> Result<impl IntoResponse> {
+    let llm_provider = model_configuration
+        .llm_properties_for_slow_model()
+        .unwrap_or(LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::CodeStory(CodeStoryLLMTypes::new()),
+            LLMProviderAPIKeys::CodeStory(CodestoryAccessToken::new(access_token.to_owned())),
+        ));
+    println!("webserver::agent_session::tool_use::hit");
+    println!(
+        "webserver::agent_session::tool_use::session_id({})",
+        &session_id
+    );
+    let cancellation_token = tokio_util::sync::CancellationToken::new();
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let message_properties = SymbolEventMessageProperties::new(
+        SymbolEventRequestId::new(exchange_id.to_owned(), session_id.to_string()),
+        sender.clone(),
+        editor_url,
+        cancellation_token.clone(),
+        llm_provider,
+    );
+
+    let session_storage_path =
+        check_session_storage_path(app.config.clone(), session_id.to_string()).await;
+
+    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
+
+    let plan_service = PlanService::new(
+        app.tool_box.clone(),
+        app.symbol_manager.clone(),
+        plan_storage_directory,
+    );
+
+    // plan-id is made up of session_id and the exchange-id joined together
+    let plan_id = plan_service.generate_unique_plan_id(&session_id, &exchange_id);
+    let plan_storage_path = check_plan_storage_path(app.config.clone(), plan_id.to_owned()).await;
+
+    let cloned_session_id = session_id.to_string();
+    let session_service = app.session_service.clone();
+    let _ = tokio::spawn(async move {
+        let _ = session_service
+            .plan_iteration(
+                cloned_session_id,
+                session_storage_path,
+                plan_storage_path,
+                plan_id,
+                plan_service,
+                exchange_id,
+                query,
+                user_context,
+                project_labels,
+                repo_ref,
+                root_directory,
+                codebase_search,
+                message_properties,
+            )
+            .await;
+        println!("tokio::spawn::plan::iteration::finished");
+    });
+
+    let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    let cloned_session_id = session_id.to_string();
+    let init_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!({
+                "session_id": cloned_session_id,
+                "started": true,
+            }))
+            // This should never happen, so we force an unwrap.
+            .expect("failed to serialize initialization object"))
+    });
+
+    // We know the stream is unwind safe as it doesn't use synchronization primitives like locks.
+    let answer_stream = ui_event_stream.map(|ui_event: UIEventWithID| {
+        sse::Event::default()
+            .json_data(ui_event)
+            .map_err(anyhow::Error::new)
+    });
+
+    // TODO(skcd): Re-introduce this again when we have a better way to manage
+    // server side events on the client side
+
+    // this will never get sent cause the sender is never dropped in a way, it will be
+    // dropped once we have completed the tokio::spawn above
+    let done_stream = futures::stream::once(async move {
+        Ok(sse::Event::default()
+            .json_data(json!(
+                {"done": "[CODESTORY_DONE]".to_owned(),
+                "session_id": session_id.to_string(),
+            }))
+            .expect("failed to send done object"))
+    });
+
+    let stream = init_stream.chain(answer_stream).chain(done_stream);
+
+    Ok(Sse::new(Box::pin(stream)))
+}
+
 pub async fn agent_session_plan_iterate(
     Extension(app): Extension<Application>,
     Json(AgentSessionChatRequest {

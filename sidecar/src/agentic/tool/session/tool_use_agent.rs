@@ -2,24 +2,37 @@
 
 use std::sync::Arc;
 
+use fancy_regex::Regex;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
+use quick_xml::de::from_str;
 
 use crate::agentic::{
     symbol::{errors::SymbolError, identifier::LLMProperties},
-    tool::session::chat::SessionChatRole,
+    tool::{
+        code_edit::types::CodeEditingPartialRequest,
+        input::ToolInputPartial,
+        lsp::{
+            file_diagnostics::WorkspaceDiagnosticsPartial, list_files::ListFilesInput,
+            open_file::OpenFileRequestPartial, search_file::SearchFileContentInputPartial,
+        },
+        session::chat::SessionChatRole,
+        terminal::terminal::TerminalInputPartial,
+    },
 };
 
-use super::chat::SessionChatMessage;
+use super::{
+    ask_followup_question::AskFollowupQuestionsRequest,
+    attempt_completion::AttemptCompletionClientRequest, chat::SessionChatMessage,
+};
 
 #[derive(Clone)]
 pub struct ToolUseAgentInput {
     // pass in the messages
     session_messages: Vec<SessionChatMessage>,
     tool_descriptions: Vec<String>,
-    user_message: String,
     llm_properties: LLMProperties,
     working_directory: String,
     operating_system: String,
@@ -30,7 +43,6 @@ impl ToolUseAgentInput {
     pub fn new(
         session_messages: Vec<SessionChatMessage>,
         tool_descriptions: Vec<String>,
-        user_message: String,
         llm_properties: LLMProperties,
         working_directory: String,
         operating_system: String,
@@ -39,7 +51,6 @@ impl ToolUseAgentInput {
         Self {
             session_messages,
             tool_descriptions,
-            user_message,
             llm_properties,
             working_directory,
             operating_system,
@@ -172,16 +183,13 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
         )
     }
 
-    fn user_message(&self, context: &ToolUseAgentInput) -> String {
-        let user_message = &context.user_message;
-        user_message.to_owned()
-    }
-
-    pub async fn invoke(&self, input: ToolUseAgentInput) -> Result<String, SymbolError> {
+    pub async fn invoke(
+        &self,
+        input: ToolUseAgentInput,
+    ) -> Result<(Option<ToolInputPartial>, Option<String>), SymbolError> {
         // Now over here we want to trigger the tool agent recursively and also parse out the output as required
         // this will involve some kind of magic because for each tool type we want to be sure about how we are parsing the output but it should not be too hard to make that happen
         let system_message = LLMClientMessage::system(self.system_message(&input));
-        let current_user_message = LLMClientMessage::user(self.user_message(&input));
         // grab the previous messages as well
         let llm_properties = input.llm_properties.clone();
         let previous_messages = input.session_messages.into_iter().map(|session_message| {
@@ -198,10 +206,9 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
         let final_messages: Vec<_> = vec![system_message]
             .into_iter()
             .chain(previous_messages)
-            .chain(vec![current_user_message])
             .collect();
 
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let response = self
             .llm_client
             .stream_completion(
@@ -222,6 +229,115 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
 
         // Now this input needs to be parsed out properly but we are going to stop over here for now
         println!("{:?}", &response);
-        response.map_err(|e| SymbolError::LLMClientError(e))
+        response
+            .map_err(|e| SymbolError::LLMClientError(e))
+            .map(|response| parse_out_tool_input(&response))
     }
+}
+
+// these types are garbage, sue me later
+fn parse_out_tool_input(input: &str) -> (Option<ToolInputPartial>, Option<String>) {
+    let tags = vec![
+        "thinking",
+        "search_files",
+        "code_edit_input",
+        "list_files",
+        "read_file",
+        "get_diagnostics",
+        "execute_command",
+        "attempt_completion",
+        "ask_followup_question",
+    ];
+
+    // Build the regex pattern to match any of the tags
+    let tags_pattern = tags.join("|");
+    let pattern = format!(
+        r"(?s)<({tags_pattern})>(.*?)</\1>",
+        tags_pattern = tags_pattern
+    );
+
+    let re = Regex::new(&pattern).unwrap();
+    let mut thinking = None;
+    for cap in re.captures_iter(&input) {
+        let capture = cap.expect("to work");
+        let tag_name = &capture[1];
+        let content = &capture[2];
+
+        // Skip the <thinking> block
+        if tag_name == "thinking" {
+            thinking = Some(content.to_owned());
+            continue;
+        }
+
+        // Step 2: Map tag to enum variant
+        match tag_name {
+            "search_files" => {
+                // Step 3: Parse the XML content
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: SearchFileContentInputPartial = from_str(&xml_content).unwrap();
+
+                // Step 4: Construct the enum variant
+                return (
+                    Some(ToolInputPartial::SearchFileContentWithRegex(parsed)),
+                    thinking,
+                );
+            }
+            "code_edit_input" => {
+                // Step 3: Parse the XML content
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: CodeEditingPartialRequest = from_str(&xml_content).unwrap();
+
+                // Step 4: Construct the enum variant
+                return (Some(ToolInputPartial::CodeEditing(parsed)), thinking);
+            }
+            "list_files" => {
+                // Step 3: Parse the XML content
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: ListFilesInput = from_str(&xml_content).unwrap();
+
+                // Step 4: Construct the enum variant
+                return (Some(ToolInputPartial::ListFiles(parsed)), thinking);
+            }
+            "read_file" => {
+                // Step 3: Parse the XML content
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: OpenFileRequestPartial = from_str(&xml_content).unwrap();
+
+                // Step 4: Construct the enum variant
+                return (Some(ToolInputPartial::OpenFile(parsed)), thinking);
+            }
+            "get_diagnostics" => {
+                // Step 3: Parse the XML content
+                let xml_content = format!("<root>{}</root>", content);
+
+                return (
+                    Some(ToolInputPartial::LSPDiagnostics(
+                        WorkspaceDiagnosticsPartial::new(),
+                    )),
+                    thinking,
+                );
+            }
+            "execute_command" => {
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: TerminalInputPartial = from_str(&xml_content).unwrap();
+                return (Some(ToolInputPartial::TerminalCommand(parsed)), thinking);
+            }
+            "attempt_completion" => {
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: AttemptCompletionClientRequest = from_str(&xml_content).unwrap();
+                return (Some(ToolInputPartial::AttemptCompletion(parsed)), thinking);
+            }
+            "ask_followup_question" => {
+                let xml_content = format!("<root>{}</root>", content);
+                let parsed: AskFollowupQuestionsRequest = from_str(&xml_content).unwrap();
+                return (
+                    Some(ToolInputPartial::AskFollowupQuestions(parsed)),
+                    thinking,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    (None, None)
 }

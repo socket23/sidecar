@@ -85,6 +85,21 @@ pub enum ToolInputPartial {
     AttemptCompletion(AttemptCompletionClientRequest),
 }
 
+impl ToolInputPartial {
+    pub fn to_tool_type(&self) -> ToolType {
+        match self {
+            Self::CodeEditing(_) => ToolType::CodeEditing,
+            Self::ListFiles(_) => ToolType::ListFiles,
+            Self::SearchFileContentWithRegex(_) => ToolType::SearchFileContentWithRegex,
+            Self::OpenFile(_) => ToolType::OpenFile,
+            Self::LSPDiagnostics(_) => ToolType::LSPDiagnostics,
+            Self::TerminalCommand(_) => ToolType::TerminalCommand,
+            Self::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
+            Self::AttemptCompletion(_) => ToolType::AttemptCompletion,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ToolInput {
     CodeEditing(CodeEdit),

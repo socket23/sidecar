@@ -20,6 +20,7 @@ use sidecar::{
             },
             identifier::LLMProperties,
             manager::SymbolManager,
+            tool_box::ToolBox,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
@@ -29,19 +30,21 @@ use sidecar::{
                 file_diagnostics::WorkspaceDiagnosticsPartial,
                 list_files::ListFilesInput,
                 open_file::{OpenFileRequest, OpenFileRequestPartial},
-                search_file::SearchFileContentInputPartial,
+                search_file::{SearchFileContentInput, SearchFileContentInputPartial},
             },
             r#type::{Tool, ToolType},
             session::{
                 ask_followup_question::AskFollowupQuestionsRequest,
                 attempt_completion::AttemptCompletionClientRequest,
+                service::SessionService,
                 tool_use_agent::{ToolUseAgent, ToolUseAgentInput},
             },
-            terminal::terminal::TerminalInputPartial,
+            terminal::terminal::{TerminalInput, TerminalInputPartial},
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
+    repo::types::RepoRef,
     user_context::types::UserContext,
 };
 
@@ -104,11 +107,40 @@ async fn main() {
            // ),
     ));
 
-    let llm_properties = LLMProperties::new(
-        LLMType::ClaudeSonnet,
-        LLMProvider::Anthropic,
-        LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
-    );
+    let tool_box = Arc::new(ToolBox::new(
+        tool_broker.clone(),
+        symbol_broker.clone(),
+        editor_parsing.clone(),
+    ));
+
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let mut session_path = default_index_dir().join("session");
+    // check if the plan_storage_path_exists
+    if tokio::fs::metadata(&session_path).await.is_err() {
+        tokio::fs::create_dir(&session_path)
+            .await
+            .expect("directory creation to not fail");
+    }
+    session_path = session_path.join(session_id.to_owned());
+    session_path
+        .to_str()
+        .expect("path conversion to work on all platforms")
+        .to_owned();
+
+    let symbol_tracker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
+
+    let symbol_manager = Arc::new(SymbolManager::new(
+        tool_broker.clone(),
+        symbol_tracker.clone(),
+        editor_parsing.clone(),
+        LLMProperties::new(
+            LLMType::ClaudeSonnet,
+            LLMProvider::Anthropic,
+            LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
+        ),
+    ));
+
+    let session_service = SessionService::new(tool_box.clone(), symbol_manager);
 
     let tools_to_use = vec![
         ToolType::ListFiles,
@@ -116,36 +148,46 @@ async fn main() {
         ToolType::OpenFile,
         ToolType::CodeEditing,
         ToolType::LSPDiagnostics,
-        ToolType::AskFollowupQuestions,
+        // disable for testing
+        // ToolType::AskFollowupQuestions,
         ToolType::AttemptCompletion,
     ];
-    let tool_description = tools_to_use
-        .into_iter()
-        .filter_map(|tool_to_use| tool_broker.get_tool_description(&tool_to_use))
-        .collect::<Vec<_>>();
-
-    let mut tool_input = ToolUseAgentInput::new(
+    let repo_ref = RepoRef::local("/Users/skcd/scratch/sidecar").expect("to work");
+    let mut session = session_service.create_new_session_with_tools(
+        &session_id,
         vec![],
-        tool_description,
-        "Whats happening with ToolInput?".to_owned(),
-        llm_properties,
-        "/Users/skcd/scratch/sidecar".to_owned(),
-        "darwin".to_owned(),
-        "zsh".to_owned(),
+        repo_ref.clone(),
+        session_path.to_string_lossy().to_string(),
+        tools_to_use.to_vec(),
     );
+
+    let mut exchange_id = 0;
+    let initial_query = "What are we doing with the ToolInput".to_owned();
+    session = session.human_message(
+        exchange_id.to_string(),
+        initial_query,
+        UserContext::default(),
+        vec![],
+        repo_ref.clone(),
+    );
+
     loop {
-        let tool_use_agent = ToolUseAgent::new(llm_client.clone());
-
-        let response = tool_use_agent.invoke(tool_input.clone()).await;
-        if response.is_err() {
-            return;
-        }
-        let response = response.expect("is_err above to work");
-        let parsed_response = parse_out_tool_input(&response);
-
+        let parent_exchange_id = exchange_id;
+        exchange_id = exchange_id + 1;
+        let tool_to_use = session
+            .get_tool_to_use(
+                tool_box.clone(),
+                llm_client.clone(),
+                "/Users/skcd/scratch/sidecar".to_owned(),
+                "darwin".to_owned(),
+                "zsh".to_owned(),
+                exchange_id.to_string(),
+                parent_exchange_id.to_string(),
+            )
+            .await;
         // okay now that we have the right thing we want to keep running this as a loop
         // and see what comes out of it
-        match parsed_response {
+        match tool_to_use {
             None => {
                 // this implies failure case that we were not able to parse the tool output
                 // for now lets break over here
@@ -154,122 +196,114 @@ async fn main() {
             Some(tool_input_partial) => match tool_input_partial {
                 ToolInputPartial::AskFollowupQuestions(followup_question) => {
                     println!("Ask followup question: {}", followup_question.question());
+                    let input = ToolInput::AskFollowupQuestions(followup_question);
+                    let response = tool_broker.invoke(input).await;
+                    println!("response: {:?}", response);
                 }
-                ToolInputPartial::AttemptCompletion(_attempt_completion) => {
+                ToolInputPartial::AttemptCompletion(attempt_completion) => {
+                    println!("LLM reached a stop condition");
+                    println!("{:?}", &attempt_completion);
                     break;
                 }
                 ToolInputPartial::CodeEditing(code_editing) => {
                     println!("Code editing: {}", code_editing.fs_file_path());
                 }
-                ToolInputPartial::LSPDiagnostics(diagnostics) => {}
+                ToolInputPartial::LSPDiagnostics(diagnostics) => {
+                    println!("LSP diagnostics: {:?}", diagnostics);
+                }
                 ToolInputPartial::ListFiles(list_files) => {
-                    println!("list files: {}", list_files.directory_path())
+                    println!("list files: {}", list_files.directory_path());
+                    let input = ToolInput::ListFiles(list_files);
+                    let response = tool_broker.invoke(input).await;
+                    let list_files_output = response
+                        .expect("to work")
+                        .get_list_files_directory()
+                        .expect("to work");
+                    let response = list_files_output
+                        .files()
+                        .into_iter()
+                        .map(|file_path| file_path.to_string_lossy().to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    exchange_id = exchange_id + 1;
+                    session = session.human_message(
+                        exchange_id.to_string(),
+                        response.to_owned(),
+                        UserContext::default(),
+                        vec![],
+                        repo_ref.clone(),
+                    );
+                    println!("response: {:?}", response);
                 }
                 ToolInputPartial::OpenFile(open_file) => {
+                    println!("open file: {}", open_file.fs_file_path());
                     let open_file_path = open_file.fs_file_path().to_owned();
                     let request = OpenFileRequest::new(open_file_path, editor_url.clone());
                     let input = ToolInput::OpenFile(request);
-                    let response = tool_broker.invoke(input).await;
+                    let response = tool_broker
+                        .invoke(input)
+                        .await
+                        .expect("to work")
+                        .get_file_open_response()
+                        .expect("to work")
+                        .to_string();
+                    exchange_id = exchange_id + 1;
+                    session = session.human_message(
+                        exchange_id.to_string(),
+                        response.clone(),
+                        UserContext::default(),
+                        vec![],
+                        repo_ref.clone(),
+                    );
                     println!("response: {:?}", response);
                 }
-                ToolInputPartial::SearchFileContentWithRegex(search_filex) => {}
-                ToolInputPartial::TerminalCommand(terminal_command) => {}
+                ToolInputPartial::SearchFileContentWithRegex(search_file) => {
+                    println!("search file: {}", search_file.directory_path());
+                    let request = SearchFileContentInput::new(
+                        search_file.directory_path().to_owned(),
+                        search_file.regex_pattern().to_owned(),
+                        search_file.file_pattern().map(|s| s.to_owned()),
+                        editor_url.clone(),
+                    );
+                    let input = ToolInput::SearchFileContentWithRegex(request);
+                    let tool_response = tool_broker.invoke(input).await.expect("to work");
+                    let response = tool_response
+                        .get_search_file_content_with_regex()
+                        .expect("to work");
+                    let response = response.response();
+                    exchange_id = exchange_id + 1;
+                    session = session.human_message(
+                        exchange_id.to_string(),
+                        response.to_owned(),
+                        UserContext::default(),
+                        vec![],
+                        repo_ref.clone(),
+                    );
+                    println!("response: {:?}", response);
+                }
+                ToolInputPartial::TerminalCommand(terminal_command) => {
+                    println!("terminal command: {}", terminal_command.command());
+                    let command = terminal_command.command().to_owned();
+                    let request = TerminalInput::new(command, editor_url.clone());
+                    let input = ToolInput::TerminalCommand(request);
+                    let tool_output = tool_broker.invoke(input).await;
+                    let output = tool_output
+                        .expect("to work")
+                        .terminal_command()
+                        .expect("to work")
+                        .output()
+                        .to_owned();
+                    exchange_id = exchange_id + 1;
+                    session = session.human_message(
+                        exchange_id.to_string(),
+                        output.to_owned(),
+                        UserContext::default(),
+                        vec![],
+                        repo_ref.clone(),
+                    );
+                    println!("response: {:?}", output);
+                }
             },
         }
     }
-}
-
-fn parse_out_tool_input(input: &str) -> Option<ToolInputPartial> {
-    let tags = vec![
-        "thinking",
-        "search_files",
-        "code_edit_input",
-        "list_files",
-        "read_file",
-        "get_diagnostics",
-        "execute_command",
-        "attempt_completion",
-        "ask_followup_question",
-    ];
-
-    // Build the regex pattern to match any of the tags
-    let tags_pattern = tags.join("|");
-    let pattern = format!(
-        r"(?s)<({tags_pattern})>(.*?)</\1>",
-        tags_pattern = tags_pattern
-    );
-
-    let re = Regex::new(&pattern).unwrap();
-    for cap in re.captures_iter(&input) {
-        let capture = cap.expect("to work");
-        let tag_name = &capture[1];
-        let content = &capture[2];
-
-        // Skip the <thinking> block
-        if tag_name == "thinking" {
-            continue;
-        }
-
-        // Step 2: Map tag to enum variant
-        match tag_name {
-            "search_files" => {
-                // Step 3: Parse the XML content
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: SearchFileContentInputPartial = from_str(&xml_content).unwrap();
-
-                // Step 4: Construct the enum variant
-                return Some(ToolInputPartial::SearchFileContentWithRegex(parsed));
-            }
-            "code_edit_input" => {
-                // Step 3: Parse the XML content
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: CodeEditingPartialRequest = from_str(&xml_content).unwrap();
-
-                // Step 4: Construct the enum variant
-                return Some(ToolInputPartial::CodeEditing(parsed));
-            }
-            "list_files" => {
-                // Step 3: Parse the XML content
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: ListFilesInput = from_str(&xml_content).unwrap();
-
-                // Step 4: Construct the enum variant
-                return Some(ToolInputPartial::ListFiles(parsed));
-            }
-            "read_file" => {
-                // Step 3: Parse the XML content
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: OpenFileRequestPartial = from_str(&xml_content).unwrap();
-
-                // Step 4: Construct the enum variant
-                return Some(ToolInputPartial::OpenFile(parsed));
-            }
-            "get_diagnostics" => {
-                // Step 3: Parse the XML content
-                let xml_content = format!("<root>{}</root>", content);
-
-                return Some(ToolInputPartial::LSPDiagnostics(
-                    WorkspaceDiagnosticsPartial::new(),
-                ));
-            }
-            "execute_command" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: TerminalInputPartial = from_str(&xml_content).unwrap();
-                return Some(ToolInputPartial::TerminalCommand(parsed));
-            }
-            "attempt_completion" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: AttemptCompletionClientRequest = from_str(&xml_content).unwrap();
-                return Some(ToolInputPartial::AttemptCompletion(parsed));
-            }
-            "ask_followup_question" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: AskFollowupQuestionsRequest = from_str(&xml_content).unwrap();
-                return Some(ToolInputPartial::AskFollowupQuestions(parsed));
-            }
-            _ => {}
-        }
-    }
-
-    None
 }

@@ -60,7 +60,7 @@ impl SessionService {
             .map(|cancellation_token| cancellation_token.clone())
     }
 
-    fn create_new_session_with_tools(
+    pub fn create_new_session_with_tools(
         &self,
         session_id: &str,
         project_labels: Vec<String>,

@@ -45,6 +45,23 @@ pub struct OpenFileResponse {
 }
 
 impl OpenFileResponse {
+    pub fn to_string(&self) -> String {
+        let fs_file_path = &self.fs_file_path;
+        let content = &self.file_contents;
+        let language = &self.language;
+        format!(
+            r#"<fs_file_path>
+{fs_file_path}
+</fs_file_path>
+<content>
+```{language}
+{content}
+</content>"#
+        )
+    }
+}
+
+impl OpenFileResponse {
     pub fn new(
         fs_file_path: String,
         file_contents: String,

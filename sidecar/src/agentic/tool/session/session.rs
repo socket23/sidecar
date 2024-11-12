@@ -4,6 +4,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
+use llm_client::{
+    broker::LLMBroker,
+    clients::types::LLMType,
+    provider::{AnthropicAPIKey, LLMProvider, LLMProviderAPIKeys},
+};
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -15,7 +20,7 @@ use crate::{
                 human::HumanAgenticRequest,
                 message_event::{SymbolEventMessage, SymbolEventMessageProperties},
             },
-            identifier::SymbolIdentifier,
+            identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
             scratch_pad::ScratchPadAgent,
             tool_box::ToolBox,
@@ -42,6 +47,7 @@ use crate::{
 use super::{
     chat::{SessionChatClientRequest, SessionChatMessage},
     hot_streak::SessionHotStreakRequest,
+    tool_use_agent::{ToolUseAgent, ToolUseAgentInput},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -160,6 +166,7 @@ pub struct ExchangeReplyAgentTool {
     // the data out properly
     // for now, I am leaving things here until I can come up with a proper API for that
     tool_input_partial: ToolInputPartial,
+    thinking: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -200,6 +207,22 @@ impl ExchangeTypeAgent {
             reply: ExchangeReplyAgent::Edit(ExchangeReplyAgentEdit {
                 edits_made_diff: edits_made,
                 accepted: false,
+            }),
+            parent_exchange_id,
+        }
+    }
+
+    fn tool_use(
+        tool_input_partial: ToolInputPartial,
+        tool_type: ToolType,
+        thinking: String,
+        parent_exchange_id: String,
+    ) -> Self {
+        Self {
+            reply: ExchangeReplyAgent::Tool(ExchangeReplyAgentTool {
+                tool_type,
+                tool_input_partial,
+                thinking,
             }),
             parent_exchange_id,
         }
@@ -347,6 +370,25 @@ impl Exchange {
         }
     }
 
+    fn agent_tool_use(
+        parent_exchange_id: String,
+        exchange_id: String,
+        tool_input: ToolInputPartial,
+        tool_type: ToolType,
+        thinking: String,
+    ) -> Self {
+        Self {
+            exchange_id,
+            exchange_type: ExchangeType::AgentChat(ExchangeTypeAgent::tool_use(
+                tool_input,
+                tool_type,
+                thinking,
+                parent_exchange_id,
+            )),
+            exchange_state: ExchangeState::Running,
+        }
+    }
+
     fn set_completion_status(mut self, accetped: bool) -> Self {
         if accetped {
             self.exchange_state = ExchangeState::Accepted;
@@ -457,10 +499,13 @@ impl Exchange {
                         let tool_description =
                             tool_broker.get_tool_description(&tool_input.tool_type);
                         let tool_input_parameters = &tool_input.tool_input_partial;
+                        let thinking = &tool_input.thinking;
                         match tool_description {
                             Some(tool_description) => SessionChatMessage::assistant(format!(
                                 r#"I want to use the following tool:
 {tool_description}
+my reason for using this is:
+{thinking}
 my inputs for the tool are:
 {:#?}"#,
                                 tool_input_parameters
@@ -860,23 +905,63 @@ impl Session {
         Ok(self)
     }
 
-    /// Toolformer, this just use the tools in a loop and uses a custom system prompt
-    /// Runs totally via auto-approval flow and waits for no input from the user today
-    pub async fn tool_former(mut self, user_query: String) -> Result<(), SymbolError> {
-        let mut exchange_id = 0;
-        self.exchanges.push(Exchange::human_chat(
-            exchange_id.to_string(),
-            user_query,
-            UserContext::new(vec![], vec![], None, vec![]),
-            self.project_labels.clone(),
-            self.repo_ref.clone(),
-        ));
-
-        // increment the exchange_id over here
-        exchange_id = exchange_id + 1;
-        loop {
-            // now we want it to choose the tools based on the custom system message
+    pub async fn get_tool_to_use(
+        mut self,
+        tool_box: Arc<ToolBox>,
+        llm_client: Arc<LLMBroker>,
+        working_directory: String,
+        operating_system: String,
+        default_shell: String,
+        exchange_id: String,
+        parent_exchange_id: String,
+    ) -> Option<ToolInputPartial> {
+        // figure out what to do over here given the state of the session
+        let mut converted_messages = vec![];
+        for previous_message in self.exchanges.iter() {
+            converted_messages.push(
+                previous_message
+                    .to_conversation_message(tool_box.tools().clone())
+                    .await,
+            );
         }
+
+        // Now we can create the input for the tool use agent
+        let tool_use_agent_input = ToolUseAgentInput::new(
+            converted_messages,
+            self.tools
+                .to_vec()
+                .into_iter()
+                .filter_map(|tool_type| tool_box.tools().get_tool_description(&tool_type))
+                .collect(),
+            LLMProperties::new(
+                LLMType::ClaudeSonnet,
+                LLMProvider::Anthropic,
+                LLMProviderAPIKeys::Anthropic(AnthropicAPIKey::new("".to_owned())),
+            ),
+            working_directory,
+            operating_system,
+            default_shell,
+        );
+
+        let tool_use_agent = ToolUseAgent::new(llm_client);
+
+        // now we can invoke the tool use agent over here and get the parsed input and store it
+        let output = tool_use_agent.invoke(tool_use_agent_input).await;
+        match output {
+            Ok((Some(tool_input_partial), Some(thinking))) => {
+                let tool_type = tool_input_partial.to_tool_type();
+                self.exchanges.push(Exchange::agent_tool_use(
+                    parent_exchange_id,
+                    exchange_id,
+                    tool_input_partial.clone(),
+                    tool_type,
+                    thinking,
+                ));
+                return Some(tool_input_partial);
+            }
+            _ => {}
+        }
+        None
     }
 
     /// This reacts to the last message and generates the reply for the user to handle

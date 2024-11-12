@@ -103,13 +103,13 @@ impl Tool for FileDiagnostics {
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters: 
-- path: (required) The path of the file to get diagnostics for (relative to the current working directory {})
+- fs_file_path: (required) The path of the file to get diagnostics for (relative to the current working directory {})
 
 Usage:
 <get_diagnostics>
-<path>
+<fs_file_path>
 File path here
-</path>
+</fs_file_path>
 </get_diagnostics>
 "#,
             std::env::current_dir().unwrap().to_str().unwrap()

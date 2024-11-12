@@ -455,23 +455,23 @@ impl Tool for CodeEditingTool {
     }
 
     fn tool_description(&self) -> String {
-        "Edit a file. The tool is able to edit the file precisely based on instructions. If the file doesn't exist, it will be created. The tool will automatically create any directories needed to write the file.".to_owned()
+        "Edit a file. The tool is able to edit the file precisely based on instruction. If the file doesn't exist, it will be created. The tool will automatically create any directories needed to write the file.".to_owned()
     }
 
     fn tool_input_format(&self) -> String {
         format!(
             r#"Parameters: 
-- path: (required) The path of the file to write to (relative to the current working directory {})
-- instructions: (required) The edit instructions.
+- fs_file_path: (required) The path of the file to write to (relative to the current working directory {})
+- instruction: (required) The edit instruction.
 
 Usage:
 <code_edit_input>
-<path>
+<fs_file_path>
 File path here
-</path>
-<instructions>
-Edit instructions here
-</instructions>
+</fs_file_path>
+<instruction>
+Edit instruction here
+</instruction>
 </code_edit_input>
 "#,
             std::env::current_dir().unwrap().to_str().unwrap()

@@ -194,14 +194,13 @@ async fn main() {
                     let fs_file_path = code_editing.fs_file_path().to_owned();
                     println!("Code editing: {}", fs_file_path);
                     let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
-                    let access_token = String::from("");
 
                     let message_properties = SymbolEventMessageProperties::new(
                         SymbolEventRequestId::new(request_id_str.clone(), request_id_str.clone()),
                         sender.clone(),
                         editor_url.to_owned(),
                         tokio_util::sync::CancellationToken::new(),
-                        access_token,
+                        anthropic_llm_properties.clone(),
                     );
 
                     let file_contents = tool_box

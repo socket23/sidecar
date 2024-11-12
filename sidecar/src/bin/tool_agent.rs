@@ -1,6 +1,5 @@
 use std::{path::PathBuf, sync::Arc};
 
-use fancy_regex::Regex;
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,
@@ -10,21 +9,21 @@ use llm_client::{
         OpenAIProvider,
     },
 };
-use quick_xml::de::from_str;
 use sidecar::{
     agentic::{
         symbol::{
             events::{
+                edit::SymbolToEdit,
                 input::{SymbolEventRequestId, SymbolInputEvent},
                 message_event::SymbolEventMessageProperties,
             },
-            identifier::LLMProperties,
+            identifier::{LLMProperties, SymbolIdentifier},
             manager::SymbolManager,
             tool_box::ToolBox,
         },
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
-            code_edit::{models::broker::CodeEditBroker, types::CodeEditingPartialRequest},
+            code_edit::models::broker::CodeEditBroker,
             input::{ToolInput, ToolInputPartial},
             lsp::{
                 file_diagnostics::WorkspaceDiagnosticsPartial,
@@ -42,7 +41,11 @@ use sidecar::{
             terminal::terminal::{TerminalInput, TerminalInputPartial},
         },
     },
-    chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
+    chunking::{
+        editor_parsing::EditorParsing,
+        languages::TSLanguageParsing,
+        text_document::{Position, Range},
+    },
     inline_completion::symbols_tracker::SymbolTrackerInline,
     repo::types::RepoRef,
     user_context::types::UserContext,
@@ -208,7 +211,66 @@ async fn main() {
                     break;
                 }
                 ToolInputPartial::CodeEditing(code_editing) => {
-                    println!("Code editing: {}", code_editing.fs_file_path());
+                    let fs_file_path = code_editing.fs_file_path().to_owned();
+                    println!("Code editing: {}", fs_file_path);
+                    let (sender, mut _receiver) = tokio::sync::mpsc::unbounded_channel();
+                    let access_token = String::from("");
+
+                    let message_properties = SymbolEventMessageProperties::new(
+                        SymbolEventRequestId::new(request_id_str.clone(), request_id_str.clone()),
+                        sender.clone(),
+                        editor_url.to_owned(),
+                        tokio_util::sync::CancellationToken::new(),
+                        access_token,
+                    );
+
+                    let file_contents = tool_box
+                        .file_open(fs_file_path.to_owned(), message_properties.clone())
+                        .await
+                        .expect("to work")
+                        .contents();
+
+                    let instruction = code_editing.instruction().to_owned();
+
+                    let default_range = Range::new(Position::new(0, 0, 0), Position::new(0, 0, 0));
+
+                    let symbol_to_edit = SymbolToEdit::new(
+                        "".to_owned(),
+                        default_range,
+                        fs_file_path.to_owned(),
+                        vec![instruction.clone()],
+                        false,
+                        false, // is_new
+                        false,
+                        "".to_owned(),
+                        None,
+                        false,
+                        None,
+                        false,
+                        None,
+                        vec![], // previous_user_queries
+                        None,
+                    );
+
+                    let symbol_identifier = SymbolIdentifier::new_symbol("");
+
+                    let response = tool_box
+                        .code_editing_with_search_and_replace(
+                            &symbol_to_edit,
+                            &fs_file_path,
+                            &file_contents,
+                            &default_range,
+                            "".to_owned(),
+                            instruction.clone(),
+                            &symbol_identifier,
+                            None,
+                            None,
+                            message_properties,
+                        )
+                        .await
+                        .expect("to work"); // big expectations
+
+                    println!("response: {:?}", response);
                 }
                 ToolInputPartial::LSPDiagnostics(diagnostics) => {
                     println!("LSP diagnostics: {:?}", diagnostics);

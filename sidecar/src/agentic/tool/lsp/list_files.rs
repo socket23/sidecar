@@ -176,6 +176,13 @@ pub struct ListFilesInput {
 }
 
 impl ListFilesInput {
+    pub fn new(directory_path: String, recursive: bool) -> Self {
+        Self {
+            directory_path,
+            recursive,
+        }
+    }
+
     pub fn directory_path(&self) -> &str {
         &self.directory_path
     }

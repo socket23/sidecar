@@ -29,6 +29,12 @@ pub struct CodeEditingPartialRequest {
 }
 
 impl CodeEditingPartialRequest {
+    pub fn new(fs_file_path: String, instruction: String) -> Self {
+        Self {
+            fs_file_path,
+            instruction,
+        }
+    }
     pub fn fs_file_path(&self) -> &str {
         &self.fs_file_path
     }
@@ -486,8 +492,7 @@ File path here
 <instruction>
 Edit instruction here
 </instruction>
-</code_edit_input>
-"#
+</code_edit_input>"#
         )
     }
 }

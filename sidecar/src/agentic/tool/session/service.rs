@@ -19,6 +19,7 @@ use crate::{
         },
         tool::{
             broker::ToolBroker,
+            helpers::diff_recent_changes::DiffFileContent,
             input::{ToolInput, ToolInputPartial},
             lsp::{
                 file_diagnostics::DiagnosticMap, open_file::OpenFileRequest,
@@ -487,6 +488,12 @@ impl SessionService {
 
                             let instruction = code_editing.instruction().to_owned();
 
+                            // keep track of the file content which we are about to modify over here
+                            let old_file_content = self
+                                .tool_box
+                                .file_open(fs_file_path.to_owned(), message_properties.clone())
+                                .await;
+
                             let default_range =
                             // very large end position
                                 Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
@@ -527,6 +534,36 @@ impl SessionService {
                                 .await
                                 .expect("to work"); // big expectations but can also fail, we should handle it properly
 
+                            // now that we have modified the file we can ask the editor for the git-diff of this file over here
+                            // and we also have the previous state over here
+                            let diff_changes = self
+                                .tool_box
+                                .recently_edited_files_with_content(
+                                    vec![fs_file_path.to_owned()].into_iter().collect(),
+                                    match old_file_content {
+                                        Ok(old_file_content) => {
+                                            vec![DiffFileContent::new(
+                                                fs_file_path.to_owned(),
+                                                old_file_content.contents(),
+                                            )]
+                                        }
+                                        Err(_) => vec![],
+                                    },
+                                    message_properties.clone(),
+                                )
+                                .await?;
+
+                            // we need to take the L1 level changes here since those are the ones we are interested in and then add
+                            // that as a human message over here
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                format!(r#"I performed the edits which you asked for, here is the git diff for it:
+{}"#, diff_changes.l1_changes()),
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
                             println!("response: {:?}", response);
                         }
                         ToolInputPartial::LSPDiagnostics(diagnostics) => {

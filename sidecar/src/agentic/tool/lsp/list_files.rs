@@ -225,7 +225,8 @@ impl Tool for ListFilesClient {
     }
 
     fn tool_description(&self) -> String {
-        r#"Request to list files and directories within the specified directory.
+        r#"### list_files
+Request to list files and directories within the specified directory.
 If recursive is true, it will list all files and directories recursively.
 If recursive is false, it will only list the top-level contents.
 Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not."#.to_owned()

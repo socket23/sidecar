@@ -468,7 +468,8 @@ impl Tool for CodeEditingTool {
     }
 
     fn tool_description(&self) -> String {
-        "Edit a file. The tool is able to edit the file precisely based on instruction. If the file doesn't exist, it will be created. The tool will automatically create any directories needed to write the file.".to_owned()
+        "### code_edit_input
+Edit a file. The tool is able to edit the file precisely based on instruction. If the file doesn't exist, it will be created. The tool will automatically create any directories needed to write the file.".to_owned()
     }
 
     fn tool_input_format(&self) -> String {

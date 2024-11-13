@@ -305,7 +305,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
         let tool_input = match tag_name {
             "search_files" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: SearchFileContentInputPartial = match dbg!(from_str(&xml_content)) {
+                let parsed: SearchFileContentInputPartial = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -313,7 +313,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "code_edit_input" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: CodeEditingPartialRequest = match dbg!(from_str(&xml_content)) {
+                let parsed: CodeEditingPartialRequest = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -321,7 +321,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "list_files" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: ListFilesInput = match dbg!(from_str(&xml_content)) {
+                let parsed: ListFilesInput = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -329,7 +329,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "read_file" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: OpenFileRequestPartial = match dbg!(from_str(&xml_content)) {
+                let parsed: OpenFileRequestPartial = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -340,7 +340,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "execute_command" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: TerminalInputPartial = match dbg!(from_str(&xml_content)) {
+                let parsed: TerminalInputPartial = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -348,7 +348,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "attempt_completion" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: AttemptCompletionClientRequest = match dbg!(from_str(&xml_content)) {
+                let parsed: AttemptCompletionClientRequest = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -356,7 +356,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "ask_followup_question" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: AskFollowupQuestionsRequest = match dbg!(from_str(&xml_content)) {
+                let parsed: AskFollowupQuestionsRequest = match from_str(&xml_content) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };

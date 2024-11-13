@@ -82,4 +82,7 @@ pub enum ToolError {
 
     #[error("Repo map error: {0}")]
     RepoMapError(#[from] RepoMapError),
+
+    #[error("Readline error")]
+    ReadLineError,
 }

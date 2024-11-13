@@ -2,11 +2,13 @@
 //! Can be used by the agent to grep for this in the repository or in a sub-directory
 
 use async_trait::async_trait;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, Lines};
+use tokio::process::ChildStdout;
 use tokio::{io::BufReader, process::Command};
 
 use crate::agentic::tool::{errors::ToolError, input::ToolInput, output::ToolOutput, r#type::Tool};
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::process::Stdio;
 
 /// Magic number which came into existence to not break LLM context windows
@@ -269,26 +271,20 @@ impl Tool for SearchFileContentClient {
         let stdout = stdout.expect("Failed to capture stdout");
         let reader = BufReader::new(stdout).lines();
 
-        let mut output = String::new();
-        let mut line_count = 0;
         let max_lines = MAX_RESULTS * 5;
 
         tokio::pin!(reader);
 
-        while let Some(line) = reader.next_line().await? {
-            if line_count >= max_lines {
-                break;
-            }
-            output.push_str(&line);
-            output.push('\n');
-            line_count += 1;
-        }
+        // we should put a timeout over here so we don't indefinetly wait for the command
+        // to finish and instead finish within the timeout
+        let output = read_with_timeout(reader, max_lines, Duration::from_secs(10))
+            .await
+            .map_err(|e| {
+                eprintln!("{:?}", e);
+                ToolError::ReadLineError
+            })?;
 
         let _status = child.wait().await?;
-        // even if there were errors we still want to read from this
-        // if !status.success() {
-        //     return Err(ToolError::OutputStreamNotPresent);
-        // }
 
         let mut results: Vec<SearchResult> = Vec::new();
         let mut current_result: Option<SearchResult> = None;
@@ -376,4 +372,32 @@ file pattern here (optional)
 "#
         )
     }
+}
+
+use tokio::time::{timeout, Duration};
+
+async fn read_with_timeout(
+    mut reader: Pin<&mut Lines<BufReader<ChildStdout>>>,
+    max_lines: usize,
+    timeout_duration: Duration,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut output = String::new();
+    let mut line_count = 0;
+
+    // Wrap the polling loop in a timeout and handle partial results if timeout occurs
+    let _ = timeout(timeout_duration, async {
+        while let Some(line) = reader.next_line().await? {
+            if line_count >= max_lines {
+                break;
+            }
+            output.push_str(&line);
+            output.push('\n');
+            line_count += 1;
+        }
+        Ok::<(), Box<dyn std::error::Error>>(())
+    })
+    .await;
+
+    // Return whatever we have read, even if timeout was reached
+    Ok(output)
 }

@@ -62,7 +62,7 @@ use super::{
     },
     r#type::ToolType,
     ref_filter::ref_filter::ReferenceFilterRequest,
-    repo_map::generator::RepoMapGeneratorRequest,
+    repo_map::generator::{RepoMapGeneratorRequest, RepoMapGeneratorRequestPartial},
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
     session::{
@@ -84,6 +84,7 @@ pub enum ToolInputPartial {
     TerminalCommand(TerminalInputPartial),
     AskFollowupQuestions(AskFollowupQuestionsRequest),
     AttemptCompletion(AttemptCompletionClientRequest),
+    RepoMapGeneration(RepoMapGeneratorRequestPartial),
 }
 
 impl ToolInputPartial {
@@ -97,6 +98,7 @@ impl ToolInputPartial {
             Self::TerminalCommand(_) => ToolType::TerminalCommand,
             Self::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
             Self::AttemptCompletion(_) => ToolType::AttemptCompletion,
+            Self::RepoMapGeneration(_) => ToolType::RepoMapGeneration,
         }
     }
 
@@ -112,6 +114,7 @@ impl ToolInputPartial {
             Self::TerminalCommand(terminal_command) => terminal_command.to_string(),
             Self::AskFollowupQuestions(ask_followup_question) => ask_followup_question.to_string(),
             Self::AttemptCompletion(attempt_completion) => attempt_completion.to_string(),
+            Self::RepoMapGeneration(repo_map_generator) => repo_map_generator.to_string(),
         }
     }
 }

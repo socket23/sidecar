@@ -26,6 +26,7 @@ use crate::{
             },
             plan::service::PlanService,
             r#type::{Tool, ToolType},
+            repo_map::generator::RepoMapGeneratorRequest,
             session::{session::AgentToolUseOutput, tool_use_agent::ToolUseAgent},
             terminal::terminal::TerminalInput,
         },
@@ -398,6 +399,7 @@ impl SessionService {
                     // disable for testing
                     // ToolType::AskFollowupQuestions,
                     ToolType::AttemptCompletion,
+                    ToolType::RepoMapGeneration,
                 ],
             )
         };
@@ -651,6 +653,34 @@ impl SessionService {
                                 repo_ref.clone(),
                             );
                             println!("response: {:?}", output);
+                        }
+                        ToolInputPartial::RepoMapGeneration(repo_map_request) => {
+                            println!(
+                                "repo map generation request: {}",
+                                repo_map_request.to_string()
+                            );
+                            let request =
+                                ToolInput::RepoMapGeneration(RepoMapGeneratorRequest::new(
+                                    repo_map_request.directory_path().to_owned(),
+                                    3000,
+                                ));
+                            let tool_output = tool_broker.invoke(request).await;
+                            let repo_map_str = tool_output
+                                .expect("to work")
+                                .repo_map_generator_response()
+                                .expect("to work")
+                                .repo_map()
+                                .to_owned();
+
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                repo_map_str.to_owned(),
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
+                            println!("response: {:?}", repo_map_str);
                         }
                     };
                 }

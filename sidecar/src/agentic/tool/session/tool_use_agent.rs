@@ -294,8 +294,6 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
         let capture = cap.expect("to work");
         let tag_name = &capture[1];
         let content = &capture[2];
-        println!("tag_name::{:?}", &tag_name);
-        println!("content::{:?}", &content);
 
         // Capture thinking content
         if tag_name == "thinking" {

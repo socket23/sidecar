@@ -384,12 +384,21 @@ impl SessionService {
             );
             session
         } else {
-            self.create_new_session(
-                session_id.to_owned(),
+            self.create_new_session_with_tools(
+                &session_id,
                 project_labels.to_vec(),
                 repo_ref.clone(),
                 storage_path,
-                UserContext::default(),
+                vec![
+                    ToolType::ListFiles,
+                    ToolType::SearchFileContentWithRegex,
+                    ToolType::OpenFile,
+                    ToolType::CodeEditing,
+                    ToolType::LSPDiagnostics,
+                    // disable for testing
+                    // ToolType::AskFollowupQuestions,
+                    ToolType::AttemptCompletion,
+                ],
             )
         };
 

@@ -323,7 +323,6 @@ impl LLMClient for CodeStoryClient {
             }
         }
 
-        dbg!("codestory.provider.finished_streaming");
         Ok(buffered_stream)
     }
 

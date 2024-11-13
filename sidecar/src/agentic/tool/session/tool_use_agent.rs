@@ -51,6 +51,7 @@ impl ToolUseAgentInput {
     }
 }
 
+#[derive(Debug)]
 pub enum ToolUseAgentOutput {
     Success((ToolInputPartial, String)),
     Failure(String),
@@ -120,12 +121,15 @@ Always adhere to this format for the tool use to ensure proper parsing and execu
 # Tool Use Guidelines
 
 1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task.
-2. Your tool use should be strictly in the XML format for the tool.
-3. After each tool use, you will get the result of the tool use. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
+2. Choose the most appropriate tool based on the task and the tool descriptions provided. Assess if you need additional information to proceed, and which of the available tools would be most effective for gathering this information. For example using the list_files tool is more effective than running a command like \`ls\` in the terminal. It's critical that you think about each available tool and use the one that best fits the current step in the task.
+3. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.
+4. Formulate your tool use using the XML format specified for each tool.
+5. After each tool use, the user will respond with the result of that tool use. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
   - Information about whether the tool succeeded or failed, along with any reasons for failure.
-  - Linter or Language Server diagnostics which could arise after the tool use like code editing.
+  - Linter errors that may have arisen due to the changes you made, which you'll need to address.
   - New terminal output in reaction to the changes, which you may need to consider or act upon.
   - Any other relevant feedback or information related to the tool use.
+6. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.
 
 It is crucial to proceed step-by-step, waiting for the user's message after each tool use before moving forward with the task. This approach allows you to:
 1. Confirm the success of each step before proceeding.
@@ -166,7 +170,9 @@ RULES
 - You are STRICTLY FORBIDDEN from starting your messages with "Great", "Certainly", "Okay", "Sure". You should NOT be conversational in your responses, but rather direct and to the point. For example you should NOT say "Great, I've updated the CSS" but instead something like "I've updated the CSS". It is important you be clear and technical in your messages.
 - When presented with images, utilize your vision capabilities to thoroughly examine them and extract meaningful information. Incorporate these insights into your thought process as you accomplish the user's task.
 - Before executing commands, check the "Actively Running Terminals" section in environment_details. If present, consider how these active processes might impact your task. For example, if a local development server is already running, you wouldn't need to start it again. If no active terminals are listed, proceed with command execution as normal.
+- It is critical you wait for the user's response after each tool use, in order to confirm the success of the tool use. For example, if asked to make a todo app, you would create a file, wait for the user's response it was created successfully, then create another file if needed, wait for the user's response it was created successfully
 - ALWAYS start your tool use with the <thinking></thinking> section.
+- ONLY USE A SINGLE tool at a time, never use multiple tools in the same response.
 
 ====
 
@@ -288,6 +294,8 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
         let capture = cap.expect("to work");
         let tag_name = &capture[1];
         let content = &capture[2];
+        println!("tag_name::{:?}", &tag_name);
+        println!("content::{:?}", &content);
 
         // Capture thinking content
         if tag_name == "thinking" {
@@ -299,7 +307,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
         let tool_input = match tag_name {
             "search_files" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: SearchFileContentInputPartial = match from_str(&xml_content) {
+                let parsed: SearchFileContentInputPartial = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -307,7 +315,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "code_edit_input" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: CodeEditingPartialRequest = match from_str(&xml_content) {
+                let parsed: CodeEditingPartialRequest = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -315,7 +323,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "list_files" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: ListFilesInput = match from_str(&xml_content) {
+                let parsed: ListFilesInput = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -323,7 +331,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "read_file" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: OpenFileRequestPartial = match from_str(&xml_content) {
+                let parsed: OpenFileRequestPartial = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -334,7 +342,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "execute_command" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: TerminalInputPartial = match from_str(&xml_content) {
+                let parsed: TerminalInputPartial = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -342,7 +350,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "attempt_completion" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: AttemptCompletionClientRequest = match from_str(&xml_content) {
+                let parsed: AttemptCompletionClientRequest = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };
@@ -350,7 +358,7 @@ fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
             }
             "ask_followup_question" => {
                 let xml_content = format!("<root>{}</root>", content);
-                let parsed: AskFollowupQuestionsRequest = match from_str(&xml_content) {
+                let parsed: AskFollowupQuestionsRequest = match dbg!(from_str(&xml_content)) {
                     Ok(p) => p,
                     Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
                 };

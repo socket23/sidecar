@@ -25,11 +25,11 @@ impl RepoMapGeneratorRequestPartial {
 
     pub fn to_string(&self) -> String {
         format!(
-            r#"<list_code_definition_names>
-<path>
+            r#"<repo_map_generation>
+<directory_path>
 {}
-</path>
-</list_code_definition_names>"#,
+</directory_path>
+</repo_map_generation>"#,
             &self.directory_path
         )
     }
@@ -117,12 +117,12 @@ Request to list definition names (classes, functions, methods, etc.) used in sou
 
     fn tool_input_format(&self) -> String {
         r#"Parameters:
-- path: (required) The path of the directory (relative to the current working directory ${cwd.toPosix()}) to list top level source code definitions for.
+- directory_path: (required) The path of the directory (relative to the current working directory ${cwd.toPosix()}) to list top level source code definitions for.
 Usage:
 <repo_map_generation>
-<path>
+<directory_path>
 Absolute directory path here
-</path>
+</directory_path>
 </repo_map_generation>"#.to_owned()
     }
 }

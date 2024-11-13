@@ -2,12 +2,11 @@
 
 use std::sync::Arc;
 
-use fancy_regex::Regex;
+use futures::StreamExt;
 use llm_client::{
     broker::LLMBroker,
     clients::types::{LLMClientCompletionRequest, LLMClientMessage},
 };
-use quick_xml::de::from_str;
 
 use crate::agentic::{
     symbol::{errors::SymbolError, events::message_event::SymbolEventMessageProperties},
@@ -19,6 +18,8 @@ use crate::agentic::{
             file_diagnostics::WorkspaceDiagnosticsPartial, list_files::ListFilesInput,
             open_file::OpenFileRequestPartial, search_file::SearchFileContentInputPartial,
         },
+        r#type::ToolType,
+        repo_map::generator::RepoMapGeneratorRequestPartial,
         session::chat::SessionChatRole,
         terminal::terminal::TerminalInputPartial,
     },
@@ -96,20 +97,24 @@ You use the previous information which you get from using the tools to inform yo
 
 # Tool Use Formatting
 
-Tool use is formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
+Tool use is formatted using XML-style tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Each tag is on a new line. Here's the structure:
 
 <tool_name>
-<parameter1_name>value1</parameter1_name>
-<parameter2_name>value2</parameter2_name>
+<parameter1_name>
+value1
+</parameter1_name>
+<parameter2_name>
+value2
+</parameter2_name>
 {{rest of the parameters}}
 </tool_name>
 
 As an example:
 
 <read_file>
-<path>
+<fs_file_path>
 bin/main.rs
-</path>
+</fs_file_path>
 </read_file>
 
 Always adhere to this format for the tool use to ensure proper parsing and execution from the tool use.
@@ -231,148 +236,469 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
 
         let cancellation_token = input.symbol_event_messaeg_properties.cancellation_token();
 
-        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let cloned_llm_client = self.llm_client.clone();
-        let response = run_with_cancellation(cancellation_token, async move {
-            cloned_llm_client
-                .stream_completion(
-                    llm_properties.api_key().clone(),
-                    LLMClientCompletionRequest::new(
-                        llm_properties.llm().clone(),
-                        final_messages,
-                        0.2,
-                        None,
-                    ),
-                    llm_properties.provider().clone(),
-                    vec![
-                        ("event_type".to_owned(), "tool_use".to_owned()),
-                        ("root_id".to_owned(), root_request_id),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    sender,
-                )
-                .await
-        })
-        .await;
+        let response = run_with_cancellation(
+            cancellation_token.clone(),
+            tokio::spawn(async move {
+                cloned_llm_client
+                    .stream_completion(
+                        llm_properties.api_key().clone(),
+                        LLMClientCompletionRequest::new(
+                            llm_properties.llm().clone(),
+                            final_messages,
+                            0.2,
+                            None,
+                        ),
+                        llm_properties.provider().clone(),
+                        vec![
+                            ("event_type".to_owned(), "tool_use".to_owned()),
+                            ("root_id".to_owned(), root_request_id),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        sender,
+                    )
+                    .await
+            }),
+        );
 
-        match response {
-            Some(result) => {
-                // Now this input needs to be parsed out properly but we are going to stop over here for now
-                result
-                    .map_err(|e| SymbolError::LLMClientError(e))
-                    .map(|response| parse_out_tool_input(&response))
+        let mut delta_receiver = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+        let mut tool_use_generator = ToolUseGenerator::new();
+        while let Some(Some(stream_msg)) =
+            run_with_cancellation(cancellation_token.clone(), delta_receiver.next()).await
+        {
+            let delta = stream_msg.delta();
+            if let Some(delta) = delta {
+                tool_use_generator.add_delta(delta);
             }
+        }
+
+        // for forcing a flush, we append a \n on our own to the answer up until now
+        // so that there are no remaining lines
+        tool_use_generator.flush_answer();
+
+        let thinking_for_tool = tool_use_generator.thinking;
+        let tool_input_partial = tool_use_generator.tool_input_partial;
+        let complete_response = tool_use_generator.answer_up_until_now;
+
+        let final_output = match tool_input_partial {
+            Some(tool_input_partial) => Ok(ToolUseAgentOutput::Success((
+                tool_input_partial,
+                thinking_for_tool,
+            ))),
+            None => Ok(ToolUseAgentOutput::Failure(complete_response)),
+        };
+
+        match response.await {
+            Some(_) => final_output,
             None => Err(SymbolError::CancelledResponseStream),
         }
     }
 }
 
-fn parse_out_tool_input(input: &str) -> ToolUseAgentOutput {
-    let tags = vec![
-        "thinking",
-        "search_files",
-        "code_edit_input",
-        "list_files",
-        "read_file",
-        "get_diagnostics",
-        "execute_command",
-        "attempt_completion",
-        "ask_followup_question",
-    ];
+#[derive(Debug, Clone)]
+enum ToolBlockStatus {
+    // this is when we haven't found anything
+    NoBlock,
+    // this is when we find the thinking block
+    Thinking,
+    // this is when we found a tool use tag
+    ToolUseFind,
+    // once we have the start of a tool input, we go over here
+    ToolFound,
+    // these are all the different attributes of the tool input
+    FilePathFound,
+    InstructionFound,
+    DirectoryPathFound,
+    RecursiveFound,
+    RegexPatternFound,
+    FilePatternFound,
+    CommandFound,
+    QuestionFound,
+    ResultFound,
+}
 
-    // Build the regex pattern to match any of the tags
-    let tags_pattern = tags.join("|");
-    let pattern = format!(
-        r"(?s)<({tags_pattern})>(.*?)</\1>",
-        tags_pattern = tags_pattern
-    );
+struct ToolUseGenerator {
+    answer_up_until_now: String,
+    previous_answer_line_number: Option<usize>,
+    tool_block_status: ToolBlockStatus,
+    thinking: String,
+    tool_type_possible: Option<ToolType>,
+    fs_file_path: Option<String>,
+    instruction: Option<String>,
+    directory_path: Option<String>,
+    recursive: Option<bool>,
+    regex_pattern_found: Option<String>,
+    file_pattern: Option<String>,
+    command: Option<String>,
+    question: Option<String>,
+    result: Option<String>,
+    tool_input_partial: Option<ToolInputPartial>,
+}
 
-    let re = Regex::new(&pattern).unwrap();
-    let mut thinking = None;
-
-    for cap in re.captures_iter(&input) {
-        let capture = cap.expect("to work");
-        let tag_name = &capture[1];
-        let content = &capture[2];
-
-        // Capture thinking content
-        if tag_name == "thinking" {
-            thinking = Some(content.to_owned());
-            continue;
+impl ToolUseGenerator {
+    fn new() -> Self {
+        Self {
+            answer_up_until_now: "".to_owned(),
+            previous_answer_line_number: None,
+            tool_block_status: ToolBlockStatus::NoBlock,
+            thinking: "".to_owned(),
+            tool_type_possible: None,
+            fs_file_path: None,
+            instruction: None,
+            directory_path: None,
+            recursive: None,
+            regex_pattern_found: None,
+            file_pattern: None,
+            command: None,
+            question: None,
+            result: None,
+            tool_input_partial: None,
         }
-
-        // Attempt to map tag to enum variant
-        let tool_input = match tag_name {
-            "search_files" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: SearchFileContentInputPartial = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::SearchFileContentWithRegex(parsed)
-            }
-            "code_edit_input" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: CodeEditingPartialRequest = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::CodeEditing(parsed)
-            }
-            "list_files" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: ListFilesInput = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::ListFiles(parsed)
-            }
-            "read_file" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: OpenFileRequestPartial = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::OpenFile(parsed)
-            }
-            "get_diagnostics" => {
-                ToolInputPartial::LSPDiagnostics(WorkspaceDiagnosticsPartial::new())
-            }
-            "execute_command" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: TerminalInputPartial = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::TerminalCommand(parsed)
-            }
-            "attempt_completion" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: AttemptCompletionClientRequest = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::AttemptCompletion(parsed)
-            }
-            "ask_followup_question" => {
-                let xml_content = format!("<root>{}</root>", content);
-                let parsed: AskFollowupQuestionsRequest = match from_str(&xml_content) {
-                    Ok(p) => p,
-                    Err(_e) => return ToolUseAgentOutput::Failure(input.to_string()),
-                };
-                ToolInputPartial::AskFollowupQuestions(parsed)
-            }
-            _ => continue,
-        };
-
-        // If we found a valid tag and parsed successfully, return Success
-        return ToolUseAgentOutput::Success((
-            tool_input,
-            thinking.unwrap_or_else(|| "".to_string()),
-        ));
     }
 
-    // If no matching tag was found, return Failure
-    ToolUseAgentOutput::Failure(input.to_string())
+    fn flush_answer(&mut self) {
+        self.answer_up_until_now.push_str("\n");
+        self.process_answer();
+    }
+
+    fn add_delta(&mut self, delta: &str) {
+        self.answer_up_until_now.push_str(delta);
+        self.process_answer();
+    }
+
+    fn process_answer(&mut self) {
+        let line_number_to_process = get_last_newline_line_number(&self.answer_up_until_now);
+        if line_number_to_process.is_none() {
+            return;
+        }
+
+        let line_number_to_process_until =
+            line_number_to_process.expect("is_none to hold above") - 1;
+
+        let stream_lines = self.answer_up_until_now.to_owned();
+        let stream_lines = stream_lines.lines().into_iter().collect::<Vec<_>>();
+
+        let start_index = self
+            .previous_answer_line_number
+            .map_or(0, |line_number| line_number + 1);
+
+        for line_number in start_index..=line_number_to_process_until {
+            println!(
+                "{:?}::{}",
+                &self.tool_block_status, &stream_lines[line_number]
+            );
+            self.previous_answer_line_number = Some(line_number);
+            let answer_line_at_index = stream_lines[line_number];
+            match self.tool_block_status.clone() {
+                ToolBlockStatus::NoBlock => {
+                    if answer_line_at_index == "<thinking>" {
+                        self.tool_block_status = ToolBlockStatus::Thinking;
+                    }
+                }
+                ToolBlockStatus::Thinking => {
+                    if answer_line_at_index == "</thinking>" {
+                        self.tool_block_status = ToolBlockStatus::ToolUseFind;
+                    } else {
+                        if self.thinking.is_empty() {
+                            self.thinking = answer_line_at_index.to_owned();
+                        } else {
+                            self.thinking.push_str("\n");
+                            self.thinking.push_str(answer_line_at_index);
+                        }
+                    }
+                }
+                ToolBlockStatus::ToolUseFind => {
+                    if answer_line_at_index == "<search_files>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::SearchFileContentWithRegex);
+                    } else if answer_line_at_index == "<code_edit_input>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::CodeEditing);
+                    } else if answer_line_at_index == "<list_files>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::ListFiles);
+                    } else if answer_line_at_index == "<read_file>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::OpenFile);
+                    } else if answer_line_at_index == "<get_diagnostics>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::FileDiagnostics);
+                    } else if answer_line_at_index == "<execute_command>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::TerminalCommand);
+                    } else if answer_line_at_index == "<attempt_completion>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::AttemptCompletion);
+                    } else if answer_line_at_index == "<ask_followup_question>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::AskFollowupQuestions);
+                    } else if answer_line_at_index == "<repo_map_generation>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::RepoMapGeneration);
+                        // these are the ending condition over here
+                        // we grab all the fields which are required and then return them back over here
+                    }
+                }
+                ToolBlockStatus::ToolFound => {
+                    if answer_line_at_index == "<fs_file_path>" {
+                        self.tool_block_status = ToolBlockStatus::FilePathFound;
+                    } else if answer_line_at_index == "<instruction>" {
+                        self.tool_block_status = ToolBlockStatus::InstructionFound;
+                    } else if answer_line_at_index == "<directory_path>" {
+                        self.tool_block_status = ToolBlockStatus::DirectoryPathFound;
+                    } else if answer_line_at_index == "<recursive>" {
+                        self.tool_block_status = ToolBlockStatus::RecursiveFound;
+                    } else if answer_line_at_index == "<regex_pattern>" {
+                        self.tool_block_status = ToolBlockStatus::RegexPatternFound;
+                    } else if answer_line_at_index == "<file_pattern>" {
+                        self.tool_block_status = ToolBlockStatus::FilePatternFound;
+                    } else if answer_line_at_index == "<command>" {
+                        self.tool_block_status = ToolBlockStatus::CommandFound;
+                    } else if answer_line_at_index == "<question>" {
+                        self.tool_block_status = ToolBlockStatus::QuestionFound;
+                    } else if answer_line_at_index == "<result>" {
+                        self.tool_block_status = ToolBlockStatus::ResultFound;
+                    } else if answer_line_at_index == "</search_files>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match (
+                            self.directory_path.clone(),
+                            self.regex_pattern_found.clone(),
+                        ) {
+                            (Some(directory_path), Some(regex_pattern)) => {
+                                self.tool_input_partial =
+                                    Some(ToolInputPartial::SearchFileContentWithRegex(
+                                        SearchFileContentInputPartial::new(
+                                            directory_path,
+                                            regex_pattern,
+                                            self.file_pattern.clone(),
+                                        ),
+                                    ));
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</code_edit_input>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match (self.fs_file_path.clone(), self.instruction.clone()) {
+                            (Some(fs_file_path), Some(instruction)) => {
+                                self.tool_input_partial = Some(ToolInputPartial::CodeEditing(
+                                    CodeEditingPartialRequest::new(fs_file_path, instruction),
+                                ));
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</list_files>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match (self.directory_path.clone(), self.recursive.clone()) {
+                            (Some(directory_path), Some(recursive)) => {
+                                self.tool_input_partial = Some(ToolInputPartial::ListFiles(
+                                    ListFilesInput::new(directory_path, recursive),
+                                ))
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</read_file>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match self.fs_file_path.clone() {
+                            Some(fs_file_path) => {
+                                self.tool_input_partial = Some(ToolInputPartial::OpenFile(
+                                    OpenFileRequestPartial::new(fs_file_path),
+                                ));
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</get_diagnostics>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        self.tool_input_partial = Some(ToolInputPartial::LSPDiagnostics(
+                            WorkspaceDiagnosticsPartial::new(),
+                        ));
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</execute_command>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match self.command.clone() {
+                            Some(command) => {
+                                self.tool_input_partial = Some(ToolInputPartial::TerminalCommand(
+                                    TerminalInputPartial::new(command.to_owned()),
+                                ))
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</attempt_completion>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match self.result.clone() {
+                            Some(result) => {
+                                self.tool_input_partial =
+                                    Some(ToolInputPartial::AttemptCompletion(
+                                        AttemptCompletionClientRequest::new(
+                                            result,
+                                            self.command.clone(),
+                                        ),
+                                    ));
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</ask_followup_question>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match self.question.clone() {
+                            Some(question) => {
+                                self.tool_input_partial =
+                                    Some(ToolInputPartial::AskFollowupQuestions(
+                                        AskFollowupQuestionsRequest::new(question),
+                                    ));
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</repo_map_generation>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        match self.directory_path.clone() {
+                            Some(directory_path) => {
+                                self.tool_input_partial =
+                                    Some(ToolInputPartial::RepoMapGeneration(
+                                        RepoMapGeneratorRequestPartial::new(directory_path),
+                                    ));
+                            }
+                            _ => {}
+                        }
+                        self.tool_type_possible = None;
+                    }
+                }
+                ToolBlockStatus::FilePathFound => {
+                    if answer_line_at_index == "</fs_file_path>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        self.fs_file_path = Some(answer_line_at_index.to_owned());
+                    }
+                }
+                ToolBlockStatus::InstructionFound => {
+                    if answer_line_at_index == "</instruction>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        match self.instruction.clone() {
+                            Some(instruction) => {
+                                self.instruction = Some(instruction + "\n" + answer_line_at_index);
+                            }
+                            None => self.instruction = Some(answer_line_at_index.to_owned()),
+                        }
+                    }
+                }
+                ToolBlockStatus::DirectoryPathFound => {
+                    if answer_line_at_index == "</directory_path>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        self.directory_path = Some(answer_line_at_index.to_owned());
+                    }
+                }
+                ToolBlockStatus::RecursiveFound => {
+                    if answer_line_at_index == "</recursive>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        self.recursive =
+                            Some(answer_line_at_index.parse::<bool>().unwrap_or(false));
+                    }
+                }
+                ToolBlockStatus::RegexPatternFound => {
+                    if answer_line_at_index == "</regex_pattern>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        match self.regex_pattern_found.clone() {
+                            Some(existing_pattern) => {
+                                self.regex_pattern_found =
+                                    Some(existing_pattern + "\n" + answer_line_at_index);
+                            }
+                            None => {
+                                self.regex_pattern_found = Some(answer_line_at_index.to_owned());
+                            }
+                        }
+                    }
+                }
+                ToolBlockStatus::FilePatternFound => {
+                    if answer_line_at_index == "</file_pattern>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        self.file_pattern = Some(answer_line_at_index.to_owned());
+                    }
+                }
+                ToolBlockStatus::CommandFound => {
+                    if answer_line_at_index == "</command>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        match self.command.clone() {
+                            Some(command) => {
+                                self.command = Some(command + "\n" + answer_line_at_index);
+                            }
+                            None => self.command = Some(answer_line_at_index.to_owned()),
+                        }
+                    }
+                }
+                ToolBlockStatus::QuestionFound => {
+                    if answer_line_at_index == "</question>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        match self.question.clone() {
+                            Some(question) => {
+                                self.question = Some(question + "\n" + answer_line_at_index);
+                            }
+                            None => self.question = Some(answer_line_at_index.to_owned()),
+                        }
+                    }
+                }
+                ToolBlockStatus::ResultFound => {
+                    if answer_line_at_index == "</result>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        match self.result.clone() {
+                            Some(result) => {
+                                self.result = Some(result + "\n" + answer_line_at_index);
+                            }
+                            None => self.result = Some(answer_line_at_index.to_owned()),
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Helps to get the last line number which has a \n
+fn get_last_newline_line_number(s: &str) -> Option<usize> {
+    s.rfind('\n')
+        .map(|last_index| s[..=last_index].chars().filter(|&c| c == '\n').count())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolUseGenerator;
+
+    #[test]
+    fn test_make_tool_parsing_work() {
+        let input = r#"<thinking>
+I need to first locate and read the Tool trait definition. Based on the context, it's likely in one of the Rust source files. Let me search for it.
+</thinking>
+
+<search_files>
+<directory_path>
+/Users/skcd/test_repo/sidecar
+</directory_path>
+<regex_pattern>
+trait\s+Tool\s*\{
+</regex_pattern>
+<file_pattern>
+*.rs
+</file_pattern>
+</search_files>"#;
+        let mut tool_use_generator = ToolUseGenerator::new();
+        tool_use_generator.add_delta(&input);
+        tool_use_generator.flush_answer();
+
+        let tool_use_possible = tool_use_generator.tool_input_partial;
+        assert!(tool_use_possible.is_some());
+    }
 }

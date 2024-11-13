@@ -137,6 +137,8 @@ pub enum ToolType {
     AskFollowupQuestions,
     // Attempt completion
     AttemptCompletion,
+    // Repo map for a sub-directory
+    RepoMapGeneration,
 }
 
 impl std::fmt::Display for ToolType {
@@ -229,6 +231,7 @@ impl std::fmt::Display for ToolType {
             ToolType::ListFiles => write!(f, "List files"),
             ToolType::AskFollowupQuestions => write!(f, "Ask followup questions"),
             ToolType::AttemptCompletion => write!(f, "Attempt completion"),
+            ToolType::RepoMapGeneration => write!(f, "Repo map generation"),
         }
     }
 }

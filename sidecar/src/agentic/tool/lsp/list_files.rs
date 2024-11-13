@@ -34,7 +34,7 @@ fn is_root_or_home(dir_path: &Path) -> bool {
     is_root || is_home
 }
 
-fn list_files(dir_path: &Path, recursive: bool, limit: usize) -> (Vec<PathBuf>, bool) {
+pub fn list_files(dir_path: &Path, recursive: bool, limit: usize) -> (Vec<PathBuf>, bool) {
     // Check if dir_path is root or home directory
     if is_root_or_home(dir_path) {
         return (vec![dir_path.to_path_buf()], false);

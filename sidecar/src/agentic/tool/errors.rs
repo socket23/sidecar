@@ -1,6 +1,8 @@
 use llm_client::clients::types::{LLMClientError, LLMType};
 use thiserror::Error;
 
+use crate::repomap::error::RepoMapError;
+
 use super::{
     code_symbol::types::CodeSymbolError, file::types::FileImportantError,
     filtering::errors::CodeToEditFilteringError, kw_search::types::KeywordsReplyError,
@@ -77,4 +79,7 @@ pub enum ToolError {
 
     #[error("Output stream not present")]
     OutputStreamNotPresent,
+
+    #[error("Repo map error: {0}")]
+    RepoMapError(#[from] RepoMapError),
 }

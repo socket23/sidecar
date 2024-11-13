@@ -2,19 +2,35 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use llm_client::broker::LLMBroker;
 use tokio::{io::AsyncWriteExt, sync::Mutex};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     agentic::{
         symbol::{
-            errors::SymbolError, events::message_event::SymbolEventMessageProperties,
-            manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
+            errors::SymbolError,
+            events::{edit::SymbolToEdit, message_event::SymbolEventMessageProperties},
+            identifier::SymbolIdentifier,
+            manager::SymbolManager,
+            scratch_pad::ScratchPadAgent,
+            tool_box::ToolBox,
             ui_event::UIEventWithID,
         },
-        tool::{plan::service::PlanService, r#type::ToolType},
+        tool::{
+            broker::ToolBroker,
+            input::{ToolInput, ToolInputPartial},
+            lsp::{
+                file_diagnostics::DiagnosticMap, open_file::OpenFileRequest,
+                search_file::SearchFileContentInput,
+            },
+            plan::service::PlanService,
+            r#type::{Tool, ToolType},
+            session::{session::AgentToolUseOutput, tool_use_agent::ToolUseAgent},
+            terminal::terminal::TerminalInput,
+        },
     },
-    chunking::text_document::Range,
+    chunking::text_document::{Position, Range},
     repo::types::RepoRef,
     user_context::types::UserContext,
 };
@@ -346,6 +362,7 @@ impl SessionService {
         &self,
         session_id: String,
         storage_path: String,
+        user_message: String,
         exchange_id: String,
         all_files: Vec<String>,
         open_files: Vec<String>,
@@ -353,6 +370,9 @@ impl SessionService {
         project_labels: Vec<String>,
         repo_ref: RepoRef,
         root_directory: String,
+        tool_box: Arc<ToolBox>,
+        tool_broker: Arc<ToolBroker>,
+        llm_broker: Arc<LLMBroker>,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
         println!("session_service::tool_use_agentic::start");
@@ -372,6 +392,277 @@ impl SessionService {
                 UserContext::default(),
             )
         };
+
+        // os can be passed over here safely since we can assume the sidecar is running
+        // close to the vscode server
+        // we should ideally get this information from the vscode-server side setting
+        let tool_agent = ToolUseAgent::new(
+            llm_broker.clone(),
+            root_directory,
+            std::env::consts::OS.to_owned(),
+            shell.to_owned(),
+        );
+
+        session = session.human_message_tool_use(
+            exchange_id.to_owned(),
+            user_message,
+            all_files,
+            open_files,
+            shell,
+        );
+        let _ = self.save_to_storage(&session).await;
+
+        session = session.accept_open_exchanges_if_any(message_properties.clone());
+        let mut human_message_ticker = 0;
+        // now that we have saved it we can start the loop over here and look out for the cancellation
+        // token which will imply that we should end the current loop
+        loop {
+            let _ = self.save_to_storage(&session).await;
+            let tool_exchange_id = self
+                .tool_box
+                .create_new_exchange(session_id.to_owned(), message_properties.clone())
+                .await?;
+
+            let cancellation_token = tokio_util::sync::CancellationToken::new();
+
+            message_properties = message_properties
+                .set_request_id(tool_exchange_id.to_owned())
+                .set_cancellation_token(cancellation_token.clone());
+
+            // track the new exchange over here
+            self.track_exchange(&session_id, &tool_exchange_id, cancellation_token.clone())
+                .await;
+
+            let tool_use_output = session
+                // the clone here is pretty bad but its the easiest and the sanest
+                // way to keep things on the happy path
+                .clone()
+                .get_tool_to_use(
+                    tool_box.clone(),
+                    tool_exchange_id,
+                    exchange_id.to_owned(),
+                    tool_agent.clone(),
+                    message_properties.clone(),
+                )
+                .await;
+
+            match tool_use_output {
+                AgentToolUseOutput::Success((tool_input_partial, new_session)) => {
+                    // update our session
+                    session = new_session;
+                    // store to disk
+                    let _ = self.save_to_storage(&session).await;
+                    // execute the partial tool input and get the final output here
+                    match tool_input_partial {
+                        ToolInputPartial::AskFollowupQuestions(followup_question) => {
+                            println!("Ask followup question: {}", followup_question.question());
+                            let input = ToolInput::AskFollowupQuestions(followup_question);
+                            let response = tool_broker.invoke(input).await;
+                            println!("response: {:?}", response);
+                        }
+                        ToolInputPartial::AttemptCompletion(attempt_completion) => {
+                            println!("LLM reached a stop condition");
+                            println!("{:?}", &attempt_completion);
+                            break;
+                        }
+                        ToolInputPartial::CodeEditing(code_editing) => {
+                            let fs_file_path = code_editing.fs_file_path().to_owned();
+                            println!("Code editing: {}", fs_file_path);
+                            let file_contents = tool_box
+                                .file_open(fs_file_path.to_owned(), message_properties.clone())
+                                .await
+                                .expect("file_contents to work")
+                                .contents();
+
+                            let instruction = code_editing.instruction().to_owned();
+
+                            let default_range =
+                            // very large end position
+                                Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
+
+                            let symbol_to_edit = SymbolToEdit::new(
+                                fs_file_path.to_owned(),
+                                default_range,
+                                fs_file_path.to_owned(),
+                                vec![instruction.clone()],
+                                false,
+                                false, // is_new
+                                false,
+                                "".to_owned(),
+                                None,
+                                false,
+                                None,
+                                false,
+                                None,
+                                vec![], // previous_user_queries
+                                None,
+                            );
+
+                            let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
+
+                            let response = tool_box
+                                .code_editing_with_search_and_replace(
+                                    &symbol_to_edit,
+                                    &fs_file_path,
+                                    &file_contents,
+                                    &default_range,
+                                    "".to_owned(),
+                                    instruction.clone(),
+                                    &symbol_identifier,
+                                    None,
+                                    None,
+                                    message_properties.clone(),
+                                )
+                                .await
+                                .expect("to work"); // big expectations but can also fail, we should handle it properly
+
+                            println!("response: {:?}", response);
+                        }
+                        ToolInputPartial::LSPDiagnostics(diagnostics) => {
+                            println!("LSP diagnostics: {:?}", diagnostics);
+                            // figure out what do to with this, we should probably just gather all the diagnostics
+                            // and pass it along as a user message
+                            let diagnostics_output = tool_box
+                                .grab_workspace_diagnostics(message_properties.clone())
+                                .await
+                                .expect("big expectation for diagnostics to never fail");
+                            let diagnostics_grouped_by_file: DiagnosticMap = diagnostics_output
+                                .0
+                                .into_iter()
+                                .fold(HashMap::new(), |mut acc, error| {
+                                    acc.entry(error.fs_file_path().to_owned())
+                                        .or_insert_with(Vec::new)
+                                        .push(error);
+                                    acc
+                                });
+
+                            let formatted_diagnostics =
+                                PlanService::format_diagnostics(&diagnostics_grouped_by_file);
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                formatted_diagnostics,
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
+                        }
+                        ToolInputPartial::ListFiles(list_files) => {
+                            println!("list files: {}", list_files.directory_path());
+                            let input = ToolInput::ListFiles(list_files);
+                            let response = tool_broker.invoke(input).await;
+                            let list_files_output = response
+                                .expect("to work")
+                                .get_list_files_directory()
+                                .expect("to work");
+                            let response = list_files_output
+                                .files()
+                                .into_iter()
+                                .map(|file_path| file_path.to_string_lossy().to_string())
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                response.to_owned(),
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
+                            println!("response: {:?}", response);
+                        }
+                        ToolInputPartial::OpenFile(open_file) => {
+                            println!("open file: {}", open_file.fs_file_path());
+                            let open_file_path = open_file.fs_file_path().to_owned();
+                            let request = OpenFileRequest::new(
+                                open_file_path,
+                                message_properties.editor_url(),
+                            );
+                            let input = ToolInput::OpenFile(request);
+                            let response = tool_broker
+                                .invoke(input)
+                                .await
+                                .expect("to work")
+                                .get_file_open_response()
+                                .expect("to work")
+                                .to_string();
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                response.clone(),
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
+                            println!("response: {:?}", response);
+                        }
+                        ToolInputPartial::SearchFileContentWithRegex(search_file) => {
+                            println!("search file: {}", search_file.directory_path());
+                            let request = SearchFileContentInput::new(
+                                search_file.directory_path().to_owned(),
+                                search_file.regex_pattern().to_owned(),
+                                search_file.file_pattern().map(|s| s.to_owned()),
+                                message_properties.editor_url(),
+                            );
+                            let input = ToolInput::SearchFileContentWithRegex(request);
+                            let tool_response = tool_broker.invoke(input).await.expect("to work");
+                            let response = tool_response
+                                .get_search_file_content_with_regex()
+                                .expect("to work");
+                            let response = response.response();
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                response.to_owned(),
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
+                            println!("response: {:?}", response);
+                        }
+                        ToolInputPartial::TerminalCommand(terminal_command) => {
+                            println!("terminal command: {}", terminal_command.command());
+                            let command = terminal_command.command().to_owned();
+                            let request =
+                                TerminalInput::new(command, message_properties.editor_url());
+                            let input = ToolInput::TerminalCommand(request);
+                            let tool_output = tool_broker.invoke(input).await;
+                            let output = tool_output
+                                .expect("to work")
+                                .terminal_command()
+                                .expect("to work")
+                                .output()
+                                .to_owned();
+                            human_message_ticker = human_message_ticker + 1;
+                            session = session.human_message(
+                                human_message_ticker.to_string(),
+                                output.to_owned(),
+                                UserContext::default(),
+                                vec![],
+                                repo_ref.clone(),
+                            );
+                            println!("response: {:?}", output);
+                        }
+                    };
+                }
+                AgentToolUseOutput::Cancelled => {}
+                AgentToolUseOutput::Failed(failed_to_parse_output) => {
+                    let human_message = format!(
+                        r#"Your output was incorrect, please give me the output in the correct format:
+{}"#,
+                        failed_to_parse_output
+                    );
+                    human_message_ticker = human_message_ticker + 1;
+                    session = session.human_message(
+                        human_message_ticker.to_string(),
+                        human_message,
+                        UserContext::default(),
+                        vec![],
+                        repo_ref.clone(),
+                    );
+                }
+            }
+        }
         Ok(())
     }
 

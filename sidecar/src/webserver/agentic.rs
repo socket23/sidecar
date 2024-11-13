@@ -1344,17 +1344,17 @@ pub async fn agent_tool_use(
         exchange_id,
         editor_url,
         query,
-        user_context,
+        user_context: _user_context,
         // agent_mode,
         repo_ref,
         project_labels,
         root_directory,
-        codebase_search,
+        codebase_search: _codebase_search,
         access_token,
         model_configuration,
-        all_files: _all_files,
-        open_files: _open_files,
-        shell: _shell,
+        all_files,
+        open_files,
+        shell,
     }): Json<AgentSessionChatRequest>,
 ) -> Result<impl IntoResponse> {
     let llm_provider = model_configuration
@@ -1379,42 +1379,35 @@ pub async fn agent_tool_use(
         llm_provider,
     );
 
+    let tool_box = app.tool_box.clone();
+    let tool_broker = app.tool_box.tools().clone();
+    let llm_broker = app.llm_broker.clone();
+
     let session_storage_path =
         check_session_storage_path(app.config.clone(), session_id.to_string()).await;
-
-    let plan_storage_directory = plan_storage_directory(app.config.clone()).await;
-
-    let plan_service = PlanService::new(
-        app.tool_box.clone(),
-        app.symbol_manager.clone(),
-        plan_storage_directory,
-    );
-
-    // plan-id is made up of session_id and the exchange-id joined together
-    let plan_id = plan_service.generate_unique_plan_id(&session_id, &exchange_id);
-    let plan_storage_path = check_plan_storage_path(app.config.clone(), plan_id.to_owned()).await;
 
     let cloned_session_id = session_id.to_string();
     let session_service = app.session_service.clone();
     let _ = tokio::spawn(async move {
         let _ = session_service
-            .plan_iteration(
+            .tool_use_agentic(
                 cloned_session_id,
                 session_storage_path,
-                plan_storage_path,
-                plan_id,
-                plan_service,
-                exchange_id,
                 query,
-                user_context,
+                exchange_id,
+                all_files,
+                open_files,
+                shell,
                 project_labels,
                 repo_ref,
                 root_directory,
-                codebase_search,
+                tool_box,
+                tool_broker,
+                llm_broker,
                 message_properties,
             )
             .await;
-        println!("tokio::spawn::plan::iteration::finished");
+        println!("tokio::spawn::tool_use::iteration::finished");
     });
 
     let ui_event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);

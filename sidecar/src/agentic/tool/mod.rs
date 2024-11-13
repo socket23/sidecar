@@ -32,6 +32,7 @@ pub mod lsp;
 pub mod output;
 pub mod plan;
 pub mod ref_filter;
+pub mod repo_map;
 pub mod rerank;
 pub mod search;
 pub mod session;

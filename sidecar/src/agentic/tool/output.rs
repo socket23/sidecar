@@ -51,6 +51,7 @@ use super::{
         undo_changes::UndoChangesMadeDuringExchangeRespnose,
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
+    repo_map::generator::RepoMapGeneratorResponse,
     rerank::base::ReRankEntriesForBroker,
     session::{
         ask_followup_question::AskFollowupQuestionsResponse,
@@ -211,9 +212,15 @@ pub enum ToolOutput {
     AskFollowupQuestions(AskFollowupQuestionsResponse),
     // attempt completion
     AttemptCompletion(AttemptCompletionClientResponse),
+    // Repo map generation response
+    RepoMapGeneration(RepoMapGeneratorResponse),
 }
 
 impl ToolOutput {
+    pub fn repo_map_generation_reponse(response: RepoMapGeneratorResponse) -> Self {
+        ToolOutput::RepoMapGeneration(response)
+    }
+
     pub fn search_file_content_with_regex(response: SearchFileContentWithRegexOutput) -> Self {
         ToolOutput::SearchFileContentWithRegex(response)
     }

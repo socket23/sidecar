@@ -62,6 +62,7 @@ use super::{
     },
     r#type::ToolType,
     ref_filter::ref_filter::ReferenceFilterRequest,
+    repo_map::generator::RepoMapGeneratorRequest,
     rerank::base::ReRankEntriesForBroker,
     search::big_search::BigSearchRequest,
     session::{
@@ -227,6 +228,8 @@ pub enum ToolInput {
     AskFollowupQuestions(AskFollowupQuestionsRequest),
     // Attempt completion of a task
     AttemptCompletion(AttemptCompletionClientRequest),
+    // Generates the repo map
+    RepoMapGeneration(RepoMapGeneratorRequest),
 }
 
 impl ToolInput {
@@ -308,6 +311,15 @@ impl ToolInput {
             ToolInput::ListFiles(_) => ToolType::ListFiles,
             ToolInput::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
             ToolInput::AttemptCompletion(_) => ToolType::AttemptCompletion,
+            ToolInput::RepoMapGeneration(_) => ToolType::RepoMapGeneration,
+        }
+    }
+
+    pub fn is_repo_map_generation(self) -> Result<RepoMapGeneratorRequest, ToolError> {
+        if let ToolInput::RepoMapGeneration(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::RepoMapGeneration))
         }
     }
 

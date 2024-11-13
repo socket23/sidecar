@@ -59,6 +59,7 @@ use super::{
     },
     r#type::{Tool, ToolType},
     ref_filter::ref_filter::ReferenceFilterBroker,
+    repo_map::generator::RepoMapGeneratorClient,
     rerank::base::ReRankBroker,
     search::big_search::BigSearchBroker,
     session::{
@@ -456,6 +457,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::AttemptCompletion,
             Box::new(AttemptCompletionClient::new()),
+        );
+        tools.insert(
+            ToolType::RepoMapGeneration,
+            Box::new(RepoMapGeneratorClient::new()),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

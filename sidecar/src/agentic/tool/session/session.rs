@@ -4,7 +4,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
-use llm_client::broker::LLMBroker;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -16,7 +15,7 @@ use crate::{
                 human::HumanAgenticRequest,
                 message_event::{SymbolEventMessage, SymbolEventMessageProperties},
             },
-            identifier::{LLMProperties, SymbolIdentifier},
+            identifier::SymbolIdentifier,
             manager::SymbolManager,
             scratch_pad::ScratchPadAgent,
             tool_box::ToolBox,
@@ -43,8 +42,14 @@ use crate::{
 use super::{
     chat::{SessionChatClientRequest, SessionChatMessage},
     hot_streak::SessionHotStreakRequest,
-    tool_use_agent::{ToolUseAgent, ToolUseAgentInput},
+    tool_use_agent::{ToolUseAgent, ToolUseAgentInput, ToolUseAgentOutput},
 };
+
+pub enum AgentToolUseOutput {
+    Success((ToolInputPartial, Session)),
+    Failed(String),
+    Cancelled,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -716,7 +721,7 @@ impl Session {
         self
     }
 
-    pub fn human_message_agentic(
+    pub fn human_message_tool_use(
         mut self,
         exchange_id: String,
         human_message: String,
@@ -921,14 +926,11 @@ impl Session {
     pub async fn get_tool_to_use(
         mut self,
         tool_box: Arc<ToolBox>,
-        llm_client: Arc<LLMBroker>,
-        working_directory: String,
-        operating_system: String,
-        default_shell: String,
         exchange_id: String,
         parent_exchange_id: String,
-        llm_properties: LLMProperties,
-    ) -> (Option<ToolInputPartial>, Self) {
+        tool_use_agent: ToolUseAgent,
+        message_properties: SymbolEventMessageProperties,
+    ) -> AgentToolUseOutput {
         // figure out what to do over here given the state of the session
         let mut converted_messages = vec![];
         for previous_message in self.exchanges.iter() {
@@ -947,18 +949,22 @@ impl Session {
                 .into_iter()
                 .filter_map(|tool_type| tool_box.tools().get_tool_description(&tool_type))
                 .collect(),
-            llm_properties,
-            working_directory,
-            operating_system,
-            default_shell,
+            message_properties.clone(),
         );
-
-        let tool_use_agent = ToolUseAgent::new(llm_client);
 
         // now we can invoke the tool use agent over here and get the parsed input and store it
         let output = tool_use_agent.invoke(tool_use_agent_input).await;
         match output {
-            Ok((Some(tool_input_partial), Some(thinking))) => {
+            Ok(ToolUseAgentOutput::Success((tool_input_partial, thinking))) => {
+                // send over a UI event over here to inform the editor layer that we found a tool to use
+                let _ = message_properties
+                    .ui_sender()
+                    .send(UIEventWithID::tool_use_detected(
+                        message_properties.root_request_id().to_owned(),
+                        message_properties.request_id_str().to_owned(),
+                        tool_input_partial.clone(),
+                        thinking.to_owned(),
+                    ));
                 let tool_type = tool_input_partial.to_tool_type();
                 self.exchanges.push(Exchange::agent_tool_use(
                     parent_exchange_id,
@@ -967,11 +973,13 @@ impl Session {
                     tool_type,
                     thinking,
                 ));
-                return (Some(tool_input_partial), self);
+                AgentToolUseOutput::Success((tool_input_partial, self))
             }
-            _ => {}
+            Ok(ToolUseAgentOutput::Failure(input_string)) => {
+                AgentToolUseOutput::Failed(input_string)
+            }
+            Err(_e) => AgentToolUseOutput::Cancelled,
         }
-        (None, self)
     }
 
     /// This reacts to the last message and generates the reply for the user to handle

@@ -85,4 +85,7 @@ pub enum SymbolError {
 
     #[error("LLM Client error: {0}")]
     LLMClientError(LLMClientError),
+
+    #[error("Cancelled Response")]
+    CancelledResponseStream,
 }

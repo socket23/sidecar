@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 use crate::{
     agentic::tool::{
-        code_symbol::models::anthropic::StepListItem, ref_filter::ref_filter::Location,
-        search::iterative::IterativeSearchEvent,
+        code_symbol::models::anthropic::StepListItem, input::ToolInputPartial,
+        ref_filter::ref_filter::Location, search::iterative::IterativeSearchEvent,
     },
     chunking::text_document::Range,
     user_context::types::VariableInformation,
@@ -655,6 +655,22 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn tool_use_detected(
+        session_id: String,
+        exchange_id: String,
+        tool_use_partial_input: ToolInputPartial,
+        thinking: String,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id: exchange_id.to_owned(),
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolUseDetected(ToolUseDetectedEvent {
+                tool_use_partial_input,
+                thinking,
+            })),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1195,6 +1211,13 @@ pub enum FrameworkEvent {
     AgenticSymbolLevelThinking(StepListItem),
     ReferencesUsed(FrameworkReferencesUsed),
     TerminalCommand(TerminalCommandEvent),
+    ToolUseDetected(ToolUseDetectedEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolUseDetectedEvent {
+    tool_use_partial_input: ToolInputPartial,
+    thinking: String,
 }
 
 #[derive(Debug, serde::Serialize)]

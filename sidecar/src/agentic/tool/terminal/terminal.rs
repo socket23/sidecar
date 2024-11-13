@@ -92,7 +92,8 @@ impl Tool for TerminalTool {
     // Current working directory will be known to LLM from higher level context
     fn tool_description(&self) -> String {
         format!(
-            r#"Request to execute a CLI command on the system.
+            r#"### execute_command
+Request to execute a CLI command on the system.
 Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task.
 You must tailor your command to the user's system and provide a clear explanation of what the command does.
 Prefer to execute complex CLI commands over creating executable scripts, as they are more flexible and easier to run.

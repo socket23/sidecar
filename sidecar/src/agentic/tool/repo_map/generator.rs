@@ -111,17 +111,18 @@ impl Tool for RepoMapGeneratorClient {
     }
 
     fn tool_description(&self) -> String {
-        r#"Request to list definition names (classes, functions, methods, etc.) used in source code files at the top level of the specified directory. This tool provides insights into the codebase structure and important constructs, encapsulating high-level concepts and relationships that are crucial for understanding the overall architecture."#.to_owned()
+        r#"### repo_map_generation
+Request to list definition names (classes, functions, methods, etc.) used in source code files at the top level of the specified directory. This tool provides insights into the codebase structure and important constructs, encapsulating high-level concepts and relationships that are crucial for understanding the overall architecture."#.to_owned()
     }
 
     fn tool_input_format(&self) -> String {
         r#"Parameters:
 - path: (required) The path of the directory (relative to the current working directory ${cwd.toPosix()}) to list top level source code definitions for.
 Usage:
-<list_code_definition_names>
+<repo_map_generation>
 <path>
 Absolute directory path here
 </path>
-</list_code_definition_names>"#.to_owned()
+</repo_map_generation>"#.to_owned()
     }
 }

@@ -115,7 +115,9 @@ impl Tool for FileDiagnostics {
 
     // identical to sidecar/src/agentic/tool/lsp/diagnostics.rs
     fn tool_description(&self) -> String {
-        "Get LSP diagnostics for a file".to_owned()
+        "### get_diagnostics
+Gets the linter and language server diagnostics wihch have happend after making edits.
+Make sure to use this tool if you believe that the code which you just edited could have cascading effects elsewhere or could lead to potential bugs. We want to make sure that the codebase remains intact and no linter or Language Server Problems exist after we are done with the changes. You can act on top of these changes to move towards correctness.".to_owned()
     }
 
     // identical to sidecar/src/agentic/tool/lsp/diagnostics.rs

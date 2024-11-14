@@ -9,7 +9,10 @@ use llm_client::{
 };
 
 use crate::agentic::{
-    symbol::{errors::SymbolError, events::message_event::SymbolEventMessageProperties},
+    symbol::{
+        errors::SymbolError, events::message_event::SymbolEventMessageProperties,
+        ui_event::UIEventWithID,
+    },
     tool::{
         code_edit::types::CodeEditingPartialRequest,
         helpers::cancellation_future::run_with_cancellation,
@@ -35,19 +38,19 @@ pub struct ToolUseAgentInput {
     // pass in the messages
     session_messages: Vec<SessionChatMessage>,
     tool_descriptions: Vec<String>,
-    symbol_event_messaeg_properties: SymbolEventMessageProperties,
+    symbol_event_message_properties: SymbolEventMessageProperties,
 }
 
 impl ToolUseAgentInput {
     pub fn new(
         session_messages: Vec<SessionChatMessage>,
         tool_descriptions: Vec<String>,
-        symbol_event_messaeg_properties: SymbolEventMessageProperties,
+        symbol_event_message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
             session_messages,
             tool_descriptions,
-            symbol_event_messaeg_properties,
+            symbol_event_message_properties,
         }
     }
 }
@@ -211,7 +214,7 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
         let system_message = LLMClientMessage::system(self.system_message(&input));
         // grab the previous messages as well
         let llm_properties = input
-            .symbol_event_messaeg_properties
+            .symbol_event_message_properties
             .llm_properties()
             .clone();
         let previous_messages = input.session_messages.into_iter().map(|session_message| {
@@ -226,18 +229,21 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
             }
         });
         let root_request_id = input
-            .symbol_event_messaeg_properties
+            .symbol_event_message_properties
             .root_request_id()
             .to_owned();
+        let ui_sender = input.symbol_event_message_properties.ui_sender();
+        let exchange_id = input.symbol_event_message_properties.request_id_str();
         let final_messages: Vec<_> = vec![system_message]
             .into_iter()
             .chain(previous_messages)
             .collect();
 
-        let cancellation_token = input.symbol_event_messaeg_properties.cancellation_token();
+        let cancellation_token = input.symbol_event_message_properties.cancellation_token();
 
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let cloned_llm_client = self.llm_client.clone();
+        let cloned_root_request_id = root_request_id.to_owned();
         let response = run_with_cancellation(
             cancellation_token.clone(),
             tokio::spawn(async move {
@@ -253,7 +259,7 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
                         llm_properties.provider().clone(),
                         vec![
                             ("event_type".to_owned(), "tool_use".to_owned()),
-                            ("root_id".to_owned(), root_request_id),
+                            ("root_id".to_owned(), cloned_root_request_id),
                         ]
                         .into_iter()
                         .collect(),
@@ -264,35 +270,85 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
         );
 
         let mut delta_receiver = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-        let mut tool_use_generator = ToolUseGenerator::new();
-        while let Some(Some(stream_msg)) =
-            run_with_cancellation(cancellation_token.clone(), delta_receiver.next()).await
+        let (tool_update_sender, tool_update_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut tool_use_generator = ToolUseGenerator::new(tool_update_sender);
+
+        // run this in a background thread for now
+        let cloned_cancellation_token = cancellation_token.clone();
+        let delta_updater_task = tokio::spawn(async move {
+            while let Some(Some(stream_msg)) =
+                run_with_cancellation(cloned_cancellation_token.clone(), delta_receiver.next())
+                    .await
+            {
+                let delta = stream_msg.delta();
+                if let Some(delta) = delta {
+                    tool_use_generator.add_delta(delta);
+                }
+            }
+            // for forcing a flush, we append a \n on our own to the answer up until now
+            // so that there are no remaining lines
+            tool_use_generator.flush_answer();
+            let thinking_for_tool = tool_use_generator.thinking;
+            let tool_input_partial = tool_use_generator.tool_input_partial;
+            let complete_response = tool_use_generator.answer_up_until_now;
+            (thinking_for_tool, tool_input_partial, complete_response)
+        });
+
+        // now take the tool_receiver and try sending them over as a ui_sender
+        // event
+        let mut tool_update_receiver =
+            tokio_stream::wrappers::UnboundedReceiverStream::new(tool_update_receiver);
+        while let Some(Some(tool_update)) =
+            run_with_cancellation(cancellation_token.clone(), tool_update_receiver.next()).await
         {
-            let delta = stream_msg.delta();
-            if let Some(delta) = delta {
-                tool_use_generator.add_delta(delta);
+            match tool_update {
+                ToolBlockEvent::ThinkingFull(thinking_up_until_now) => {
+                    let _ = ui_sender.clone().send(UIEventWithID::tool_thinking(
+                        root_request_id.to_owned(),
+                        exchange_id.to_owned(),
+                        thinking_up_until_now,
+                    ));
+                }
+                ToolBlockEvent::NoToolFound(full_output) => {
+                    let _ = ui_sender.clone().send(UIEventWithID::tool_not_found(
+                        root_request_id.to_owned(),
+                        exchange_id.to_owned(),
+                        full_output,
+                    ));
+                }
+                ToolBlockEvent::ToolFound(tool_found) => {
+                    let _ = ui_sender.clone().send(UIEventWithID::tool_found(
+                        root_request_id.to_owned(),
+                        exchange_id.to_owned(),
+                        tool_found,
+                    ));
+                }
+                ToolBlockEvent::ToolParameters(tool_parameters_update) => {
+                    let _ = ui_sender.clone().send(UIEventWithID::tool_parameter_found(
+                        root_request_id.to_owned(),
+                        exchange_id.to_owned(),
+                        tool_parameters_update,
+                    ));
+                }
             }
         }
 
-        // for forcing a flush, we append a \n on our own to the answer up until now
-        // so that there are no remaining lines
-        tool_use_generator.flush_answer();
-
-        let thinking_for_tool = tool_use_generator.thinking;
-        let tool_input_partial = tool_use_generator.tool_input_partial;
-        let complete_response = tool_use_generator.answer_up_until_now;
-
-        let final_output = match tool_input_partial {
-            Some(tool_input_partial) => Ok(ToolUseAgentOutput::Success((
-                tool_input_partial,
-                thinking_for_tool,
-            ))),
-            None => Ok(ToolUseAgentOutput::Failure(complete_response)),
-        };
-
-        match response.await {
-            Some(_) => final_output,
-            None => Err(SymbolError::CancelledResponseStream),
+        if let Ok((thinking_for_tool, tool_input_partial, complete_response)) =
+            delta_updater_task.await
+        {
+            let final_output = match tool_input_partial {
+                Some(tool_input_partial) => Ok(ToolUseAgentOutput::Success((
+                    tool_input_partial,
+                    thinking_for_tool,
+                ))),
+                None => Ok(ToolUseAgentOutput::Failure(complete_response)),
+            };
+            match response.await {
+                Some(_) => final_output,
+                None => Err(SymbolError::CancelledResponseStream),
+            }
+        } else {
+            Err(SymbolError::CancelledResponseStream)
         }
     }
 }
@@ -319,6 +375,22 @@ enum ToolBlockStatus {
     ResultFound,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ToolParameters {
+    field_name: String,
+    field_content_up_until_now: String,
+    field_content_delta: String,
+}
+
+#[derive(Debug, Clone)]
+enum ToolBlockEvent {
+    ThinkingFull(String),
+    ToolFound(ToolType),
+    ToolParameters(ToolParameters),
+    // contains the full string of the step output since we failed to find any event
+    NoToolFound(String),
+}
+
 struct ToolUseGenerator {
     answer_up_until_now: String,
     previous_answer_line_number: Option<usize>,
@@ -335,10 +407,11 @@ struct ToolUseGenerator {
     question: Option<String>,
     result: Option<String>,
     tool_input_partial: Option<ToolInputPartial>,
+    sender: tokio::sync::mpsc::UnboundedSender<ToolBlockEvent>,
 }
 
 impl ToolUseGenerator {
-    fn new() -> Self {
+    fn new(sender: tokio::sync::mpsc::UnboundedSender<ToolBlockEvent>) -> Self {
         Self {
             answer_up_until_now: "".to_owned(),
             previous_answer_line_number: None,
@@ -355,12 +428,18 @@ impl ToolUseGenerator {
             question: None,
             result: None,
             tool_input_partial: None,
+            sender,
         }
     }
 
     fn flush_answer(&mut self) {
         self.answer_up_until_now.push_str("\n");
         self.process_answer();
+        if self.tool_input_partial.is_none() {
+            let _ = self.sender.clone().send(ToolBlockEvent::NoToolFound(
+                self.answer_up_until_now.to_owned(),
+            ));
+        }
     }
 
     fn add_delta(&mut self, delta: &str) {
@@ -407,36 +486,66 @@ impl ToolUseGenerator {
                             self.thinking.push_str("\n");
                             self.thinking.push_str(answer_line_at_index);
                         }
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ThinkingFull(self.thinking.to_owned()));
                     }
                 }
                 ToolBlockStatus::ToolUseFind => {
                     if answer_line_at_index == "<search_files>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::SearchFileContentWithRegex);
+                        let _ = self.sender.send(ToolBlockEvent::ToolFound(
+                            ToolType::SearchFileContentWithRegex,
+                        ));
                     } else if answer_line_at_index == "<code_edit_input>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::CodeEditing);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::CodeEditing));
                     } else if answer_line_at_index == "<list_files>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::ListFiles);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::ListFiles));
                     } else if answer_line_at_index == "<read_file>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::OpenFile);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::OpenFile));
                     } else if answer_line_at_index == "<get_diagnostics>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::FileDiagnostics);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::FileDiagnostics));
                     } else if answer_line_at_index == "<execute_command>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::TerminalCommand);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::TerminalCommand));
                     } else if answer_line_at_index == "<attempt_completion>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::AttemptCompletion);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::AttemptCompletion));
                     } else if answer_line_at_index == "<ask_followup_question>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::AskFollowupQuestions);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::AskFollowupQuestions));
                     } else if answer_line_at_index == "<repo_map_generation>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                         self.tool_type_possible = Some(ToolType::RepoMapGeneration);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::RepoMapGeneration));
                         // these are the ending condition over here
                         // we grab all the fields which are required and then return them back over here
                     }
@@ -575,6 +684,13 @@ impl ToolUseGenerator {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                     } else {
                         self.fs_file_path = Some(answer_line_at_index.to_owned());
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolParameters(ToolParameters {
+                                field_name: "fs_file_path".to_owned(),
+                                field_content_up_until_now: answer_line_at_index.to_owned(),
+                                field_content_delta: answer_line_at_index.to_owned(),
+                            }));
                     }
                 }
                 ToolBlockStatus::InstructionFound => {
@@ -583,7 +699,15 @@ impl ToolUseGenerator {
                     } else {
                         match self.instruction.clone() {
                             Some(instruction) => {
-                                self.instruction = Some(instruction + "\n" + answer_line_at_index);
+                                let new_instruction = instruction + "\n" + answer_line_at_index;
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "instruction".to_owned(),
+                                        field_content_up_until_now: new_instruction.clone(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                                self.instruction = Some(new_instruction);
                             }
                             None => self.instruction = Some(answer_line_at_index.to_owned()),
                         }
@@ -594,14 +718,28 @@ impl ToolUseGenerator {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                     } else {
                         self.directory_path = Some(answer_line_at_index.to_owned());
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolParameters(ToolParameters {
+                                field_name: "directory_path".to_owned(),
+                                field_content_up_until_now: answer_line_at_index.to_owned(),
+                                field_content_delta: answer_line_at_index.to_owned(),
+                            }));
                     }
                 }
                 ToolBlockStatus::RecursiveFound => {
                     if answer_line_at_index == "</recursive>" {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                     } else {
-                        self.recursive =
-                            Some(answer_line_at_index.parse::<bool>().unwrap_or(false));
+                        let recursive_value = answer_line_at_index.parse::<bool>().unwrap_or(false);
+                        self.recursive = Some(recursive_value);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolParameters(ToolParameters {
+                                field_name: "recursive".to_owned(),
+                                field_content_up_until_now: answer_line_at_index.to_owned(),
+                                field_content_delta: answer_line_at_index.to_owned(),
+                            }));
                     }
                 }
                 ToolBlockStatus::RegexPatternFound => {
@@ -610,11 +748,26 @@ impl ToolUseGenerator {
                     } else {
                         match self.regex_pattern_found.clone() {
                             Some(existing_pattern) => {
-                                self.regex_pattern_found =
-                                    Some(existing_pattern + "\n" + answer_line_at_index);
+                                let new_pattern =
+                                    existing_pattern.clone() + "\n" + answer_line_at_index;
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "regex_pattern".to_owned(),
+                                        field_content_up_until_now: new_pattern.clone(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                                self.regex_pattern_found = Some(new_pattern);
                             }
                             None => {
                                 self.regex_pattern_found = Some(answer_line_at_index.to_owned());
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "regex_pattern".to_owned(),
+                                        field_content_up_until_now: answer_line_at_index.to_owned(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
                             }
                         }
                     }
@@ -624,6 +777,13 @@ impl ToolUseGenerator {
                         self.tool_block_status = ToolBlockStatus::ToolFound;
                     } else {
                         self.file_pattern = Some(answer_line_at_index.to_owned());
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolParameters(ToolParameters {
+                                field_name: "file_pattern".to_owned(),
+                                field_content_up_until_now: answer_line_at_index.to_owned(),
+                                field_content_delta: answer_line_at_index.to_owned(),
+                            }));
                     }
                 }
                 ToolBlockStatus::CommandFound => {
@@ -632,9 +792,26 @@ impl ToolUseGenerator {
                     } else {
                         match self.command.clone() {
                             Some(command) => {
-                                self.command = Some(command + "\n" + answer_line_at_index);
+                                let new_command = command.clone() + "\n" + answer_line_at_index;
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "command".to_owned(),
+                                        field_content_up_until_now: new_command.clone(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                                self.command = Some(new_command);
                             }
-                            None => self.command = Some(answer_line_at_index.to_owned()),
+                            None => {
+                                self.command = Some(answer_line_at_index.to_owned());
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "command".to_owned(),
+                                        field_content_up_until_now: answer_line_at_index.to_owned(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                            }
                         }
                     }
                 }
@@ -644,9 +821,26 @@ impl ToolUseGenerator {
                     } else {
                         match self.question.clone() {
                             Some(question) => {
-                                self.question = Some(question + "\n" + answer_line_at_index);
+                                let new_question = question.clone() + "\n" + answer_line_at_index;
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "question".to_owned(),
+                                        field_content_up_until_now: new_question.clone(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                                self.question = Some(new_question);
                             }
-                            None => self.question = Some(answer_line_at_index.to_owned()),
+                            None => {
+                                self.question = Some(answer_line_at_index.to_owned());
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "question".to_owned(),
+                                        field_content_up_until_now: answer_line_at_index.to_owned(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                            }
                         }
                     }
                 }
@@ -656,9 +850,26 @@ impl ToolUseGenerator {
                     } else {
                         match self.result.clone() {
                             Some(result) => {
-                                self.result = Some(result + "\n" + answer_line_at_index);
+                                let new_result = result.clone() + "\n" + answer_line_at_index;
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "result".to_owned(),
+                                        field_content_up_until_now: new_result.clone(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                                self.result = Some(new_result);
                             }
-                            None => self.result = Some(answer_line_at_index.to_owned()),
+                            None => {
+                                self.result = Some(answer_line_at_index.to_owned());
+                                let _ = self.sender.send(ToolBlockEvent::ToolParameters(
+                                    ToolParameters {
+                                        field_name: "result".to_owned(),
+                                        field_content_up_until_now: answer_line_at_index.to_owned(),
+                                        field_content_delta: answer_line_at_index.to_owned(),
+                                    },
+                                ));
+                            }
                         }
                     }
                 }
@@ -694,7 +905,8 @@ trait\s+Tool\s*\{
 *.rs
 </file_pattern>
 </search_files>"#;
-        let mut tool_use_generator = ToolUseGenerator::new();
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut tool_use_generator = ToolUseGenerator::new(sender);
         tool_use_generator.add_delta(&input);
         tool_use_generator.flush_answer();
 

@@ -6,8 +6,9 @@ use std::collections::HashMap;
 
 use crate::{
     agentic::tool::{
-        code_symbol::models::anthropic::StepListItem, input::ToolInputPartial,
+        code_symbol::models::anthropic::StepListItem, input::ToolInputPartial, r#type::ToolType,
         ref_filter::ref_filter::Location, search::iterative::IterativeSearchEvent,
+        session::tool_use_agent::ToolParameters,
     },
     chunking::text_document::Range,
     user_context::types::VariableInformation,
@@ -671,6 +672,53 @@ impl UIEventWithID {
             })),
         }
     }
+
+    /// Sends over the tool thinking to the external world
+    pub fn tool_thinking(session_id: String, exchange_id: String, tool_thinking: String) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolThinking(ToolThinkingEvent {
+                thinking: tool_thinking,
+            })),
+        }
+    }
+
+    pub fn tool_not_found(session_id: String, exchange_id: String, full_output: String) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolNotFound(ToolNotFoundEvent {
+                full_output,
+            })),
+        }
+    }
+
+    pub fn tool_found(session_id: String, exchange_id: String, tool_type: ToolType) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolTypeFound(ToolTypeFoundEvent {
+                tool_type,
+            })),
+        }
+    }
+
+    pub fn tool_parameter_found(
+        session_id: String,
+        exchange_id: String,
+        tool_parameter_input: ToolParameters,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolParameterFound(
+                ToolParameterFoundEvent {
+                    tool_parameter_input,
+                },
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1212,6 +1260,30 @@ pub enum FrameworkEvent {
     ReferencesUsed(FrameworkReferencesUsed),
     TerminalCommand(TerminalCommandEvent),
     ToolUseDetected(ToolUseDetectedEvent),
+    ToolThinking(ToolThinkingEvent),
+    ToolNotFound(ToolNotFoundEvent),
+    ToolTypeFound(ToolTypeFoundEvent),
+    ToolParameterFound(ToolParameterFoundEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolParameterFoundEvent {
+    tool_parameter_input: ToolParameters,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolTypeFoundEvent {
+    tool_type: ToolType,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolNotFoundEvent {
+    full_output: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolThinkingEvent {
+    thinking: String,
 }
 
 #[derive(Debug, serde::Serialize)]

@@ -401,6 +401,7 @@ impl SessionService {
                     // ToolType::AskFollowupQuestions,
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
+                    ToolType::TerminalCommand,
                 ],
             )
         };
@@ -570,10 +571,12 @@ impl SessionService {
                             println!("LSP diagnostics: {:?}", diagnostics);
                             // figure out what do to with this, we should probably just gather all the diagnostics
                             // and pass it along as a user message
-                            let diagnostics_output = tool_box
-                                .grab_workspace_diagnostics(message_properties.clone())
-                                .await
-                                .expect("big expectation for diagnostics to never fail");
+                            let diagnostics_output = dbg!(
+                                tool_box
+                                    .grab_workspace_diagnostics(message_properties.clone())
+                                    .await
+                            )
+                            .expect("big expectation for diagnostics to never fail");
                             let diagnostics_grouped_by_file: DiagnosticMap = diagnostics_output
                                 .0
                                 .into_iter()

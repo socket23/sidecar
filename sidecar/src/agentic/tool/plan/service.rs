@@ -316,6 +316,9 @@ impl PlanService {
     }
 
     pub fn format_diagnostics(diagnostics: &DiagnosticMap) -> String {
+        if diagnostics.is_empty() {
+            return r#"I did not see errors, it could be that the Language Server is not configured or I found no mistakes, you can ask me to look elsewhere if you think I can grab the diagnostics from somewhere else"#.to_owned();
+        }
         diagnostics
             .iter()
             .map(|(file, errors)| {

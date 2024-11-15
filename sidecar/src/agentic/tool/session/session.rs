@@ -931,7 +931,7 @@ impl Session {
         parent_exchange_id: String,
         tool_use_agent: ToolUseAgent,
         message_properties: SymbolEventMessageProperties,
-    ) -> AgentToolUseOutput {
+    ) -> Result<AgentToolUseOutput, SymbolError> {
         // figure out what to do over here given the state of the session
         let mut converted_messages = vec![];
         for previous_message in self.exchanges.iter() {
@@ -942,6 +942,12 @@ impl Session {
             );
         }
 
+        // grab the terminal output if anything is present and pass it as part of the
+        // agent input
+        let pending_spawned_process_output = tool_box
+            .grab_pending_subprocess_output(message_properties.clone())
+            .await?;
+
         // Now we can create the input for the tool use agent
         let tool_use_agent_input = ToolUseAgentInput::new(
             converted_messages,
@@ -950,6 +956,7 @@ impl Session {
                 .into_iter()
                 .filter_map(|tool_type| tool_box.tools().get_tool_description(&tool_type))
                 .collect(),
+            pending_spawned_process_output,
             message_properties.clone(),
         );
 
@@ -975,12 +982,12 @@ impl Session {
                     tool_type,
                     thinking,
                 ));
-                AgentToolUseOutput::Success((tool_input_partial, self))
+                Ok(AgentToolUseOutput::Success((tool_input_partial, self)))
             }
             Ok(ToolUseAgentOutput::Failure(input_string)) => {
-                AgentToolUseOutput::Failed(input_string)
+                Ok(AgentToolUseOutput::Failed(input_string))
             }
-            Err(_e) => AgentToolUseOutput::Cancelled,
+            Err(_e) => Ok(AgentToolUseOutput::Cancelled),
         }
     }
 

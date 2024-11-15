@@ -457,7 +457,7 @@ impl SessionService {
                     tool_agent.clone(),
                     message_properties.clone(),
                 )
-                .await;
+                .await?;
 
             match tool_use_output {
                 AgentToolUseOutput::Success((tool_input_partial, new_session)) => {

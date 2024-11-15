@@ -139,6 +139,8 @@ pub enum ToolType {
     AttemptCompletion,
     // Repo map for a sub-directory
     RepoMapGeneration,
+    // Sub-process spawned pending output
+    SubProcessSpawnedPendingOutput,
 }
 
 impl std::fmt::Display for ToolType {
@@ -232,6 +234,9 @@ impl std::fmt::Display for ToolType {
             ToolType::AskFollowupQuestions => write!(f, "Ask followup questions"),
             ToolType::AttemptCompletion => write!(f, "Attempt completion"),
             ToolType::RepoMapGeneration => write!(f, "Repo map generation"),
+            ToolType::SubProcessSpawnedPendingOutput => {
+                write!(f, "Sub process spawned pending output")
+            }
         }
     }
 }

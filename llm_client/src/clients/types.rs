@@ -403,6 +403,10 @@ impl LLMClientMessage {
     pub fn is_cache_point(&self) -> bool {
         self.cache_point
     }
+
+    pub fn is_human_message(&self) -> bool {
+        matches!(self.role(), &LLMClientRole::User)
+    }
 }
 
 #[derive(Clone, Debug)]

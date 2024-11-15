@@ -38,6 +38,7 @@ pub struct ToolUseAgentInput {
     // pass in the messages
     session_messages: Vec<SessionChatMessage>,
     tool_descriptions: Vec<String>,
+    pending_spawned_process_output: Option<String>,
     symbol_event_message_properties: SymbolEventMessageProperties,
 }
 
@@ -45,11 +46,13 @@ impl ToolUseAgentInput {
     pub fn new(
         session_messages: Vec<SessionChatMessage>,
         tool_descriptions: Vec<String>,
+        pending_spawned_process_output: Option<String>,
         symbol_event_message_properties: SymbolEventMessageProperties,
     ) -> Self {
         Self {
             session_messages,
             tool_descriptions,
+            pending_spawned_process_output,
             symbol_event_message_properties,
         }
     }
@@ -163,6 +166,7 @@ RULES
 - Your current working directory is: {working_directory}
 - You cannot \`cd\` into a different directory to complete a task. You are stuck operating from '{working_directory}', so be sure to pass in the correct 'path' parameter when using tools that require a path.
 - Do not use the ~ character or $HOME to refer to the home directory.
+- If you have executed some terminal commands before which are long running, the user will show you that output in <executed_terminal_output></executed_terminal_output> section. This way you can stay on top of long running commands or in case you missed the output from before.
 - Before using the execute_command tool, you must first think about the SYSTEM INFORMATION context provided to understand the user's environment and tailor your commands to ensure they are compatible with their system. You must also consider if the command you need to run should be executed in a specific directory outside of the current working directory {working_directory}, and if so prepend with \`cd\`'ing into that directory && then executing the command (as one command since you are stuck operating from {working_directory}. You can only run commands in the {working_directory} you are not allowed to run commands outside of this directory.
 - When using the search_files tool, craft your regex patterns carefully to balance specificity and flexibility. Based on the user's task you may use it to find code patterns, TODO comments, function definitions, or any text-based information across the project. The results include context, so analyze the surrounding code to better understand the matches. Leverage the search_files tool in combination with other tools for more comprehensive analysis. For example, use it to find specific code patterns, then use read_file to examine the full context of interesting matches before using write_to_file to make informed changes.
 - When creating a new project (such as an app, website, or any software project), organize all new files within a dedicated project directory unless the user specifies otherwise. Use appropriate file paths when writing files, as the write_to_file tool will automatically create any necessary directories. Structure the project logically, adhering to best practices for the specific type of project being created. Unless otherwise specified, new projects should be easily run without additional setup, for example most projects can be built in HTML, CSS, and JavaScript - which you can open in a browser.
@@ -217,17 +221,43 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
             .symbol_event_message_properties
             .llm_properties()
             .clone();
-        let previous_messages = input.session_messages.into_iter().map(|session_message| {
-            let role = session_message.role();
-            match role {
-                SessionChatRole::User => {
-                    LLMClientMessage::user(session_message.message().to_owned())
+        let mut previous_messages = input
+            .session_messages
+            .into_iter()
+            .map(|session_message| {
+                let role = session_message.role();
+                match role {
+                    SessionChatRole::User => {
+                        LLMClientMessage::user(session_message.message().to_owned())
+                    }
+                    SessionChatRole::Assistant => {
+                        LLMClientMessage::assistant(session_message.message().to_owned())
+                    }
                 }
-                SessionChatRole::Assistant => {
-                    LLMClientMessage::assistant(session_message.message().to_owned())
-                }
+            })
+            .collect::<Vec<_>>();
+
+        // we want to modify 2 things here, the last user message and the one before
+        // should be cached as well
+        previous_messages.last_mut().map(|previous_message| {
+            if previous_message.is_human_message() {
+                previous_message.is_cache_point();
             }
         });
+        if previous_messages
+            .last()
+            .map(|last_message| last_message.is_human_message())
+            .unwrap_or_default()
+        {
+            if let Some(pending_spawned_process_output) = input.pending_spawned_process_output {
+                previous_messages.push(LLMClientMessage::user(format!(
+                    r#"<executed_terminal_output>
+{}
+</executed_terminal_output>"#,
+                    pending_spawned_process_output
+                )));
+            }
+        }
         let root_request_id = input
             .symbol_event_message_properties
             .root_request_id()

@@ -48,6 +48,7 @@ use super::{
         open_file::OpenFileResponse,
         quick_fix::{GetQuickFixResponse, LSPQuickFixInvocationResponse},
         search_file::SearchFileContentWithRegexOutput,
+        subprocess_spawned_output::SubProcessSpanwedPendingOutputResponse,
         undo_changes::UndoChangesMadeDuringExchangeRespnose,
     },
     plan::{generator::StepGeneratorResponse, reasoning::ReasoningResponse},
@@ -214,9 +215,17 @@ pub enum ToolOutput {
     AttemptCompletion(AttemptCompletionClientResponse),
     // Repo map generation response
     RepoMapGeneration(RepoMapGeneratorResponse),
+    // spawned subprocess and their output which is pending
+    SubProcessSpawnedPendingOutput(SubProcessSpanwedPendingOutputResponse),
 }
 
 impl ToolOutput {
+    pub fn sub_process_spawned_pending_output(
+        response: SubProcessSpanwedPendingOutputResponse,
+    ) -> Self {
+        ToolOutput::SubProcessSpawnedPendingOutput(response)
+    }
+
     pub fn repo_map_generation_reponse(response: RepoMapGeneratorResponse) -> Self {
         ToolOutput::RepoMapGeneration(response)
     }
@@ -836,6 +845,15 @@ impl ToolOutput {
     pub fn repo_map_generator_response(self) -> Option<RepoMapGeneratorResponse> {
         match self {
             ToolOutput::RepoMapGeneration(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_pending_spawned_process_output(
+        self,
+    ) -> Option<SubProcessSpanwedPendingOutputResponse> {
+        match self {
+            ToolOutput::SubProcessSpawnedPendingOutput(response) => Some(response),
             _ => None,
         }
     }

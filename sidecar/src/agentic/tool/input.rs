@@ -54,6 +54,7 @@ use super::{
         open_file::{OpenFileRequest, OpenFileRequestPartial},
         quick_fix::{GetQuickFixRequest, LSPQuickFixInvocationRequest},
         search_file::{SearchFileContentInput, SearchFileContentInputPartial},
+        subprocess_spawned_output::SubProcessSpawnedPendingOutputRequest,
         undo_changes::UndoChangesMadeDuringExchangeRequest,
     },
     plan::{
@@ -233,6 +234,8 @@ pub enum ToolInput {
     AttemptCompletion(AttemptCompletionClientRequest),
     // Generates the repo map
     RepoMapGeneration(RepoMapGeneratorRequest),
+    // Sub process generation input
+    SubProcessSpawnedPendingOutput(SubProcessSpawnedPendingOutputRequest),
 }
 
 impl ToolInput {
@@ -315,6 +318,21 @@ impl ToolInput {
             ToolInput::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
             ToolInput::AttemptCompletion(_) => ToolType::AttemptCompletion,
             ToolInput::RepoMapGeneration(_) => ToolType::RepoMapGeneration,
+            ToolInput::SubProcessSpawnedPendingOutput(_) => {
+                ToolType::SubProcessSpawnedPendingOutput
+            }
+        }
+    }
+
+    pub fn is_subprocess_spawn_pending_output(
+        self,
+    ) -> Result<SubProcessSpawnedPendingOutputRequest, ToolError> {
+        if let ToolInput::SubProcessSpawnedPendingOutput(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(
+                ToolType::SubProcessSpawnedPendingOutput,
+            ))
         }
     }
 

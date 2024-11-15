@@ -99,6 +99,7 @@ use crate::agentic::tool::lsp::quick_fix::{
     GetQuickFixRequest, GetQuickFixResponse, LSPQuickFixInvocationRequest,
     LSPQuickFixInvocationResponse,
 };
+use crate::agentic::tool::lsp::subprocess_spawned_output::SubProcessSpawnedPendingOutputRequest;
 use crate::agentic::tool::lsp::undo_changes::UndoChangesMadeDuringExchangeRequest;
 use crate::agentic::tool::plan::add_steps::PlanAddRequest;
 use crate::agentic::tool::plan::generator::{StepGeneratorRequest, StepSenderEvent};
@@ -10266,5 +10267,11 @@ FILEPATH: {fs_file_path}
             .get_undo_changes_made_during_session()
             .ok_or(SymbolError::WrongToolOutput)?;
         Ok(response.is_success())
+    }
+
+    pub async fn grab_pending_subprocess_output(&self, message_properties: SymbolEventMessageProperties) -> Result<Option<String>, SymbolError> {
+        let tool_input = ToolInput::SubProcessSpawnedPendingOutput(SubProcessSpawnedPendingOutputRequest::with_editor_url(message_properties.editor_url()));
+        let response = self.tools.invoke(tool_input).await.map_err(|e| SymbolError::ToolError(e))?.get_pending_spawned_process_output().ok_or(SymbolError::WrongToolOutput)?;
+        Ok(response.output())
     }
 }

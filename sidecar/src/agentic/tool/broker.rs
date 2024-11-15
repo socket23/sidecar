@@ -50,6 +50,7 @@ use super::{
         open_file::LSPOpenFile,
         quick_fix::{LSPQuickFixClient, LSPQuickFixInvocationClient},
         search_file::SearchFileContentClient,
+        subprocess_spawned_output::SubProcessSpawnedPendingOutputClient,
         undo_changes::UndoChangesMadeDuringExchange,
     },
     output::ToolOutput,
@@ -461,6 +462,10 @@ impl ToolBroker {
         tools.insert(
             ToolType::RepoMapGeneration,
             Box::new(RepoMapGeneratorClient::new()),
+        );
+        tools.insert(
+            ToolType::SubProcessSpawnedPendingOutput,
+            Box::new(SubProcessSpawnedPendingOutputClient::new()),
         );
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }

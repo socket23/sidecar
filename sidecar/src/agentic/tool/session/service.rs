@@ -401,6 +401,7 @@ impl SessionService {
                     // ToolType::AskFollowupQuestions,
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
+                    ToolType::TerminalCommand,
                 ],
             )
         };

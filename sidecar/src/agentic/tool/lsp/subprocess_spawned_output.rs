@@ -36,6 +36,14 @@ pub struct SubProcessSpawnedPendingOutputClient {
     client: reqwest::Client,
 }
 
+impl SubProcessSpawnedPendingOutputClient {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+}
+
 #[async_trait]
 impl Tool for SubProcessSpawnedPendingOutputClient {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError> {

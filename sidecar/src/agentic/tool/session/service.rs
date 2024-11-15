@@ -446,18 +446,20 @@ impl SessionService {
             self.track_exchange(&session_id, &tool_exchange_id, cancellation_token.clone())
                 .await;
 
-            let tool_use_output = session
-                // the clone here is pretty bad but its the easiest and the sanest
-                // way to keep things on the happy path
-                .clone()
-                .get_tool_to_use(
-                    tool_box.clone(),
-                    tool_exchange_id,
-                    exchange_id.to_owned(),
-                    tool_agent.clone(),
-                    message_properties.clone(),
-                )
-                .await?;
+            let tool_use_output = dbg!(
+                session
+                    // the clone here is pretty bad but its the easiest and the sanest
+                    // way to keep things on the happy path
+                    .clone()
+                    .get_tool_to_use(
+                        tool_box.clone(),
+                        tool_exchange_id,
+                        exchange_id.to_owned(),
+                        tool_agent.clone(),
+                        message_properties.clone(),
+                    )
+                    .await
+            )?;
 
             match tool_use_output {
                 AgentToolUseOutput::Success((tool_input_partial, new_session)) => {

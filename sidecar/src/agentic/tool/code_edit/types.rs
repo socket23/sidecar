@@ -482,7 +482,7 @@ Edit a file. The tool is able to edit the file precisely based on instruction. I
         format!(
             r#"Parameters: 
 - fs_file_path: (required) The absolute path of the file to write to.
-- instruction: (required) The edit instruction.
+- instruction: (required) The edit instruction, if you are going to output code blocks make sure they are properly placed in ```{{language}} blocks so we can present them properly to the user. Only given instructions here which are concise and contain the relevant changes, do not be verbose.
 
 Usage:
 <code_edit_input>

@@ -407,6 +407,15 @@ impl LLMClientMessage {
     pub fn is_human_message(&self) -> bool {
         matches!(self.role(), &LLMClientRole::User)
     }
+
+    pub fn is_system_message(&self) -> bool {
+        matches!(self.role(), &LLMClientRole::System)
+    }
+
+    pub fn set_role(mut self, role: LLMClientRole) -> Self {
+        self.role = role;
+        self
+    }
 }
 
 #[derive(Clone, Debug)]

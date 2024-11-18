@@ -25,16 +25,22 @@ use crate::{
         },
         tool::{
             broker::ToolBroker,
+            helpers::diff_recent_changes::DiffFileContent,
             input::{ToolInput, ToolInputPartial},
-            lsp::file_diagnostics::DiagnosticMap,
+            lsp::{
+                file_diagnostics::DiagnosticMap, open_file::OpenFileRequest,
+                search_file::SearchFileContentInput,
+            },
             plan::{
                 generator::{Step, StepSenderEvent},
                 service::PlanService,
             },
             r#type::{Tool, ToolType},
+            repo_map::generator::RepoMapGeneratorRequest,
+            terminal::terminal::TerminalInput,
         },
     },
-    chunking::text_document::Range,
+    chunking::text_document::{Position, Range},
     repo::types::RepoRef,
     user_context::types::UserContext,
 };
@@ -95,6 +101,7 @@ pub enum ExchangeType {
     // as well
     Edit(ExchangeTypeEdit),
     Plan(ExchangeTypePlan),
+    ToolOutput(ExchangeTypeToolOutput),
 }
 
 // TODO(codestory): The user is probably going to add more context over here as they
@@ -140,6 +147,30 @@ pub struct ExchangeTypeHuman {
     user_context: UserContext,
     project_labels: Vec<String>,
     repo_ref: RepoRef,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExchangeTypeToolOutput {
+    tool_type: ToolType,
+    output: String,
+    exchange_id: String,
+    user_context: UserContext,
+}
+
+impl ExchangeTypeToolOutput {
+    pub fn new(
+        tool_type: ToolType,
+        output: String,
+        exchange_id: String,
+        user_context: UserContext,
+    ) -> Self {
+        Self {
+            tool_type,
+            output,
+            exchange_id,
+            user_context,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -391,6 +422,24 @@ impl Exchange {
         }
     }
 
+    fn tool_output(
+        exchange_id: String,
+        tool_type: ToolType,
+        output: String,
+        user_context: UserContext,
+    ) -> Self {
+        Self {
+            exchange_id: exchange_id.to_owned(),
+            exchange_type: ExchangeType::ToolOutput(ExchangeTypeToolOutput::new(
+                tool_type,
+                output,
+                exchange_id.clone(),
+                user_context,
+            )),
+            exchange_state: ExchangeState::Running,
+        }
+    }
+
     fn set_completion_status(mut self, accetped: bool) -> Self {
         if accetped {
             self.exchange_state = ExchangeState::Accepted;
@@ -509,6 +558,11 @@ impl Exchange {
                     }
                 }
             }
+            ExchangeType::ToolOutput(ref tool_output) => SessionChatMessage::user(format!(
+                "Tool Output ({}): {}",
+                tool_output.tool_type.to_string(),
+                tool_output.output
+            )),
             ExchangeType::Plan(ref plan) => {
                 let user_query = &plan.query;
                 SessionChatMessage::user(format!(
@@ -718,6 +772,22 @@ impl Session {
             fs_file_path,
             file_content_in_selection,
         );
+        self.exchanges.push(exchange);
+        self
+    }
+
+    pub fn tool_output(
+        mut self,
+        exchange_id: &str,
+        tool_type: ToolType,
+        output: String,
+        user_context: UserContext,
+    ) -> Self {
+        self.global_running_user_context = self
+            .global_running_user_context
+            .merge_user_context(user_context.clone());
+        let exchange =
+            Exchange::tool_output(exchange_id.to_owned(), tool_type, output, user_context);
         self.exchanges.push(exchange);
         self
     }
@@ -1053,6 +1123,9 @@ impl Session {
                 todo!("figure out what to do over here")
             }
             ExchangeType::Plan(_plan) => {
+                todo!("figure out what to do over here")
+            }
+            ExchangeType::ToolOutput(_tool_output) => {
                 todo!("figure out what to do over here")
             }
         }
@@ -1941,6 +2014,337 @@ impl Session {
             }
         }
         self
+    }
+
+    pub async fn invoke_tool(
+        mut self,
+        tool_type: ToolType,
+        tool_input_partial: ToolInputPartial,
+        tool_box: Arc<ToolBox>,
+        mut message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        // we want to send a new event only when we are not going to ask for the followup questions
+        // we might have generated a new exchange id over here if we are going to be working
+        // on top of any tool which does not require user feedback
+        let exchange_id = if !matches!(tool_type, ToolType::AskFollowupQuestions)
+            && !matches!(tool_type, ToolType::AttemptCompletion)
+        {
+            let new_exchange_id = tool_box
+                .create_new_exchange(
+                    message_properties.root_request_id().to_owned(),
+                    message_properties.clone(),
+                )
+                .await?;
+            message_properties = message_properties.set_request_id(new_exchange_id.to_owned());
+            let session_id = message_properties.root_request_id().to_owned();
+            let exchange_id = message_properties.request_id_str().to_owned();
+            let _ = message_properties
+                .ui_sender()
+                .send(UIEventWithID::tool_output_type_found(
+                    session_id.to_owned(),
+                    exchange_id.to_owned(),
+                    tool_type.clone(),
+                ));
+            new_exchange_id
+        } else {
+            message_properties.request_id_str().to_owned()
+        };
+        match tool_input_partial {
+            ToolInputPartial::AskFollowupQuestions(_followup_question) => {
+                // this waits for the user-feedback so we do not need to react or
+                // do anything after this
+            }
+            ToolInputPartial::AttemptCompletion(attempt_completion) => {
+                println!("LLM reached a stop condition");
+                println!("{:?}", &attempt_completion);
+                // no need to send anything when we are attempting completion since we are done
+                // over here with the tool use itself
+                // figure out what to do over here
+            }
+            ToolInputPartial::CodeEditing(code_editing) => {
+                let fs_file_path = code_editing.fs_file_path().to_owned();
+                println!("Code editing: {}", fs_file_path);
+                let file_contents = tool_box
+                    .file_open(fs_file_path.to_owned(), message_properties.clone())
+                    .await?
+                    .contents();
+
+                let instruction = code_editing.instruction().to_owned();
+
+                // keep track of the file content which we are about to modify over here
+                let old_file_content = tool_box
+                    .file_open(fs_file_path.to_owned(), message_properties.clone())
+                    .await;
+
+                let default_range =
+            // very large end position
+                Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
+
+                let symbol_to_edit = SymbolToEdit::new(
+                    fs_file_path.to_owned(),
+                    default_range,
+                    fs_file_path.to_owned(),
+                    vec![instruction.clone()],
+                    false,
+                    false, // is_new
+                    false,
+                    "".to_owned(),
+                    None,
+                    false,
+                    None,
+                    false,
+                    None,
+                    vec![], // previous_user_queries
+                    None,
+                );
+
+                let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
+
+                let _response = tool_box
+                    .code_editing_with_search_and_replace(
+                        &symbol_to_edit,
+                        &fs_file_path,
+                        &file_contents,
+                        &default_range,
+                        "".to_owned(),
+                        instruction.clone(),
+                        &symbol_identifier,
+                        None,
+                        None,
+                        message_properties.clone(),
+                    )
+                    .await?; // big expectations but can also fail, we should handle it properly
+
+                // now that we have modified the file we can ask the editor for the git-diff of this file over here
+                // and we also have the previous state over here
+                let diff_changes = tool_box
+                    .recently_edited_files_with_content(
+                        vec![fs_file_path.to_owned()].into_iter().collect(),
+                        match old_file_content {
+                            Ok(old_file_content) => {
+                                vec![DiffFileContent::new(
+                                    fs_file_path.to_owned(),
+                                    old_file_content.contents(),
+                                )]
+                            }
+                            Err(_) => vec![],
+                        },
+                        message_properties.clone(),
+                    )
+                    .await?;
+
+                // we need to take the L1 level changes here since those are the ones we are interested in and then add
+                // that as a human message over here
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    format!(
+                        r#"I performed the edits which you asked for, here is the git diff for it:
+{}"#,
+                        diff_changes.l1_changes()
+                    ),
+                    UserContext::default(),
+                );
+            }
+            ToolInputPartial::LSPDiagnostics(diagnostics) => {
+                println!("LSP diagnostics: {:?}", diagnostics);
+                // figure out what do to with this, we should probably just gather all the diagnostics
+                // and pass it along as a user message
+                let diagnostics_output = dbg!(
+                    tool_box
+                        .grab_workspace_diagnostics(message_properties.clone())
+                        .await
+                )
+                .expect("big expectation for diagnostics to never fail");
+                let diagnostics_grouped_by_file: DiagnosticMap = diagnostics_output
+                    .0
+                    .into_iter()
+                    .fold(HashMap::new(), |mut acc, error| {
+                        acc.entry(error.fs_file_path().to_owned())
+                            .or_insert_with(Vec::new)
+                            .push(error);
+                        acc
+                    });
+
+                let formatted_diagnostics =
+                    PlanService::format_diagnostics(&diagnostics_grouped_by_file);
+
+                // send an update over here
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_output_delta_response(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                            "".to_owned(),
+                            formatted_diagnostics.to_owned(),
+                        ));
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    formatted_diagnostics,
+                    UserContext::default(),
+                );
+            }
+            ToolInputPartial::ListFiles(list_files) => {
+                println!("list files: {}", list_files.directory_path());
+                let input = ToolInput::ListFiles(list_files);
+                let response = tool_box
+                    .tools()
+                    .invoke(input)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?;
+                let list_files_output = response
+                    .get_list_files_directory()
+                    .ok_or(SymbolError::WrongToolOutput)?;
+                let response = list_files_output
+                    .files()
+                    .into_iter()
+                    .map(|file_path| file_path.to_string_lossy().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_output_delta_response(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                            "".to_owned(),
+                            response.to_owned(),
+                        ));
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    response,
+                    UserContext::default(),
+                );
+            }
+            ToolInputPartial::OpenFile(open_file) => {
+                println!("open file: {}", open_file.fs_file_path());
+                let open_file_path = open_file.fs_file_path().to_owned();
+                let request = OpenFileRequest::new(open_file_path, message_properties.editor_url());
+                let input = ToolInput::OpenFile(request);
+                let response = tool_box
+                    .tools()
+                    .invoke(input)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?
+                    .get_file_open_response()
+                    .ok_or(SymbolError::WrongToolOutput)?
+                    .to_string();
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_output_delta_response(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                            "".to_owned(),
+                            response.to_owned(),
+                        ));
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    response,
+                    UserContext::default(),
+                );
+            }
+            ToolInputPartial::SearchFileContentWithRegex(search_file) => {
+                println!("search file: {}", search_file.directory_path());
+                let request = SearchFileContentInput::new(
+                    search_file.directory_path().to_owned(),
+                    search_file.regex_pattern().to_owned(),
+                    search_file.file_pattern().map(|s| s.to_owned()),
+                    message_properties.editor_url(),
+                );
+                let input = ToolInput::SearchFileContentWithRegex(request);
+                let response = tool_box
+                    .tools()
+                    .invoke(input)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?
+                    .get_search_file_content_with_regex()
+                    .ok_or(SymbolError::WrongToolOutput)?;
+                let response = response.response();
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_output_delta_response(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                            "".to_owned(),
+                            response.to_owned(),
+                        ));
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    response.to_owned(),
+                    UserContext::default(),
+                );
+            }
+            ToolInputPartial::TerminalCommand(terminal_command) => {
+                println!("terminal command: {}", terminal_command.command());
+                let command = terminal_command.command().to_owned();
+                let request = TerminalInput::new(command, message_properties.editor_url());
+                let input = ToolInput::TerminalCommand(request);
+                let tool_output = tool_box
+                    .tools()
+                    .invoke(input)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?
+                    .terminal_command()
+                    .ok_or(SymbolError::WrongToolOutput)?;
+                let output = tool_output.output().to_owned();
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_output_delta_response(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                            "".to_owned(),
+                            output.to_owned(),
+                        ));
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    output,
+                    UserContext::default(),
+                );
+            }
+            ToolInputPartial::RepoMapGeneration(repo_map_request) => {
+                println!(
+                    "repo map generation request: {}",
+                    repo_map_request.to_string()
+                );
+                let request = ToolInput::RepoMapGeneration(RepoMapGeneratorRequest::new(
+                    repo_map_request.directory_path().to_owned(),
+                    3000,
+                ));
+                let tool_output = tool_box
+                    .tools()
+                    .invoke(request)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?
+                    .repo_map_generator_response()
+                    .ok_or(SymbolError::WrongToolOutput)?;
+                let repo_map_str = tool_output.repo_map().to_owned();
+                let _ =
+                    message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_output_delta_response(
+                            message_properties.root_request_id().to_owned(),
+                            message_properties.request_id_str().to_owned(),
+                            "".to_owned(),
+                            repo_map_str.to_owned(),
+                        ));
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    repo_map_str.to_owned(),
+                    UserContext::default(),
+                );
+            }
+        }
+        Ok(self)
     }
 
     async fn save_to_storage(&self) -> Result<(), SymbolError> {

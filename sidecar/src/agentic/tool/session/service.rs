@@ -9,30 +9,17 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     agentic::{
         symbol::{
-            errors::SymbolError,
-            events::{edit::SymbolToEdit, message_event::SymbolEventMessageProperties},
-            identifier::SymbolIdentifier,
-            manager::SymbolManager,
-            scratch_pad::ScratchPadAgent,
-            tool_box::ToolBox,
+            errors::SymbolError, events::message_event::SymbolEventMessageProperties,
+            manager::SymbolManager, scratch_pad::ScratchPadAgent, tool_box::ToolBox,
             ui_event::UIEventWithID,
         },
         tool::{
-            broker::ToolBroker,
-            helpers::diff_recent_changes::DiffFileContent,
-            input::{ToolInput, ToolInputPartial},
-            lsp::{
-                file_diagnostics::DiagnosticMap, open_file::OpenFileRequest,
-                search_file::SearchFileContentInput,
-            },
             plan::service::PlanService,
-            r#type::{Tool, ToolType},
-            repo_map::generator::RepoMapGeneratorRequest,
+            r#type::ToolType,
             session::{session::AgentToolUseOutput, tool_use_agent::ToolUseAgent},
-            terminal::terminal::TerminalInput,
         },
     },
-    chunking::text_document::{Position, Range},
+    chunking::text_document::Range,
     repo::types::RepoRef,
     user_context::types::UserContext,
 };
@@ -373,7 +360,6 @@ impl SessionService {
         repo_ref: RepoRef,
         root_directory: String,
         tool_box: Arc<ToolBox>,
-        tool_broker: Arc<ToolBroker>,
         llm_broker: Arc<LLMBroker>,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
@@ -398,7 +384,7 @@ impl SessionService {
                     ToolType::CodeEditing,
                     ToolType::LSPDiagnostics,
                     // disable for testing
-                    // ToolType::AskFollowupQuestions,
+                    ToolType::AskFollowupQuestions,
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
                     ToolType::TerminalCommand,
@@ -446,20 +432,18 @@ impl SessionService {
             self.track_exchange(&session_id, &tool_exchange_id, cancellation_token.clone())
                 .await;
 
-            let tool_use_output = dbg!(
-                session
-                    // the clone here is pretty bad but its the easiest and the sanest
-                    // way to keep things on the happy path
-                    .clone()
-                    .get_tool_to_use(
-                        tool_box.clone(),
-                        tool_exchange_id,
-                        exchange_id.to_owned(),
-                        tool_agent.clone(),
-                        message_properties.clone(),
-                    )
-                    .await
-            )?;
+            let tool_use_output = session
+                // the clone here is pretty bad but its the easiest and the sanest
+                // way to keep things on the happy path
+                .clone()
+                .get_tool_to_use(
+                    tool_box.clone(),
+                    tool_exchange_id,
+                    exchange_id.to_owned(),
+                    tool_agent.clone(),
+                    message_properties.clone(),
+                )
+                .await?;
 
             match tool_use_output {
                 AgentToolUseOutput::Success((tool_input_partial, new_session)) => {
@@ -467,264 +451,25 @@ impl SessionService {
                     session = new_session;
                     // store to disk
                     let _ = self.save_to_storage(&session).await;
-                    // execute the partial tool input and get the final output here
-                    match tool_input_partial {
-                        ToolInputPartial::AskFollowupQuestions(followup_question) => {
-                            println!("Ask followup question: {}", followup_question.question());
-                            let input = ToolInput::AskFollowupQuestions(followup_question);
-                            let response = tool_broker.invoke(input).await;
-                            println!("response: {:?}", response);
-                        }
-                        ToolInputPartial::AttemptCompletion(attempt_completion) => {
-                            println!("LLM reached a stop condition");
-                            println!("{:?}", &attempt_completion);
-                            break;
-                        }
-                        ToolInputPartial::CodeEditing(code_editing) => {
-                            let fs_file_path = code_editing.fs_file_path().to_owned();
-                            println!("Code editing: {}", fs_file_path);
-                            let file_contents = tool_box
-                                .file_open(fs_file_path.to_owned(), message_properties.clone())
-                                .await
-                                .expect("file_contents to work")
-                                .contents();
+                    let tool_type = tool_input_partial.to_tool_type();
+                    session = session
+                        .invoke_tool(
+                            tool_type.clone(),
+                            tool_input_partial,
+                            tool_box.clone(),
+                            message_properties.clone(),
+                        )
+                        .await?;
 
-                            let instruction = code_editing.instruction().to_owned();
-
-                            // keep track of the file content which we are about to modify over here
-                            let old_file_content = self
-                                .tool_box
-                                .file_open(fs_file_path.to_owned(), message_properties.clone())
-                                .await;
-
-                            let default_range =
-                            // very large end position
-                                Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
-
-                            let symbol_to_edit = SymbolToEdit::new(
-                                fs_file_path.to_owned(),
-                                default_range,
-                                fs_file_path.to_owned(),
-                                vec![instruction.clone()],
-                                false,
-                                false, // is_new
-                                false,
-                                "".to_owned(),
-                                None,
-                                false,
-                                None,
-                                false,
-                                None,
-                                vec![], // previous_user_queries
-                                None,
-                            );
-
-                            let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
-
-                            let response = tool_box
-                                .code_editing_with_search_and_replace(
-                                    &symbol_to_edit,
-                                    &fs_file_path,
-                                    &file_contents,
-                                    &default_range,
-                                    "".to_owned(),
-                                    instruction.clone(),
-                                    &symbol_identifier,
-                                    None,
-                                    None,
-                                    message_properties.clone(),
-                                )
-                                .await
-                                .expect("to work"); // big expectations but can also fail, we should handle it properly
-
-                            // now that we have modified the file we can ask the editor for the git-diff of this file over here
-                            // and we also have the previous state over here
-                            let diff_changes = self
-                                .tool_box
-                                .recently_edited_files_with_content(
-                                    vec![fs_file_path.to_owned()].into_iter().collect(),
-                                    match old_file_content {
-                                        Ok(old_file_content) => {
-                                            vec![DiffFileContent::new(
-                                                fs_file_path.to_owned(),
-                                                old_file_content.contents(),
-                                            )]
-                                        }
-                                        Err(_) => vec![],
-                                    },
-                                    message_properties.clone(),
-                                )
-                                .await?;
-
-                            // we need to take the L1 level changes here since those are the ones we are interested in and then add
-                            // that as a human message over here
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                format!(r#"I performed the edits which you asked for, here is the git diff for it:
-{}"#, diff_changes.l1_changes()),
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                            println!("response: {:?}", response);
-                        }
-                        ToolInputPartial::LSPDiagnostics(diagnostics) => {
-                            println!("LSP diagnostics: {:?}", diagnostics);
-                            // figure out what do to with this, we should probably just gather all the diagnostics
-                            // and pass it along as a user message
-                            let diagnostics_output = dbg!(
-                                tool_box
-                                    .grab_workspace_diagnostics(message_properties.clone())
-                                    .await
-                            )
-                            .expect("big expectation for diagnostics to never fail");
-                            let diagnostics_grouped_by_file: DiagnosticMap = diagnostics_output
-                                .0
-                                .into_iter()
-                                .fold(HashMap::new(), |mut acc, error| {
-                                    acc.entry(error.fs_file_path().to_owned())
-                                        .or_insert_with(Vec::new)
-                                        .push(error);
-                                    acc
-                                });
-
-                            let formatted_diagnostics =
-                                PlanService::format_diagnostics(&diagnostics_grouped_by_file);
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                formatted_diagnostics,
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                        }
-                        ToolInputPartial::ListFiles(list_files) => {
-                            println!("list files: {}", list_files.directory_path());
-                            let input = ToolInput::ListFiles(list_files);
-                            let response = tool_broker.invoke(input).await;
-                            let list_files_output = response
-                                .expect("to work")
-                                .get_list_files_directory()
-                                .expect("to work");
-                            let response = list_files_output
-                                .files()
-                                .into_iter()
-                                .map(|file_path| file_path.to_string_lossy().to_string())
-                                .collect::<Vec<_>>()
-                                .join("\n");
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                response.to_owned(),
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                            println!("response: {:?}", response);
-                        }
-                        ToolInputPartial::OpenFile(open_file) => {
-                            println!("open file: {}", open_file.fs_file_path());
-                            let open_file_path = open_file.fs_file_path().to_owned();
-                            let request = OpenFileRequest::new(
-                                open_file_path,
-                                message_properties.editor_url(),
-                            );
-                            let input = ToolInput::OpenFile(request);
-                            let response = tool_broker
-                                .invoke(input)
-                                .await
-                                .expect("to work")
-                                .get_file_open_response()
-                                .expect("to work")
-                                .to_string();
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                response.clone(),
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                            println!("response: {:?}", response);
-                        }
-                        ToolInputPartial::SearchFileContentWithRegex(search_file) => {
-                            println!("search file: {}", search_file.directory_path());
-                            let request = SearchFileContentInput::new(
-                                search_file.directory_path().to_owned(),
-                                search_file.regex_pattern().to_owned(),
-                                search_file.file_pattern().map(|s| s.to_owned()),
-                                message_properties.editor_url(),
-                            );
-                            let input = ToolInput::SearchFileContentWithRegex(request);
-                            let tool_response = tool_broker.invoke(input).await.expect("to work");
-                            let response = tool_response
-                                .get_search_file_content_with_regex()
-                                .expect("to work");
-                            let response = response.response();
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                response.to_owned(),
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                            println!("response: {:?}", response);
-                        }
-                        ToolInputPartial::TerminalCommand(terminal_command) => {
-                            println!("terminal command: {}", terminal_command.command());
-                            let command = terminal_command.command().to_owned();
-                            let request =
-                                TerminalInput::new(command, message_properties.editor_url());
-                            let input = ToolInput::TerminalCommand(request);
-                            let tool_output = tool_broker.invoke(input).await;
-                            let output = tool_output
-                                .expect("to work")
-                                .terminal_command()
-                                .expect("to work")
-                                .output()
-                                .to_owned();
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                output.to_owned(),
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                            println!("response: {:?}", output);
-                        }
-                        ToolInputPartial::RepoMapGeneration(repo_map_request) => {
-                            println!(
-                                "repo map generation request: {}",
-                                repo_map_request.to_string()
-                            );
-                            let request =
-                                ToolInput::RepoMapGeneration(RepoMapGeneratorRequest::new(
-                                    repo_map_request.directory_path().to_owned(),
-                                    3000,
-                                ));
-                            let tool_output = tool_broker.invoke(request).await;
-                            let repo_map_str = tool_output
-                                .expect("to work")
-                                .repo_map_generator_response()
-                                .expect("to work")
-                                .repo_map()
-                                .to_owned();
-
-                            human_message_ticker = human_message_ticker + 1;
-                            session = session.human_message(
-                                human_message_ticker.to_string(),
-                                repo_map_str.to_owned(),
-                                UserContext::default(),
-                                vec![],
-                                repo_ref.clone(),
-                            );
-                            println!("response: {:?}", repo_map_str);
-                        }
-                    };
+                    let _ = self.save_to_storage(&session).await;
+                    if matches!(tool_type, ToolType::AskFollowupQuestions)
+                        || matches!(tool_type, ToolType::AttemptCompletion)
+                    {
+                        // we break if it is any of these 2 events, since these
+                        // require the user to intervene
+                        println!("session_service::tool_use_agentic::reached_terminating_tool");
+                        break;
+                    }
                 }
                 AgentToolUseOutput::Cancelled => {}
                 AgentToolUseOutput::Failed(failed_to_parse_output) => {

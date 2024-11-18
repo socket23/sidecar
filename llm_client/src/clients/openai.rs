@@ -50,119 +50,16 @@ impl OpenAIClient {
         &self,
         messages: &[LLMClientMessage],
     ) -> Result<Vec<ChatCompletionRequestMessage>, LLMClientError> {
-        let mut formatted_messages = Vec::new();
-        let mut accumulated_content = String::new();
-        let mut last_role: Option<LLMClientRole> = None;
-
-        for message in messages {
-            let current_role = match message.role() {
-                LLMClientRole::System | LLMClientRole::User => LLMClientRole::User, // Treat System as User
-                other => other.clone(),
+        let mut final_messages = vec![];
+        for message in messages.into_iter() {
+            let message = if message.is_system_message() {
+                message.clone().set_role(LLMClientRole::User)
+            } else {
+                message.clone()
             };
-
-            match current_role {
-                LLMClientRole::User => {
-                    if last_role == Some(LLMClientRole::User) {
-                        // Accumulate content for consecutive user messages
-                        accumulated_content.push_str("\n");
-                        accumulated_content.push_str(message.content());
-                    } else {
-                        // Flush previous messages if role changes
-                        if let Some(prev_role) = last_role {
-                            if prev_role != LLMClientRole::User && !accumulated_content.is_empty() {
-                                let user_message = ChatCompletionRequestUserMessageArgs::default()
-                                    .role(Role::User)
-                                    .content(accumulated_content.clone())
-                                    .build()
-                                    .map(ChatCompletionRequestMessage::User)
-                                    .map_err(LLMClientError::OpenAPIError)?;
-                                formatted_messages.push(user_message);
-                                accumulated_content.clear();
-                            }
-                        }
-                        accumulated_content = message.content().to_owned();
-                    }
-                    last_role = Some(LLMClientRole::User);
-                }
-                LLMClientRole::Assistant => {
-                    // Flush accumulated user messages before handling assistant message
-                    if last_role == Some(LLMClientRole::User) && !accumulated_content.is_empty() {
-                        let user_message = ChatCompletionRequestUserMessageArgs::default()
-                            .role(Role::User)
-                            .content(accumulated_content.clone())
-                            .build()
-                            .map(ChatCompletionRequestMessage::User)
-                            .map_err(LLMClientError::OpenAPIError)?;
-                        formatted_messages.push(user_message);
-                        accumulated_content.clear();
-                    }
-                    // Handle assistant message
-                    let assistant_message = match message.get_function_call() {
-                        Some(function_call) => ChatCompletionRequestAssistantMessageArgs::default()
-                            .role(Role::Function)
-                            .function_call(FunctionCall {
-                                name: function_call.name().to_owned(),
-                                arguments: function_call.arguments().to_owned(),
-                            })
-                            .build()
-                            .map(ChatCompletionRequestMessage::Assistant)
-                            .map_err(LLMClientError::OpenAPIError)?,
-                        None => ChatCompletionRequestAssistantMessageArgs::default()
-                            .role(Role::Assistant)
-                            .content(message.content().to_owned())
-                            .build()
-                            .map(ChatCompletionRequestMessage::Assistant)
-                            .map_err(LLMClientError::OpenAPIError)?,
-                    };
-                    formatted_messages.push(assistant_message);
-                    last_role = Some(LLMClientRole::Assistant);
-                }
-                LLMClientRole::Function => {
-                    // Flush accumulated user messages before handling function message
-                    if last_role == Some(LLMClientRole::User) && !accumulated_content.is_empty() {
-                        let user_message = ChatCompletionRequestUserMessageArgs::default()
-                            .role(Role::User)
-                            .content(accumulated_content.clone())
-                            .build()
-                            .map(ChatCompletionRequestMessage::User)
-                            .map_err(LLMClientError::OpenAPIError)?;
-                        formatted_messages.push(user_message);
-                        accumulated_content.clear();
-                    }
-                    // Handle function message
-                    let function_message = match message.get_function_call() {
-                        Some(function_call) => ChatCompletionRequestAssistantMessageArgs::default()
-                            .role(Role::Function)
-                            .content(message.content().to_owned())
-                            .function_call(FunctionCall {
-                                name: function_call.name().to_owned(),
-                                arguments: function_call.arguments().to_owned(),
-                            })
-                            .build()
-                            .map(ChatCompletionRequestMessage::Assistant)
-                            .map_err(LLMClientError::OpenAPIError)?,
-                        None => return Err(LLMClientError::FunctionCallNotPresent),
-                    };
-                    formatted_messages.push(function_message);
-                    last_role = Some(LLMClientRole::Function);
-                }
-                // if its a system prompt don't do anything
-                LLMClientRole::System => {}
-            }
+            final_messages.push(message);
         }
-
-        // Flush any remaining accumulated user messages
-        if last_role == Some(LLMClientRole::User) && !accumulated_content.is_empty() {
-            let user_message = ChatCompletionRequestUserMessageArgs::default()
-                .role(Role::User)
-                .content(accumulated_content)
-                .build()
-                .map(ChatCompletionRequestMessage::User)
-                .map_err(LLMClientError::OpenAPIError)?;
-            formatted_messages.push(user_message);
-        }
-
-        Ok(formatted_messages)
+        self.messages(&final_messages)
     }
 
     pub fn messages(
@@ -292,13 +189,10 @@ impl LLMClient for OpenAIClient {
             .model(model.to_owned())
             .messages(messages);
         // o1-preview has no streaming
-        if !llm_model.is_o1_preview() {
-            request_builder = request_builder
-                .temperature(request.temperature())
-                .stream(true);
-        } else {
-            request_builder = request_builder.temperature(1.0);
-        }
+        request_builder = request_builder
+            .temperature(request.temperature())
+            .stream(true);
+
         if let Some(frequency_penalty) = request.frequency_penalty() {
             request_builder = request_builder.frequency_penalty(frequency_penalty);
         }
@@ -346,7 +240,7 @@ impl LLMClient for OpenAIClient {
                 }
             }
             OpenAIClientType::OpenAIClient(client) => {
-                if llm_model == &LLMType::O1Preview {
+                if false {
                     let completion = client.chat().create(request).await?;
                     let response = completion
                         .choices

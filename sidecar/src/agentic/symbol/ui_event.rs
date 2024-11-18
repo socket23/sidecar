@@ -719,6 +719,38 @@ impl UIEventWithID {
             )),
         }
     }
+
+    pub fn tool_output_type_found(
+        session_id: String,
+        exchange_id: String,
+        tool_type: ToolType,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolOutput(
+                ToolOutputEvent::ToolTypeForOutput(ToolTypeForOutputEvent { tool_type }),
+            )),
+        }
+    }
+
+    pub fn tool_output_delta_response(
+        session_id: String,
+        exchange_id: String,
+        delta: String,
+        answer_up_until_now: String,
+    ) -> Self {
+        Self {
+            request_id: session_id.to_owned(),
+            exchange_id,
+            event: UIEvent::FrameworkEvent(FrameworkEvent::ToolOutput(
+                ToolOutputEvent::ToolOutputResponse(ToolOutputResponseEvent {
+                    answer_up_until_now,
+                    delta,
+                }),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1264,6 +1296,24 @@ pub enum FrameworkEvent {
     ToolNotFound(ToolNotFoundEvent),
     ToolTypeFound(ToolTypeFoundEvent),
     ToolParameterFound(ToolParameterFoundEvent),
+    ToolOutput(ToolOutputEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub enum ToolOutputEvent {
+    ToolTypeForOutput(ToolTypeForOutputEvent),
+    ToolOutputResponse(ToolOutputResponseEvent),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolTypeForOutputEvent {
+    tool_type: ToolType,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ToolOutputResponseEvent {
+    delta: String,
+    answer_up_until_now: String,
 }
 
 #[derive(Debug, serde::Serialize)]

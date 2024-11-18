@@ -1380,7 +1380,6 @@ pub async fn agent_tool_use(
     );
 
     let tool_box = app.tool_box.clone();
-    let tool_broker = app.tool_box.tools().clone();
     let llm_broker = app.llm_broker.clone();
 
     let session_storage_path =
@@ -1402,7 +1401,6 @@ pub async fn agent_tool_use(
                 repo_ref,
                 root_directory,
                 tool_box,
-                tool_broker,
                 llm_broker,
                 message_properties,
             )

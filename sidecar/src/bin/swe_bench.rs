@@ -234,7 +234,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);
     let _ = session_service
-        .tool_use_agentic(
+        .tool_use_agentic_swe_bench(
             session_id,
             storage_path,
             input_parts.instance.problem_statement.to_owned(),

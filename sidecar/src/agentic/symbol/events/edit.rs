@@ -37,6 +37,7 @@ pub struct SymbolToEdit {
     previous_user_queries: Vec<String>,
     // the plan-step-id if present for this edit
     plan_step_id: Option<String>,
+    should_stream: bool,
 }
 
 impl SymbolToEdit {
@@ -75,7 +76,17 @@ impl SymbolToEdit {
             diff_recent_changes,
             previous_user_queries,
             plan_step_id,
+            should_stream: true,
         }
+    }
+
+    pub fn set_should_stream_status(mut self, should_stream: bool) -> Self {
+        self.should_stream = should_stream;
+        self
+    }
+
+    pub fn should_stream(&self) -> bool {
+        self.should_stream
     }
 
     pub fn plan_step_id(&self) -> Option<String> {

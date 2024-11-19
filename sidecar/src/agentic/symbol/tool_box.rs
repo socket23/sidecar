@@ -5523,6 +5523,7 @@ FILEPATH: {fs_file_path}
             sub_symbol.plan_step_id(),
             sub_symbol.previous_message(),
             message_properties.cancellation_token(),
+            sub_symbol.should_stream(),
         ));
         println!(
             "tool_box::code_edit_outline::start::symbol_name({})",
@@ -8651,6 +8652,8 @@ FILEPATH: {fs_file_path}
             None,
             vec![],
             message_properties.cancellation_token(),
+            // do not care about the warmup anyways
+            false,
         );
         let search_and_replace = ToolInput::SearchAndReplaceEditing(search_and_replace_request);
         let cloned_tools = self.tools.clone();

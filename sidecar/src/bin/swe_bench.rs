@@ -53,6 +53,9 @@ struct CliArgs {
     /// The run id for the current run
     #[arg(long)]
     run_id: String,
+
+    #[arg(long)]
+    repo_name: String,
 }
 
 /// Define the SWEbenchInstance arguments
@@ -183,6 +186,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timeout = args.timeout;
     let input_path = args.input;
     let run_id = args.run_id.to_owned();
+    let repo_name = args.repo_name.to_owned();
     let anthropic_api_key = args.anthropic_api_key.to_owned();
     let input_content = tokio::fs::read(input_path).await.expect("path content");
     let input_parts: InputParts =
@@ -237,6 +241,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tool_use_agentic_swe_bench(
             session_id,
             storage_path,
+            repo_name,
             input_parts.instance.problem_statement.to_owned(),
             initial_exchange_id.to_string(),
             vec![],

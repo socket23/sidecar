@@ -351,6 +351,7 @@ impl SessionService {
         &self,
         session_id: String,
         storage_path: String,
+        repo_name: String,
         user_message: String,
         exchange_id: String,
         all_files: Vec<String>,
@@ -400,6 +401,7 @@ impl SessionService {
             root_directory,
             std::env::consts::OS.to_owned(),
             shell.to_owned(),
+            Some(repo_name),
         );
 
         session = session.human_message_tool_use(
@@ -547,6 +549,7 @@ impl SessionService {
             root_directory,
             std::env::consts::OS.to_owned(),
             shell.to_owned(),
+            None,
         );
 
         session = session.human_message_tool_use(

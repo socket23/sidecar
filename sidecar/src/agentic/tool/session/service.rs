@@ -420,11 +420,10 @@ impl SessionService {
         // token which will imply that we should end the current loop
         loop {
             let _ = self.save_to_storage(&session).await;
-            let tool_exchange_id = dbg!(
-                self.tool_box
-                    .create_new_exchange(session_id.to_owned(), message_properties.clone())
-                    .await
-            )?;
+            let tool_exchange_id = self
+                .tool_box
+                .create_new_exchange(session_id.to_owned(), message_properties.clone())
+                .await?;
 
             let cancellation_token = tokio_util::sync::CancellationToken::new();
 

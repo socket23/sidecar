@@ -1,7 +1,7 @@
 //! We can create a new session over here and its composed of exchanges
 //! The exchanges can be made by the human or the agent
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
@@ -2121,7 +2121,17 @@ impl Session {
                 // in the future we should create a tool for this, but this will help unblock us
                 if !should_stream_edits {
                     // we want to update the whole file content with the new content over here
-                    // how do we go about doing that?
+                    // first we check if the file really exists on the fs, if it does not we create it
+                    if let Ok(false) = tokio::fs::try_exists(fs_file_path.to_owned()).await {
+                        tokio::fs::create_dir_all(
+                            Path::new(&fs_file_path).parent().expect("to exist"),
+                        )
+                        .await
+                        .expect("creating parent directory to work");
+                        tokio::fs::File::create(fs_file_path.to_owned())
+                            .await
+                            .expect("file creation to not fail");
+                    }
                     let _ = tokio::fs::write(fs_file_path.to_owned(), updated_code).await;
                 }
 

@@ -193,7 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::from_slice(&input_content).expect("Parse the serde json");
     println!("args:{:?}", input_parts);
     println!("timeout:{}", timeout);
-    println!("input_pargs:{:?}", editor_url);
+    println!("input_args:{:?}", editor_url);
 
     let model_configuration = LLMProperties::new(
         LLMType::ClaudeSonnet,
@@ -206,6 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_parts.instance.instance_id,
         run_id.to_string()
     );
+
+    println!("session_id:{}", &session_id);
 
     // Creates the unique path for the session
     let session_path = default_index_dir().join("session");
@@ -237,6 +239,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);
+    println!("session_service::tool_use_agentic_swe_bench");
     let _ = session_service
         .tool_use_agentic_swe_bench(
             session_id,

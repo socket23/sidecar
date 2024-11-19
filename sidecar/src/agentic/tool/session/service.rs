@@ -364,7 +364,7 @@ impl SessionService {
         llm_broker: Arc<LLMBroker>,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<(), SymbolError> {
-        println!("session_service::tool_use_agentic::start");
+        println!("session_service::tool_use_agentic_swe_bench::start");
         let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
         {
             println!(
@@ -411,6 +411,7 @@ impl SessionService {
             open_files,
             shell,
         );
+        println!("session_service::session_human_message_tool_use");
         let _ = self.save_to_storage(&session).await;
 
         session = session.accept_open_exchanges_if_any(message_properties.clone());
@@ -419,10 +420,11 @@ impl SessionService {
         // token which will imply that we should end the current loop
         loop {
             let _ = self.save_to_storage(&session).await;
-            let tool_exchange_id = self
-                .tool_box
-                .create_new_exchange(session_id.to_owned(), message_properties.clone())
-                .await?;
+            let tool_exchange_id = dbg!(
+                self.tool_box
+                    .create_new_exchange(session_id.to_owned(), message_properties.clone())
+                    .await
+            )?;
 
             let cancellation_token = tokio_util::sync::CancellationToken::new();
 

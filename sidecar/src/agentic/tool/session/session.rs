@@ -2021,6 +2021,7 @@ impl Session {
         tool_type: ToolType,
         tool_input_partial: ToolInputPartial,
         tool_box: Arc<ToolBox>,
+        should_stream_edits: bool,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         // we want to send a new event only when we are not going to ask for the followup questions
@@ -2096,11 +2097,12 @@ impl Session {
                     None,
                     vec![], // previous_user_queries
                     None,
-                );
+                )
+                .set_should_stream_status(should_stream_edits);
 
                 let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
 
-                let _response = tool_box
+                let updated_code = tool_box
                     .code_editing_with_search_and_replace(
                         &symbol_to_edit,
                         &fs_file_path,
@@ -2114,6 +2116,14 @@ impl Session {
                         message_properties.clone(),
                     )
                     .await?; // big expectations but can also fail, we should handle it properly
+
+                // This code-block only ever hits for the swe-bench run and nothing else
+                // in the future we should create a tool for this, but this will help unblock us
+                if !should_stream_edits {
+                    // we want to update the whole file content with the new content over here
+                    // how do we go about doing that?
+                    let _ = tokio::fs::write(fs_file_path.to_owned(), updated_code).await;
+                }
 
                 // now that we have modified the file we can ask the editor for the git-diff of this file over here
                 // and we also have the previous state over here

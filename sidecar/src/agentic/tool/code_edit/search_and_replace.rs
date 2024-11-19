@@ -99,6 +99,7 @@ pub struct SearchAndReplaceEditingRequest {
     previous_messages: Vec<SessionChatMessage>,
     // cancellation token
     cancellation_token: tokio_util::sync::CancellationToken,
+    should_stream: bool,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -128,6 +129,7 @@ impl SearchAndReplaceEditingRequest {
         plan_step_id: Option<String>,
         previous_messages: Vec<SessionChatMessage>,
         cancellation_token: tokio_util::sync::CancellationToken,
+        should_stream: bool,
     ) -> Self {
         Self {
             fs_file_path,
@@ -153,6 +155,7 @@ impl SearchAndReplaceEditingRequest {
             plan_step_id,
             previous_messages,
             cancellation_token,
+            should_stream,
         }
     }
 }

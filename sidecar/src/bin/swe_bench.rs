@@ -24,15 +24,11 @@ use sidecar::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
     repo::types::RepoRef,
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 /// Define the command-line arguments
 #[derive(Parser, Debug)]
-#[command(
-    author = "Your Name",
-    version = "1.0",
-    about = "SWE-Bench Sidecar Runner"
-)]
+#[command(author = "skcd", version = "1.0", about = "SWE-Bench Sidecar Runner")]
 struct CliArgs {
     /// Git directory name
     #[arg(long)]
@@ -191,9 +187,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_content = tokio::fs::read(input_path).await.expect("path content");
     let input_parts: InputParts =
         serde_json::from_slice(&input_content).expect("Parse the serde json");
-    println!("args:{:?}", input_parts);
-    println!("timeout:{}", timeout);
-    println!("input_args:{:?}", editor_url);
 
     let model_configuration = LLMProperties::new(
         LLMType::ClaudeSonnet,
@@ -240,6 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);
     println!("session_service::tool_use_agentic_swe_bench");
+    // generate tests to test out the code gen output
     let _ = session_service
         .tool_use_agentic_swe_bench(
             session_id,

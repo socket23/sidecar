@@ -384,8 +384,6 @@ impl SessionService {
                     ToolType::OpenFile,
                     ToolType::CodeEditing,
                     ToolType::LSPDiagnostics,
-                    // disable for testing
-                    // ToolType::AskFollowupQuestions,
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
                     ToolType::TerminalCommand,

@@ -107,6 +107,9 @@ TOOL USE
 
 You have access to a set of tools. You can use one tool per message (and only one), and you will receive the result of the tool use from the user. You should use the tools step-by-step to accomplish the user task.
 You use the previous information which you get from using the tools to inform your next tool usage.
+Your first step should always be to apply the test patch to the codebase. Then, execute the test patch using the test_runner tool.
+As long as the test patch is not passing, you must keep iterating on the patch until it passes.
+Your goal is pass the test patch.
 
 # Tool Use Formatting
 
@@ -138,7 +141,7 @@ Always adhere to this format for the tool use to ensure proper parsing and execu
 
 # Tool Use Guidelines
 
-1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task.
+1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task. Your thinking should be thorough and so it's fine if it's very long.
 2. Choose the most appropriate tool based on the task and the tool descriptions provided. Assess if you need additional information to proceed, and which of the available tools would be most effective for gathering this information. For example using the list_files tool is more effective than running a command like \`ls\` in the terminal. It's critical that you think about each available tool and use the one that best fits the current step in the task.
 3. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.
 4. Formulate your tool use using the XML format specified for each tool.
@@ -182,6 +185,7 @@ RULES
 - ALWAYS start your tool use with the <thinking></thinking> section.
 - ONLY USE A SINGLE tool at a time, never use multiple tools in the same response.
 - Each xml tag should be on a new line. This is important because we are parsing the input line by line.
+- NEVER attempt to write new tests or scripts. The golden test has already been provided for you.
 
 ====
 
@@ -528,6 +532,7 @@ enum ToolBlockStatus {
     CommandFound,
     QuestionFound,
     ResultFound,
+    FilePathsFound,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -553,6 +558,7 @@ struct ToolUseGenerator {
     thinking: String,
     tool_type_possible: Option<ToolType>,
     fs_file_path: Option<String>,
+    fs_file_paths: Option<Vec<String>>,
     instruction: Option<String>,
     directory_path: Option<String>,
     recursive: Option<bool>,
@@ -574,6 +580,7 @@ impl ToolUseGenerator {
             thinking: "".to_owned(),
             tool_type_possible: None,
             fs_file_path: None,
+            fs_file_paths: None,
             instruction: None,
             directory_path: None,
             recursive: None,
@@ -703,6 +710,12 @@ impl ToolUseGenerator {
                             .send(ToolBlockEvent::ToolFound(ToolType::RepoMapGeneration));
                         // these are the ending condition over here
                         // we grab all the fields which are required and then return them back over here
+                    } else if answer_line_at_index == "<test_runner>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                        self.tool_type_possible = Some(ToolType::TestRunner);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolFound(ToolType::TestRunner));
                     }
                 }
                 ToolBlockStatus::ToolFound => {
@@ -724,6 +737,8 @@ impl ToolUseGenerator {
                         self.tool_block_status = ToolBlockStatus::QuestionFound;
                     } else if answer_line_at_index == "<result>" {
                         self.tool_block_status = ToolBlockStatus::ResultFound;
+                    } else if answer_line_at_index == "<fs_file_paths>" {
+                        self.tool_block_status = ToolBlockStatus::FilePathsFound;
                     } else if answer_line_at_index == "</search_files>" {
                         self.tool_block_status = ToolBlockStatus::NoBlock;
                         match (
@@ -832,6 +847,16 @@ impl ToolUseGenerator {
                             _ => {}
                         }
                         self.tool_type_possible = None;
+                    } else if answer_line_at_index == "</test_runner>" {
+                        self.tool_block_status = ToolBlockStatus::NoBlock;
+                        self.tool_type_possible = None;
+                        match self.fs_file_paths.clone() {
+                            Some(fs_file_paths) => {
+                                self.tool_input_partial =
+                                    Some(ToolInputPartial::TestRunner(fs_file_paths));
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 ToolBlockStatus::FilePathFound => {
@@ -843,6 +868,22 @@ impl ToolUseGenerator {
                             .sender
                             .send(ToolBlockEvent::ToolParameters(ToolParameters {
                                 field_name: "fs_file_path".to_owned(),
+                                field_content_up_until_now: answer_line_at_index.to_owned(),
+                                field_content_delta: answer_line_at_index.to_owned(),
+                            }));
+                    }
+                }
+                ToolBlockStatus::FilePathsFound => {
+                    if answer_line_at_index == "</fs_file_paths>" {
+                        self.tool_block_status = ToolBlockStatus::ToolFound;
+                    } else {
+                        let mut fs_file_paths = self.fs_file_paths.clone().unwrap_or(vec![]);
+                        fs_file_paths.push(answer_line_at_index.to_owned());
+                        self.fs_file_paths = Some(fs_file_paths);
+                        let _ = self
+                            .sender
+                            .send(ToolBlockEvent::ToolParameters(ToolParameters {
+                                field_name: "fs_file_paths".to_owned(),
                                 field_content_up_until_now: answer_line_at_index.to_owned(),
                                 field_content_delta: answer_line_at_index.to_owned(),
                             }));

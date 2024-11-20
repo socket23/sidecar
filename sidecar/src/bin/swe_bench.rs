@@ -24,7 +24,7 @@ use sidecar::{
     inline_completion::symbols_tracker::SymbolTrackerInline,
     repo::types::RepoRef,
 };
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 
 /// Define the command-line arguments
 #[derive(Parser, Debug)]
@@ -179,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tool_box = Arc::new(ToolBox::new(tool_broker, symbol_broker, editor_parsing));
 
     let editor_url = args.editor_url.to_owned();
-    let timeout = args.timeout;
+    let _timeout = args.timeout;
     let input_path = args.input;
     let run_id = args.run_id.to_owned();
     let repo_name = args.repo_name.to_owned();

@@ -387,6 +387,7 @@ impl SessionService {
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
                     ToolType::TerminalCommand,
+                    ToolType::TestRunner,
                 ],
             )
         };

@@ -38,6 +38,7 @@ use crate::{
             r#type::{Tool, ToolType},
             repo_map::generator::RepoMapGeneratorRequest,
             terminal::terminal::TerminalInput,
+            test_runner::runner::TestRunnerRequest,
         },
     },
     chunking::text_document::{Position, Range},
@@ -2051,6 +2052,24 @@ impl Session {
             message_properties.request_id_str().to_owned()
         };
         match tool_input_partial {
+            ToolInputPartial::TestRunner(fs_file_paths) => {
+                let editor_url = message_properties.editor_url().to_owned();
+                let input = ToolInput::RunTests(TestRunnerRequest::new(fs_file_paths, editor_url));
+                let response = tool_box
+                    .tools()
+                    .invoke(input)
+                    .await
+                    .map_err(|e| SymbolError::ToolError(e))?;
+
+                let test_runner_output = response.get_test_runner().unwrap();
+
+                self = self.tool_output(
+                    &exchange_id,
+                    tool_type.clone(),
+                    test_runner_output,
+                    UserContext::default(),
+                );
+            }
             ToolInputPartial::AskFollowupQuestions(_followup_question) => {
                 // this waits for the user-feedback so we do not need to react or
                 // do anything after this

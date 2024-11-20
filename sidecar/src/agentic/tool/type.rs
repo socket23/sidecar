@@ -129,6 +129,8 @@ pub enum ToolType {
     ContextDriveHotStreakReply,
     // Terminal command
     TerminalCommand,
+    // Run tests
+    TestRunner,
     // Searches the files given a regex pattern
     SearchFileContentWithRegex,
     // List files
@@ -237,6 +239,7 @@ impl std::fmt::Display for ToolType {
             ToolType::SubProcessSpawnedPendingOutput => {
                 write!(f, "Sub process spawned pending output")
             }
+            ToolType::TestRunner => write!(f, "Test runner"),
         }
     }
 }

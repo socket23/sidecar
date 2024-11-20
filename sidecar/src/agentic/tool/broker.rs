@@ -70,6 +70,7 @@ use super::{
     },
     swe_bench::test_tool::SWEBenchTestTool,
     terminal::terminal::TerminalTool,
+    test_runner::runner::TestRunner,
 };
 
 pub struct ToolBrokerConfiguration {
@@ -467,6 +468,7 @@ impl ToolBroker {
             ToolType::SubProcessSpawnedPendingOutput,
             Box::new(SubProcessSpawnedPendingOutputClient::new()),
         );
+        tools.insert(ToolType::TestRunner, Box::new(TestRunner {}));
         // we also want to add the re-ranking tool here, so we invoke it freely
         Self { tools }
     }

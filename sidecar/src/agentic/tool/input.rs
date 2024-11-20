@@ -73,6 +73,7 @@ use super::{
     },
     swe_bench::test_tool::SWEBenchTestRequest,
     terminal::terminal::{TerminalInput, TerminalInputPartial},
+    test_runner::runner::TestRunnerRequest,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -86,6 +87,7 @@ pub enum ToolInputPartial {
     AskFollowupQuestions(AskFollowupQuestionsRequest),
     AttemptCompletion(AttemptCompletionClientRequest),
     RepoMapGeneration(RepoMapGeneratorRequestPartial),
+    TestRunner(Vec<String>),
 }
 
 impl ToolInputPartial {
@@ -100,6 +102,7 @@ impl ToolInputPartial {
             Self::AskFollowupQuestions(_) => ToolType::AskFollowupQuestions,
             Self::AttemptCompletion(_) => ToolType::AttemptCompletion,
             Self::RepoMapGeneration(_) => ToolType::RepoMapGeneration,
+            Self::TestRunner(_) => ToolType::TestRunner,
         }
     }
 
@@ -116,6 +119,7 @@ impl ToolInputPartial {
             Self::AskFollowupQuestions(ask_followup_question) => ask_followup_question.to_string(),
             Self::AttemptCompletion(attempt_completion) => attempt_completion.to_string(),
             Self::RepoMapGeneration(repo_map_generator) => repo_map_generator.to_string(),
+            Self::TestRunner(fs_file_paths) => fs_file_paths.join(", "),
         }
     }
 }
@@ -236,6 +240,8 @@ pub enum ToolInput {
     RepoMapGeneration(RepoMapGeneratorRequest),
     // Sub process generation input
     SubProcessSpawnedPendingOutput(SubProcessSpawnedPendingOutputRequest),
+    // Run tests
+    RunTests(TestRunnerRequest),
 }
 
 impl ToolInput {
@@ -321,6 +327,7 @@ impl ToolInput {
             ToolInput::SubProcessSpawnedPendingOutput(_) => {
                 ToolType::SubProcessSpawnedPendingOutput
             }
+            ToolInput::RunTests(_) => ToolType::TestRunner,
         }
     }
 
@@ -341,6 +348,14 @@ impl ToolInput {
             Ok(request)
         } else {
             Err(ToolError::WrongToolInput(ToolType::RepoMapGeneration))
+        }
+    }
+
+    pub fn is_test_runner(self) -> Result<TestRunnerRequest, ToolError> {
+        if let ToolInput::RunTests(request) = self {
+            Ok(request)
+        } else {
+            Err(ToolError::WrongToolInput(ToolType::TestRunner))
         }
     }
 

@@ -217,6 +217,8 @@ pub enum ToolOutput {
     RepoMapGeneration(RepoMapGeneratorResponse),
     // spawned subprocess and their output which is pending
     SubProcessSpawnedPendingOutput(SubProcessSpanwedPendingOutputResponse),
+    // Test runner
+    TestRunner(String),
 }
 
 impl ToolOutput {
@@ -838,6 +840,13 @@ impl ToolOutput {
     pub fn get_list_files_directory(self) -> Option<ListFilesOutput> {
         match self {
             ToolOutput::ListFiles(response) => Some(response),
+            _ => None,
+        }
+    }
+
+    pub fn get_test_runner(self) -> Option<String> {
+        match self {
+            ToolOutput::TestRunner(response) => Some(response),
             _ => None,
         }
     }

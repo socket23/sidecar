@@ -19,6 +19,10 @@ impl TestRunnerResponse {
     pub fn test_output(&self) -> &str {
         &self.test_output
     }
+
+    pub fn exit_code(&self) -> i32 {
+        self.exit_code
+    }
 }
 
 impl TestRunnerRequest {

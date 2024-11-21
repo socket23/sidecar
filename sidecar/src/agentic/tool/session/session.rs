@@ -2076,12 +2076,61 @@ impl Session {
         self
     }
 
+    async fn handle_critique(
+        mut self,
+        tool_agent: ToolUseAgent,
+        tool_box: Arc<ToolBox>,
+        message_properties: SymbolEventMessageProperties,
+    ) -> Result<Self, SymbolError> {
+        // figure out what to do over here given the state of the session
+        let mut converted_messages = vec![];
+        for previous_message in self.exchanges.iter() {
+            converted_messages.push(
+                previous_message
+                    .to_conversation_message(tool_box.tools().clone())
+                    .await,
+            );
+        }
+
+        // decay the content of the messages depending on the decay condition
+        // so we can keep the context smaller and more relevant
+        converted_messages = self.decay_messages(self.exchanges.as_slice(), converted_messages);
+        let input =
+            ToolUseAgentInput::new(converted_messages, vec![], None, message_properties.clone());
+        let critique = tool_agent.invoke_critique(input).await?;
+        // reset all the exchanges since we are going to start a new
+        println!("session::handle_critique::starting_new");
+        let exchange_message = format!(
+            r#"When trying to solve this issue before we ran into a wrong approach, the patch was reviewed by a senior engineer who had the following helpful feedback to share:
+{}
+            
+We have also reset the repository state and discarded all the changes which you did before. This is to help you start on a fresh plate."#,
+            critique
+        );
+        self.exchanges = vec![];
+        self.exchanges.push(Exchange::human_chat(
+            "critique".to_owned(),
+            exchange_message,
+            UserContext::default(),
+            self.project_labels.to_vec(),
+            self.repo_ref.clone(),
+        ));
+
+        // reset the repository status by running git stash
+        let _ = tool_box
+            .use_terminal_command("git stash", message_properties)
+            .await;
+        self.save_to_storage().await?;
+        Ok(self)
+    }
+
     pub async fn invoke_tool(
         mut self,
         tool_type: ToolType,
         tool_input_partial: ToolInputPartial,
         tool_box: Arc<ToolBox>,
         should_stream_edits: bool,
+        tool_agent: ToolUseAgent,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         // we want to send a new event only when we are not going to ask for the followup questions
@@ -2128,6 +2177,14 @@ impl Session {
                     test_runner_output.test_output().to_owned(),
                     UserContext::default(),
                 );
+
+                // The test running is a terminal condition, if we have an exit code 0
+                // we are good, otherwise the cirtique will take a look
+                if test_runner_output.exit_code() != 0 {
+                    return self
+                        .handle_critique(tool_agent, tool_box, message_properties)
+                        .await;
+                }
             }
             ToolInputPartial::AskFollowupQuestions(_followup_question) => {
                 // this waits for the user-feedback so we do not need to react or

@@ -461,6 +461,7 @@ impl SessionService {
                             tool_input_partial,
                             tool_box.clone(),
                             false,
+                            tool_agent.clone(),
                             message_properties.clone(),
                         )
                         .await?;
@@ -609,6 +610,7 @@ impl SessionService {
                             tool_input_partial,
                             tool_box.clone(),
                             true,
+                            tool_agent.clone(),
                             message_properties.clone(),
                         )
                         .await?;

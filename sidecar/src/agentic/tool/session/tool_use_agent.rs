@@ -108,6 +108,7 @@ You have access to a set of tools. You can use one tool per message (and only on
 You use the previous information which you get from using the tools to inform your next tool usage.
 Your first step should always be to apply the test patch to the codebase. Then, execute the test patch using the test_runner tool.
 As long as the test patch is not passing, you must keep iterating on the patch until it passes.
+You should always output the <thinking></thinking> section before using a tool and we are showing you an example
 Your goal is pass the test patch.
 
 # Tool Use Formatting
@@ -125,7 +126,9 @@ value2
 </tool_name>
 
 As an example:
-
+<thinking>
+I want to read the content of bin/main.rs
+</thinking>
 <read_file>
 <fs_file_path>
 bin/main.rs
@@ -193,7 +196,7 @@ SYSTEM INFORMATION
 Operating System: {operating_system}
 Default Shell: {default_shell}
 Current Working Directory: {working_directory}
-Current Repo Name; {repo_name}
+Current Repo Name: {repo_name}
 
 ====
 

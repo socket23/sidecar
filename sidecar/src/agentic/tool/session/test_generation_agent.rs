@@ -1,4 +1,10 @@
 //! Takes as input whatever is required to generate the next tool which should be used
+//! But this always works towards generating a test
+//! That's the most important part
+//! Here are some ways we can shortcircuit the search space very widely
+//! - We provide the files which we want to generate the test from
+//! - We have 0 codebase context and are starting afresh to find the tests and run it
+//! - We have a pre-test run and want to explore the failing tests from there properly
 
 use std::sync::Arc;
 
@@ -31,10 +37,11 @@ use crate::agentic::{
 use super::{
     ask_followup_question::AskFollowupQuestionsRequest,
     attempt_completion::AttemptCompletionClientRequest, chat::SessionChatMessage,
+    tool_use_agent::ToolParameters,
 };
 
 #[derive(Clone)]
-pub struct ToolUseAgentInput {
+pub struct TestGenerationInput {
     // pass in the messages
     session_messages: Vec<SessionChatMessage>,
     tool_descriptions: Vec<String>,
@@ -42,7 +49,7 @@ pub struct ToolUseAgentInput {
     symbol_event_message_properties: SymbolEventMessageProperties,
 }
 
-impl ToolUseAgentInput {
+impl TestGenerationInput {
     pub fn new(
         session_messages: Vec<SessionChatMessage>,
         tool_descriptions: Vec<String>,
@@ -59,13 +66,13 @@ impl ToolUseAgentInput {
 }
 
 #[derive(Debug)]
-pub enum ToolUseAgentOutput {
+pub enum TestGenerationOutput {
     Success((ToolInputPartial, String)),
     Failure(String),
 }
 
 #[derive(Clone)]
-pub struct ToolUseAgent {
+pub struct TestGeneration {
     llm_client: Arc<LLMBroker>,
     working_directory: String,
     operating_system: String,
@@ -73,7 +80,7 @@ pub struct ToolUseAgent {
     swe_bench_repo_name: Option<String>,
 }
 
-impl ToolUseAgent {
+impl TestGeneration {
     pub fn new(
         llm_client: Arc<LLMBroker>,
         working_directory: String,
@@ -90,7 +97,11 @@ impl ToolUseAgent {
         }
     }
 
-    fn system_message_for_swe_bench(&self, context: &ToolUseAgentInput, repo_name: &str) -> String {
+    fn system_message_for_swe_bench(
+        &self,
+        context: &TestGenerationInput,
+        repo_name: &str,
+    ) -> String {
         let tool_descriptions = context.tool_descriptions.join("\n");
         let working_directory = self.working_directory.to_owned();
         let operating_system = self.operating_system.to_owned();
@@ -211,7 +222,7 @@ You are an expert in {repo_name} and know in detail everything about this reposi
         )
     }
 
-    fn system_message(&self, context: &ToolUseAgentInput) -> String {
+    fn system_message(&self, context: &TestGenerationInput) -> String {
         let tool_descriptions = context.tool_descriptions.join("\n");
         let working_directory = self.working_directory.to_owned();
         let operating_system = self.operating_system.to_owned();
@@ -335,8 +346,8 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
 
     pub async fn invoke(
         &self,
-        input: ToolUseAgentInput,
-    ) -> Result<ToolUseAgentOutput, SymbolError> {
+        input: TestGenerationInput,
+    ) -> Result<TestGenerationOutput, SymbolError> {
         // Now over here we want to trigger the tool agent recursively and also parse out the output as required
         // this will involve some kind of magic because for each tool type we want to be sure about how we are parsing the output but it should not be too hard to make that happen
         let system_message =
@@ -496,11 +507,11 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
             delta_updater_task.await
         {
             let final_output = match tool_input_partial {
-                Some(tool_input_partial) => Ok(ToolUseAgentOutput::Success((
+                Some(tool_input_partial) => Ok(TestGenerationOutput::Success((
                     tool_input_partial,
                     thinking_for_tool,
                 ))),
-                None => Ok(ToolUseAgentOutput::Failure(complete_response)),
+                None => Ok(TestGenerationOutput::Failure(complete_response)),
             };
             match response.await {
                 Some(_) => final_output,
@@ -533,13 +544,6 @@ enum ToolBlockStatus {
     QuestionFound,
     ResultFound,
     FilePathsFound,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ToolParameters {
-    pub(crate) field_name: String,
-    pub(crate) field_content_up_until_now: String,
-    pub(crate) field_content_delta: String,
 }
 
 #[derive(Debug, Clone)]

@@ -2080,6 +2080,7 @@ impl Session {
         mut self,
         tool_agent: ToolUseAgent,
         tool_box: Arc<ToolBox>,
+        original_user_message: String,
         message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         // figure out what to do over here given the state of the session
@@ -2104,7 +2105,10 @@ impl Session {
             r#"When trying to solve this issue before we ran into a wrong approach, the patch was reviewed by a senior engineer who had the following helpful feedback to share:
 {}
             
-We have also reset the repository state and discarded all the changes which you did before. This is to help you start on a fresh plate."#,
+We have also reset the repository state and discarded all the changes which you did before. This is to help you start on a fresh plate.
+
+The Github Issue we are trying to solve is:
+{original_user_message}"#,
             critique
         );
         self.exchanges = vec![];
@@ -2131,6 +2135,7 @@ We have also reset the repository state and discarded all the changes which you 
         tool_box: Arc<ToolBox>,
         should_stream_edits: bool,
         tool_agent: ToolUseAgent,
+        original_user_message: String,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         // we want to send a new event only when we are not going to ask for the followup questions
@@ -2182,7 +2187,12 @@ We have also reset the repository state and discarded all the changes which you 
                 // we are good, otherwise the cirtique will take a look
                 if test_runner_output.exit_code() != 0 {
                     return self
-                        .handle_critique(tool_agent, tool_box, message_properties)
+                        .handle_critique(
+                            tool_agent,
+                            tool_box,
+                            original_user_message,
+                            message_properties,
+                        )
                         .await;
                 }
             }

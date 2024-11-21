@@ -406,7 +406,7 @@ impl SessionService {
 
         session = session.human_message_tool_use(
             exchange_id.to_owned(),
-            user_message,
+            user_message.to_owned(),
             all_files,
             open_files,
             shell,
@@ -462,6 +462,7 @@ impl SessionService {
                             tool_box.clone(),
                             false,
                             tool_agent.clone(),
+                            user_message.to_owned(),
                             message_properties.clone(),
                         )
                         .await?;
@@ -556,7 +557,7 @@ impl SessionService {
 
         session = session.human_message_tool_use(
             exchange_id.to_owned(),
-            user_message,
+            user_message.to_owned(),
             all_files,
             open_files,
             shell,
@@ -611,6 +612,7 @@ impl SessionService {
                             tool_box.clone(),
                             true,
                             tool_agent.clone(),
+                            user_message.to_owned(),
                             message_properties.clone(),
                         )
                         .await?;

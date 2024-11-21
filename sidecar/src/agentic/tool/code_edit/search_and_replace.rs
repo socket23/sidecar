@@ -481,7 +481,7 @@ If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
             let context_instructions = context.instructions;
             format!(
                 r#"{context_instructions}
-Think carefully since this is a long file where you have to make the changes"#
+Think carefully since this is a long file where you have to make the changes. Find the perfect search block so the replacement goes through without issues"#
             )
         } else {
             context.instructions

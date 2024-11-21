@@ -387,8 +387,8 @@ impl SessionService {
                     // ToolType::LSPDiagnostics,
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
-                    ToolType::TerminalCommand,
-                    ToolType::TestRunner,
+                    // ToolType::TerminalCommand,
+                    // ToolType::TestRunner,
                 ],
             )
         };

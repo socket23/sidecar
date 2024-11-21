@@ -99,7 +99,7 @@ pub struct SearchAndReplaceEditingRequest {
     previous_messages: Vec<SessionChatMessage>,
     // cancellation token
     cancellation_token: tokio_util::sync::CancellationToken,
-    _should_stream: bool,
+    should_stream: bool,
 }
 
 impl SearchAndReplaceEditingRequest {
@@ -155,7 +155,7 @@ impl SearchAndReplaceEditingRequest {
             plan_step_id,
             previous_messages,
             cancellation_token,
-            _should_stream: should_stream,
+            should_stream,
         }
     }
 }
@@ -602,6 +602,7 @@ impl Tool for SearchAndReplaceEditing {
         let ui_sender = context.ui_sender.clone();
         let fs_file_path = context.fs_file_path.to_owned();
         let editor_url = context.editor_url.to_owned();
+        let should_stream = context.should_stream;
         let file_lock;
         {
             let cloned_file_locker = self.file_locker.clone();
@@ -747,10 +748,15 @@ impl Tool for SearchAndReplaceEditing {
                             .map(|output| output.get_file_open_response())
                             .ok()
                             .flatten();
-                        if let Some(file_content) = file_content {
-                            let _ = sender.send(Some(file_content.contents()));
-                        } else {
+                        // if we are not streaming do not refetch the file content
+                        if !should_stream {
                             let _ = sender.send(None);
+                        } else {
+                            if let Some(file_content) = file_content {
+                                let _ = sender.send(Some(file_content.contents()));
+                            } else {
+                                let _ = sender.send(None);
+                            }
                         }
                     }
                     Some(EditDelta::EditLockRelease) => {

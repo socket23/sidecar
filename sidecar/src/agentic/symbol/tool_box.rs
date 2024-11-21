@@ -5497,12 +5497,13 @@ FILEPATH: {fs_file_path}
         let session_id = message_properties.root_request_id().to_owned();
         let exchange_id = message_properties.request_id_str().to_owned();
         let llm_properties = message_properties.llm_properties().clone();
-        println!("code_editing_with_search_and_replace::session_id({})::exchange_id({})", &session_id, &exchange_id);
+        println!("code_editing_with_search_and_replace::session_id({})::exchange_id({})::file_content_len({})", &session_id, &exchange_id, file_content.lines().into_iter().collect::<Vec<_>>().len());
 
         let request = ToolInput::SearchAndReplaceEditing(SearchAndReplaceEditingRequest::new(
             fs_file_path.to_owned(),
             selection_range.clone(),
             in_range_selection,
+            // we are passing the full file content
             file_content.to_owned(),
             extra_context,
             llm_properties,
@@ -5546,6 +5547,7 @@ FILEPATH: {fs_file_path}
         );
 
         let updated_code = response.updated_code();
+        println!("search_and_replacing::code_editing_lines::({})", updated_code.lines().into_iter().collect::<Vec<_>>().len());
 
         println!(
             "tool_box::search_and_replace::finish::symbol_name({})",

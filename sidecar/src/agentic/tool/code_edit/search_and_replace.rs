@@ -481,7 +481,8 @@ If you want to put code in a new file, use a *SEARCH/REPLACE block* with:
             let context_instructions = context.instructions;
             format!(
                 r#"{context_instructions}
-Think carefully since this is a long file where you have to make the changes. Find the perfect search block so the replacement goes through without issues"#
+Think carefully since this is a long file where you have to make the changes. Find the perfect search block so the replacement goes through without issues
+Your search block should be a code snippet from the <code_to_edit> section. Make sure that it matches the code section for 1:1 parity"#
             )
         } else {
             context.instructions

@@ -2224,46 +2224,134 @@ The Github Issue we are trying to solve is:
                     .file_open(fs_file_path.to_owned(), message_properties.clone())
                     .await;
 
-                let default_range =
-            // very large end position
-                Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
+                // if the file is very very large then we chunk it up and use search and replace
+                // on individual chunks instead
+                let updated_code = if file_contents.lines().into_iter().collect::<Vec<_>>().len()
+                    >= 1300
+                {
+                    let first_range = Range::new(Position::new(0, 0, 0), Position::new(750, 0, 0));
+                    let second_range =
+                        Range::new(Position::new(751, 0, 0), Position::new(10_000, 0, 0));
 
-                let symbol_to_edit = SymbolToEdit::new(
-                    fs_file_path.to_owned(),
-                    default_range,
-                    fs_file_path.to_owned(),
-                    vec![instruction.clone()],
-                    false,
-                    false, // is_new
-                    false,
-                    "".to_owned(),
-                    None,
-                    false,
-                    None,
-                    false,
-                    None,
-                    vec![], // previous_user_queries
-                    None,
-                )
-                .set_should_stream_status(should_stream_edits);
-
-                let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
-
-                let updated_code = tool_box
-                    .code_editing_with_search_and_replace(
-                        &symbol_to_edit,
-                        &fs_file_path,
-                        &file_contents,
-                        &default_range,
+                    // First half of the file has been edited
+                    let symbol_to_edit = SymbolToEdit::new(
+                        fs_file_path.to_owned(),
+                        first_range,
+                        fs_file_path.to_owned(),
+                        vec![instruction.clone()],
+                        false,
+                        false, // is_new
+                        false,
                         "".to_owned(),
-                        instruction.clone(),
-                        &symbol_identifier,
                         None,
+                        false,
                         None,
-                        message_properties.clone(),
+                        false,
+                        None,
+                        vec![], // previous_user_queries
+                        None,
                     )
-                    .await?; // big expectations but can also fail, we should handle it properly
+                    .set_should_stream_status(should_stream_edits);
 
+                    let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
+
+                    let first_part_edited = tool_box
+                        .code_editing_with_search_and_replace(
+                            &symbol_to_edit,
+                            &fs_file_path,
+                            &file_contents,
+                            &first_range,
+                            "".to_owned(),
+                            instruction.clone(),
+                            &symbol_identifier,
+                            None,
+                            None,
+                            message_properties.clone(),
+                        )
+                        .await?; // big expectations but can also fail, we should handle it properly
+
+                    // Editing second half of the file
+                    let symbol_to_edit = SymbolToEdit::new(
+                        fs_file_path.to_owned(),
+                        second_range,
+                        fs_file_path.to_owned(),
+                        vec![instruction.clone()],
+                        false,
+                        false, // is_new
+                        false,
+                        "".to_owned(),
+                        None,
+                        false,
+                        None,
+                        false,
+                        None,
+                        vec![], // previous_user_queries
+                        None,
+                    )
+                    .set_should_stream_status(should_stream_edits);
+
+                    let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
+
+                    let second_part_edited = tool_box
+                        .code_editing_with_search_and_replace(
+                            &symbol_to_edit,
+                            &fs_file_path,
+                            &file_contents,
+                            &second_range,
+                            "".to_owned(),
+                            instruction.clone(),
+                            &symbol_identifier,
+                            None,
+                            None,
+                            message_properties.clone(),
+                        )
+                        .await?; // big expectations but can also fail, we should handle it properly
+                    format!(
+                        r#"{}
+{}"#,
+                        first_part_edited, second_part_edited
+                    )
+                } else {
+                    let default_range =
+                    // very large end position
+                    Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
+
+                    let symbol_to_edit = SymbolToEdit::new(
+                        fs_file_path.to_owned(),
+                        default_range,
+                        fs_file_path.to_owned(),
+                        vec![instruction.clone()],
+                        false,
+                        false, // is_new
+                        false,
+                        "".to_owned(),
+                        None,
+                        false,
+                        None,
+                        false,
+                        None,
+                        vec![], // previous_user_queries
+                        None,
+                    )
+                    .set_should_stream_status(should_stream_edits);
+
+                    let symbol_identifier = SymbolIdentifier::new_symbol(&fs_file_path);
+
+                    tool_box
+                        .code_editing_with_search_and_replace(
+                            &symbol_to_edit,
+                            &fs_file_path,
+                            &file_contents,
+                            &default_range,
+                            "".to_owned(),
+                            instruction.clone(),
+                            &symbol_identifier,
+                            None,
+                            None,
+                            message_properties.clone(),
+                        )
+                        .await? // big expectations but can also fail, we should handle it properly
+                };
                 // This code-block only ever hits for the swe-bench run and nothing else
                 // in the future we should create a tool for this, but this will help unblock us
                 if !should_stream_edits {

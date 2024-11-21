@@ -2299,7 +2299,8 @@ The Github Issue we are trying to solve is:
                             &file_contents,
                             &second_range,
                             "".to_owned(),
-                            instruction.clone(),
+                            format!(r#"{}
+This is part of the file which might not contain the method in full, if thats the case do not generate any edits"#, instruction.clone()),
                             &symbol_identifier,
                             None,
                             None,

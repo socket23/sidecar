@@ -455,7 +455,7 @@ impl SessionService {
                     // store to disk
                     let _ = self.save_to_storage(&session).await;
                     let tool_type = tool_input_partial.to_tool_type();
-                    session = session
+                    let session_output = session
                         .invoke_tool(
                             tool_type.clone(),
                             tool_input_partial,
@@ -465,7 +465,15 @@ impl SessionService {
                             user_message.to_owned(),
                             message_properties.clone(),
                         )
-                        .await?;
+                        .await;
+
+                    // return here if the test case is passing
+                    if matches!(session_output, Err(SymbolError::TestCaseIsPassing)) {
+                        println!("session_service::tool_type::test_case_passing");
+                        break;
+                    }
+
+                    session = session_output?;
 
                     let _ = self.save_to_storage(&session).await;
                     if matches!(tool_type, ToolType::AskFollowupQuestions)

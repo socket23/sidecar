@@ -88,4 +88,7 @@ pub enum SymbolError {
 
     #[error("Cancelled Response")]
     CancelledResponseStream,
+
+    #[error("Test case is passing")]
+    TestCaseIsPassing,
 }

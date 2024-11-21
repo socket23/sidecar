@@ -2252,9 +2252,10 @@ The Github Issue we are trying to solve is:
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
-                    let first_range = Range::new(Position::new(0, 0, 0), Position::new(750, 0, 0));
+                    let first_range =
+                        Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
                     let second_range =
-                        Range::new(Position::new(751, 0, 0), Position::new(10_000, 0, 0));
+                        Range::new(Position::new(0, 0, 0), Position::new(10_000, 0, 0));
 
                     // First half of the file has been edited
                     let symbol_to_edit = SymbolToEdit::new(

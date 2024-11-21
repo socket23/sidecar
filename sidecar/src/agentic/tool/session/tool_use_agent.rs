@@ -142,6 +142,7 @@ The problem is a Github Issue on {repo_name}
         format!(
             r#"You are an expert software engineer tasked with solving Github issues which the user will provide. You are an expert at {repo_name} and you will be given a list of tools which you can use one after the other to debug and fix the issue.
 The user is pretty sure that all the information to solve the issue is present within the {working_directory} which they have cloned for to work on the issue.
+Your first step MUST ALWAYS be to apply the test patch to the codebase. NEVER use any other tool before applying the test patch.
 The end goal is to fix the issue in the current {working_directory}. You have to make sure that the bug is fixed at the end when you are done with your changes.
 Do your very best, you got this!
 ====
@@ -150,7 +151,6 @@ TOOL USE
 
 You have access to a set of tools. You can use one tool per message (and only one), and you will receive the result of the tool use from the user. You should use the tools step-by-step to accomplish the user task.
 You use the previous information which you get from using the tools to inform your next tool usage.
-Your first step should always be to apply the test patch to the codebase. Then, execute the test patch using the test_runner tool.
 As long as the test patch is not passing, you must keep iterating on the patch until it passes.
 You should always output the <thinking></thinking> section before using a tool and we are showing you an example
 Your goal is pass the test patch.

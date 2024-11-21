@@ -40,6 +40,10 @@ pub struct SessionChatMessage {
 }
 
 impl SessionChatMessage {
+    pub fn new(role: SessionChatRole, message: String) -> Self {
+        Self { role, message }
+    }
+
     pub fn assistant(message: String) -> Self {
         Self {
             message,

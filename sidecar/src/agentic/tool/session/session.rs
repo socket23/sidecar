@@ -672,6 +672,61 @@ impl Session {
             .find(|exchange| &exchange.exchange_id == exchange_id)
     }
 
+    fn decay_messages(
+        &self,
+        // both of these have the same length
+        exchanges: &[Exchange],
+        mut conversation_messages: Vec<SessionChatMessage>,
+    ) -> Vec<SessionChatMessage> {
+        // The algorithm we use for decay is the following:
+        // - When using any tool which is of map type query -> List<Results>
+        // we keep the tool output for the map tool type as long as there is not
+        // a mutation (code_edit) or we use another map type tool
+        // - This allows us to keep the token usage small while still retaining
+        let mut previous_map_tool_indices = vec![];
+        for (idx, exchange) in exchanges.into_iter().enumerate() {
+            match &exchange.exchange_type {
+                ExchangeType::AgentChat(agent_chat) => match &agent_chat.reply {
+                    ExchangeReplyAgent::Tool(tool_input) => {
+                        let input_tool_type = &tool_input.tool_type;
+                        // We are have an input tool over here
+                        // map_tool_type || mutation_tool_type
+                        // [T T T T M I I C T M I I I M M T T]
+                        // if we get a C which is code-edit
+                        // then we remove the output of the previous map test
+                        // and if we have multiple M steps we remove all of them
+                        // until we get a C (code-edit)
+                        if input_tool_type.is_map_type() {
+                            previous_map_tool_indices.push(idx);
+                        }
+                        if input_tool_type.is_code_edit_type() {
+                            // rest all the running map types over here sinc we
+                            // have started started code editing
+                            previous_map_tool_indices.into_iter().for_each(
+                                |map_tool_input_index| {
+                                    // the tool output is generally immediately
+                                    // after the current tool input index
+                                    let role = conversation_messages[map_tool_input_index + 1]
+                                        .role()
+                                        .clone();
+                                    conversation_messages[map_tool_input_index + 1] =
+                                        SessionChatMessage::new(
+                                            role,
+                                            "... truncated output".to_owned(),
+                                        );
+                                },
+                            );
+                            previous_map_tool_indices = vec![];
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        conversation_messages
+    }
+
     /// Finds the exchange we are interested in and mutates the previous queries
     /// and the current query
     pub fn plan_iteration(
@@ -1012,6 +1067,10 @@ impl Session {
                     .await,
             );
         }
+
+        // decay the content of the messages depending on the decay condition
+        // so we can keep the context smaller and more relevant
+        converted_messages = self.decay_messages(self.exchanges.as_slice(), converted_messages);
 
         // grab the terminal output if anything is present and pass it as part of the
         // agent input

@@ -244,6 +244,33 @@ impl std::fmt::Display for ToolType {
     }
 }
 
+impl ToolType {
+    pub fn is_map_type(&self) -> bool {
+        let map_tool_type = vec![
+            ToolType::SearchFileContentWithRegex,
+            ToolType::ListFiles,
+            ToolType::RepoMapGeneration,
+        ];
+        map_tool_type
+            .into_iter()
+            .any(|tool_type| tool_type == *self)
+    }
+
+    pub fn is_insight_type(&self) -> bool {
+        let insight_tool_type = vec![ToolType::OpenFile];
+        insight_tool_type
+            .into_iter()
+            .any(|tool_type| tool_type == *self)
+    }
+
+    pub fn is_code_edit_type(&self) -> bool {
+        let mutation_tool_type = vec![ToolType::CodeEditing];
+        mutation_tool_type
+            .into_iter()
+            .any(|tool_type| tool_type == *self)
+    }
+}
+
 #[async_trait]
 pub trait Tool {
     async fn invoke(&self, input: ToolInput) -> Result<ToolOutput, ToolError>;

@@ -5,6 +5,7 @@
 //! - We provide the files which we want to generate the test from
 //! - We have 0 codebase context and are starting afresh to find the tests and run it
 //! - We have a pre-test run and want to explore the failing tests from there properly
+//! - This allows us to shortcircuit the logic quite a bit
 
 use std::sync::Arc;
 

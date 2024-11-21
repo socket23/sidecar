@@ -106,7 +106,8 @@ The problem is a Github Issue on {repo_name}
 ## OUTPUT REQUIRED
 - You have to give feedback to the junior engineer which they will take to heart and follow to the letter.
 - Be short and concise in your feedback and point out the wrong assumptions they might have made.
-- You are an expert and the junior engineer wants the feedback from you, so please be thorough with your feedback so they are able to solve the Github Issue."#
+- You are an expert and the junior engineer wants the feedback from you, so please be thorough with your feedback so they are able to solve the Github Issue.
+- You are never to tell the junior engineer the final solution, but guide them towards the right answer by challenging their assumptions and any wrong conclusions they might have drawn."#
         )
     }
 
@@ -415,7 +416,7 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
                         ),
                         llm_properties.provider().clone(),
                         vec![
-                            ("event_type".to_owned(), "tool_use".to_owned()),
+                            ("event_type".to_owned(), "critique".to_owned()),
                             ("root_id".to_owned(), cloned_root_request_id),
                         ]
                         .into_iter()

@@ -9,6 +9,18 @@ pub struct TestRunnerRequest {
     editor_url: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TestRunnerResponse {
+    test_output: String,
+    exit_code: i32,
+}
+
+impl TestRunnerResponse {
+    pub fn test_output(&self) -> &str {
+        &self.test_output
+    }
+}
+
 impl TestRunnerRequest {
     pub fn new(fs_file_paths: Vec<String>, editor_url: String) -> Self {
         Self {
@@ -34,8 +46,8 @@ impl Tool for TestRunner {
             .await
             .map_err(|e| ToolError::LLMClientError(e.into()))?;
 
-        let output = response
-            .text()
+        let output: TestRunnerResponse = response
+            .json()
             .await
             .map_err(|e| ToolError::LLMClientError(e.into()))?;
 

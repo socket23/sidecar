@@ -383,7 +383,8 @@ impl SessionService {
                     ToolType::SearchFileContentWithRegex,
                     ToolType::OpenFile,
                     ToolType::CodeEditing,
-                    ToolType::LSPDiagnostics,
+                    // disable this since its polluting our flow
+                    // ToolType::LSPDiagnostics,
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
                     ToolType::TerminalCommand,

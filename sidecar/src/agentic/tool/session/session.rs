@@ -2125,7 +2125,7 @@ impl Session {
                 self = self.tool_output(
                     &exchange_id,
                     tool_type.clone(),
-                    test_runner_output,
+                    test_runner_output.test_output().to_owned(),
                     UserContext::default(),
                 );
             }
@@ -2210,7 +2210,41 @@ impl Session {
                             .await
                             .expect("file creation to not fail");
                     }
-                    let _ = tokio::fs::write(fs_file_path.to_owned(), updated_code).await;
+                    let _ =
+                        tokio::fs::write(fs_file_path.to_owned(), updated_code.to_owned()).await;
+
+                    // we have the original file content and the updated code content
+                    // we want to generate a git-diff between the 2 and pass that to the LLM implicitly
+                    // since we do not have a recent-edits handle easily implemented in python mock editor
+                    // This is really bad but we are interested in testing out things for now (DO NOT COMMIT)
+                    let client = reqwest::Client::new();
+                    let original_content = &file_contents;
+                    let request_object = serde_json::json!({
+                        "original_content": original_content,
+                        "modified_content": updated_code,
+                        "fs_file_path": fs_file_path,
+                    });
+                    let response = client
+                        .post(message_properties.editor_url() + "/diff_generator")
+                        .body(serde_json::to_string(&request_object).expect("to work"))
+                        .send()
+                        .await
+                        .expect("to get a reply");
+                    #[derive(serde::Deserialize)]
+                    struct FileEditedResponseStruct {
+                        generated_diff: String,
+                    }
+                    let response: FileEditedResponseStruct =
+                        response.json().await.expect("to work");
+
+                    self = self.tool_output(
+                        &exchange_id,
+                        tool_type.clone(),
+                        format!(r#"I performed the edits which you asked for, here is the git diff for it:
+{}"#, response.generated_diff),
+                        UserContext::default()
+                    );
+                    return Ok(self);
                 }
 
                 // now that we have modified the file we can ask the editor for the git-diff of this file over here

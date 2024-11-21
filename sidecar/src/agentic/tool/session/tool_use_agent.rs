@@ -98,7 +98,6 @@ impl ToolUseAgent {
         format!(
             r#"You are an expert software engineer tasked with solving Github issues which the user will provide. You are an expert at {repo_name} and you will be given a list of tools which you can use one after the other to debug and fix the issue.
 The user is pretty sure that all the information to solve the issue is present within the {working_directory} which they have cloned for to work on the issue.
-If you are going to execute any python commands or scripts you should always use `python3` and nothing else.
 The end goal is to fix the issue in the current {working_directory}. You have to make sure that the bug is fixed at the end when you are done with your changes.
 Do your very best, you got this!
 ====
@@ -185,7 +184,7 @@ RULES
 - ALWAYS start your tool use with the <thinking></thinking> section.
 - ONLY USE A SINGLE tool at a time, never use multiple tools in the same response.
 - Each xml tag should be on a new line. This is important because we are parsing the input line by line.
-- NEVER attempt to write new tests or scripts. The golden test has already been provided for you.
+- NEVER attempt to write new tests or scripts. The golden test for the test file has already been provided for you.
 
 ====
 

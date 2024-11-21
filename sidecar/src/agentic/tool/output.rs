@@ -61,6 +61,7 @@ use super::{
     },
     swe_bench::test_tool::SWEBenchTestRepsonse,
     terminal::terminal::TerminalOutput,
+    test_runner::runner::TestRunnerResponse,
 };
 
 #[derive(Debug)]
@@ -218,7 +219,7 @@ pub enum ToolOutput {
     // spawned subprocess and their output which is pending
     SubProcessSpawnedPendingOutput(SubProcessSpanwedPendingOutputResponse),
     // Test runner
-    TestRunner(String),
+    TestRunner(TestRunnerResponse),
 }
 
 impl ToolOutput {
@@ -844,7 +845,7 @@ impl ToolOutput {
         }
     }
 
-    pub fn get_test_runner(self) -> Option<String> {
+    pub fn get_test_runner(self) -> Option<TestRunnerResponse> {
         match self {
             ToolOutput::TestRunner(response) => Some(response),
             _ => None,

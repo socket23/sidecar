@@ -2194,6 +2194,8 @@ The Github Issue we are trying to solve is:
                             message_properties,
                         )
                         .await;
+                } else if test_runner_output.exit_code() == 0 {
+                    return Err(SymbolError::TestCaseIsPassing);
                 }
             }
             ToolInputPartial::AskFollowupQuestions(_followup_question) => {

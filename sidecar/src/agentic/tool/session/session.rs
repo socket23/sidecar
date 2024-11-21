@@ -2235,7 +2235,7 @@ The Github Issue we are trying to solve is:
                         .into_iter()
                         .enumerate()
                         .filter_map(|(idx, line)| {
-                            if *idx <= 750 {
+                            if idx <= 750 {
                                 Some(line.to_owned())
                             } else {
                                 None

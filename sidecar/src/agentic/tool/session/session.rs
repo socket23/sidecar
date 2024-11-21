@@ -2234,8 +2234,13 @@ The Github Issue we are trying to solve is:
                         .lines()
                         .into_iter()
                         .enumerate()
-                        .take_while(|(idx, _)| *idx <= 750)
-                        .map(|(_, line_content)| line_content.to_owned())
+                        .filter_map(|(idx, line)| {
+                            if *idx <= 750 {
+                                Some(line.to_owned())
+                            } else {
+                                None
+                            }
+                        })
                         .collect::<Vec<_>>()
                         .join("\n");
                     let second_part_lines = file_contents

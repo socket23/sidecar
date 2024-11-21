@@ -2229,6 +2229,29 @@ The Github Issue we are trying to solve is:
                 let updated_code = if file_contents.lines().into_iter().collect::<Vec<_>>().len()
                     >= 1300
                 {
+                    let first_part_lines = file_contents
+                        .to_owned()
+                        .lines()
+                        .into_iter()
+                        .enumerate()
+                        .take_while(|(idx, _)| *idx <= 750)
+                        .map(|(_, line_content)| line_content.to_owned())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let second_part_lines = file_contents
+                        .to_owned()
+                        .lines()
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(idx, line)| {
+                            if idx > 750 {
+                                Some(line.to_owned())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     let first_range = Range::new(Position::new(0, 0, 0), Position::new(750, 0, 0));
                     let second_range =
                         Range::new(Position::new(751, 0, 0), Position::new(10_000, 0, 0));
@@ -2259,7 +2282,7 @@ The Github Issue we are trying to solve is:
                         .code_editing_with_search_and_replace(
                             &symbol_to_edit,
                             &fs_file_path,
-                            &file_contents,
+                            &first_part_lines,
                             &first_range,
                             "".to_owned(),
                             instruction.clone(),
@@ -2296,7 +2319,7 @@ The Github Issue we are trying to solve is:
                         .code_editing_with_search_and_replace(
                             &symbol_to_edit,
                             &fs_file_path,
-                            &file_contents,
+                            &second_part_lines,
                             &second_range,
                             "".to_owned(),
                             format!(r#"{}

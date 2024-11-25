@@ -402,6 +402,7 @@ impl SessionService {
             std::env::consts::OS.to_owned(),
             shell.to_owned(),
             Some(repo_name),
+            false,
         );
 
         session = session.human_message_tool_use(
@@ -561,6 +562,7 @@ impl SessionService {
             std::env::consts::OS.to_owned(),
             shell.to_owned(),
             None,
+            false,
         );
 
         session = session.human_message_tool_use(

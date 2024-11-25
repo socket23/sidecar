@@ -167,9 +167,6 @@ TOOL USE
 
 You have access to a set of tools. You can use one tool per message (and only one), and you will receive the result of the tool use from the user. You should use the tools step-by-step to accomplish the user task.
 You use the previous information which you get from using the tools to inform your next tool usage.
-Your first step should always be to apply the test patch to the codebase. Then, execute the test patch using the test_runner tool.
-As long as the test patch is not passing, you must keep iterating on the patch until it passes.
-Your goal is pass the test patch.
 
 # Tool Use Formatting
 
@@ -245,7 +242,7 @@ RULES
 - ALWAYS start your tool use with the <thinking></thinking> section.
 - ONLY USE A SINGLE tool at a time, never use multiple tools in the same response.
 - Each xml tag should be on a new line. This is important because we are parsing the input line by line.
-- NEVER attempt to write new tests or scripts. The golden test has already been provided for you.
+- NEVER attempt to write new tests or scripts.
 
 ====
 

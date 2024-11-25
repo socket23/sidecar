@@ -1,4 +1,4 @@
-use clap::{Args as ClapArgs, Parser};
+use clap::Parser;
 use llm_client::{
     broker::LLMBroker,
     clients::types::LLMType,

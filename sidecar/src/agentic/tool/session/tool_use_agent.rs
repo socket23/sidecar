@@ -204,7 +204,8 @@ You are an expert in {repo_name} and know in detail everything about this reposi
 3. Once you've written the tests, make sure to run them to confirm that you are able to replicate the behavior in the Github Issue.
 4. You can ONLY USE 1 TOOL in each step and not multiple tools, using multiple tools is not allowed.
 5. ONLY ATTEMPT COMPLETION if you have finished writing the tests which faitfully replicate the Github Issue.
-6. You have to present proof to the user that the tests faitfully replicate the Github Issue by presenting the failing tests and their output."#
+6. You have to present proof to the user that the tests faitfully replicate the Github Issue by presenting the failing tests and their output.
+7. Make sure that the test is FAILING so the user is able to replicate the issue easily on their end. Passing tests do not showcase the failing behavior of the Github Issue."#
         )
     }
 

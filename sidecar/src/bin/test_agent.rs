@@ -1,3 +1,6 @@
+//! Contains the test agent whose job is to generate tests and reproduce the error
+//! case
+
 use clap::{Args as ClapArgs, Parser};
 use llm_client::{
     broker::LLMBroker,
@@ -28,8 +31,8 @@ use std::{path::PathBuf, sync::Arc};
 
 /// Define the command-line arguments
 #[derive(Parser, Debug)]
-#[command(author = "skcd", version = "1.0", about = "SWE-Bench Sidecar Runner")]
-struct CliArgs {
+#[command(author = "skcd", version = "1.0", about = "SWE-Bench Test Generator")]
+struct TestAgentCliArgs {
     /// Git directory name
     #[arg(long)]
     timeout: usize,
@@ -89,7 +92,7 @@ fn default_index_dir() -> PathBuf {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command-line arguments
-    let args = CliArgs::parse();
+    let args = TestAgentCliArgs::parse();
 
     let editor_parsing = Arc::new(EditorParsing::default());
     let symbol_broker = Arc::new(SymbolTrackerInline::new(editor_parsing.clone()));
@@ -180,25 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);
-    println!("session_service::tool_use_agentic_swe_bench");
+    println!("session_service::test_agent::tool_use_agentic_swe_bench");
     // generate tests to test out the code gen output
-    let _ = session_service
-        .tool_use_agentic_swe_bench(
-            session_id,
-            storage_path,
-            repo_name,
-            input_parts.instance.problem_statement.to_owned(),
-            initial_exchange_id.to_string(),
-            vec![],
-            vec![],
-            "bash".to_owned(),
-            vec![],
-            RepoRef::local(&input_parts.git_drname).expect("to work"),
-            input_parts.git_drname.to_owned(),
-            tool_box,
-            llm_broker,
-            message_properties,
-        )
-        .await;
     Ok(())
 }

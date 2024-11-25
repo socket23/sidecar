@@ -59,6 +59,10 @@ impl Tool for SessionExchangeClient {
             .json()
             .await
             .map_err(|_e| ToolError::SerdeConversionFailed)?;
+        println!(
+            "tool_box::session_exchange_client::new_response::({:?})",
+            &new_exchange
+        );
         Ok(ToolOutput::new_exchange_during_session(new_exchange))
     }
 

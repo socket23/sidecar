@@ -606,6 +606,8 @@ impl SessionService {
                 )
                 .await?;
 
+            println!("tool_use_output::{:?}", tool_use_output);
+
             match tool_use_output {
                 AgentToolUseOutput::Success((tool_input_partial, new_session)) => {
                     // update our session
@@ -635,7 +637,10 @@ impl SessionService {
                         break;
                     }
                 }
-                AgentToolUseOutput::Cancelled => {}
+                AgentToolUseOutput::Cancelled => {
+                    // if it is cancelled then we should break
+                    break;
+                }
                 AgentToolUseOutput::Failed(failed_to_parse_output) => {
                     let human_message = format!(
                         r#"Your output was incorrect, please give me the output in the correct format:

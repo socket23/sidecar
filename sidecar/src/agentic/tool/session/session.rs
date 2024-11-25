@@ -2136,6 +2136,7 @@ The Github Issue we are trying to solve is:
         should_stream_edits: bool,
         tool_agent: ToolUseAgent,
         original_user_message: String,
+        is_test_generation: bool,
         mut message_properties: SymbolEventMessageProperties,
     ) -> Result<Self, SymbolError> {
         // we want to send a new event only when we are not going to ask for the followup questions
@@ -2185,17 +2186,20 @@ The Github Issue we are trying to solve is:
 
                 // The test running is a terminal condition, if we have an exit code 0
                 // we are good, otherwise the cirtique will take a look
-                if test_runner_output.exit_code() != 0 {
-                    return self
-                        .handle_critique(
-                            tool_agent,
-                            tool_box,
-                            original_user_message,
-                            message_properties,
-                        )
-                        .await;
-                } else if test_runner_output.exit_code() == 0 {
-                    return Err(SymbolError::TestCaseIsPassing);
+                // we only do this when we are not generating test cases
+                if !is_test_generation {
+                    if test_runner_output.exit_code() != 0 {
+                        return self
+                            .handle_critique(
+                                tool_agent,
+                                tool_box,
+                                original_user_message,
+                                message_properties,
+                            )
+                            .await;
+                    } else if test_runner_output.exit_code() == 0 {
+                        return Err(SymbolError::TestCaseIsPassing);
+                    }
                 }
             }
             ToolInputPartial::AskFollowupQuestions(_followup_question) => {

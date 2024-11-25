@@ -71,7 +71,7 @@ pub struct ToolUseAgent {
     operating_system: String,
     shell: String,
     swe_bench_repo_name: Option<String>,
-    _is_test_agent: bool,
+    is_test_agent: bool,
 }
 
 impl ToolUseAgent {
@@ -89,11 +89,11 @@ impl ToolUseAgent {
             operating_system,
             shell,
             swe_bench_repo_name,
-            _is_test_agent: is_test_agent,
+            is_test_agent,
         }
     }
 
-    fn _system_message_for_test_agent(
+    fn system_message_for_test_agent(
         &self,
         context: &ToolUseAgentInput,
         repo_name: &str,
@@ -202,8 +202,9 @@ You are an expert in {repo_name} and know in detail everything about this reposi
 1. Analyze the Github Issue and set clear, and understand what kind of tests will help in effectively replicating the Github Issue.
 2. Remember, you have extensive capabilities with access to a wide range of tools that can be used in powerful and clever ways as necessary to accomplish each goal. Before calling a tool, do some analysis within <thinking></thinking> tags. First, analyze the file structure provided in environment_details to gain context and insights for proceeding effectively. Then, think about which of the provided tools is the most relevant tool to accomplish the user's task. Next, go through each of the required parameters of the relevant tool and determine if the user has directly provided or given enough information to infer a value. When deciding if the parameter can be inferred, carefully consider all the context to see if it supports a specific value. If all of the required parameters are present or can be reasonably inferred, close the thinking tag and proceed with the tool use. BUT, if one of the values for a required parameter is missing.
 3. Once you've written the tests, make sure to run them to confirm that you are able to replicate the behavior in the Github Issue.
-5. You can ONLY USE 1 TOOL in each step and not multiple tools, using multiple tools is not allowed.
-7. ONLY ATTEMPT COMPLETION if you have finished writing the tests which faitfully replicate the Github Issue."#
+4. You can ONLY USE 1 TOOL in each step and not multiple tools, using multiple tools is not allowed.
+5. ONLY ATTEMPT COMPLETION if you have finished writing the tests which faitfully replicate the Github Issue.
+6. You have to present proof to the user that the tests faitfully replicate the Github Issue by presenting the failing tests and their output."#
         )
     }
 
@@ -553,7 +554,11 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
         // this will involve some kind of magic because for each tool type we want to be sure about how we are parsing the output but it should not be too hard to make that happen
         let system_message =
             LLMClientMessage::system(if let Some(repo_name) = self.swe_bench_repo_name.as_ref() {
-                self.system_message_for_swe_bench(&input, repo_name)
+                if self.is_test_agent {
+                    self.system_message_for_test_agent(&input, repo_name)
+                } else {
+                    self.system_message_for_swe_bench(&input, repo_name)
+                }
             } else {
                 self.system_message(&input)
             });

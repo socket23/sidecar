@@ -25,6 +25,7 @@ use sidecar::{
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
     inline_completion::symbols_tracker::SymbolTrackerInline,
+    repo::types::RepoRef,
 };
 use std::{path::PathBuf, sync::Arc};
 
@@ -132,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _timeout = args.timeout;
     let input_path = args.input;
     let run_id = args.run_id.to_owned();
-    let _repo_name = args.repo_name.to_owned();
+    let repo_name = args.repo_name.to_owned();
     let anthropic_api_key = args.anthropic_api_key.to_owned();
     let input_content = tokio::fs::read(input_path).await.expect("path content");
     let input_parts: InputParts =
@@ -161,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .expect("directory creation to not fail");
     }
     let session_path = session_path.join(session_id.to_owned());
-    let _storage_path = session_path
+    let storage_path = session_path
         .to_str()
         .expect("path conversion to work on all platforms")
         .to_owned();
@@ -170,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let cancellation_token = tokio_util::sync::CancellationToken::new();
-    let _message_properties = SymbolEventMessageProperties::new(
+    let message_properties = SymbolEventMessageProperties::new(
         SymbolEventRequestId::new(
             initial_exchange_id.to_string().to_owned(),
             run_id.to_string(),
@@ -181,8 +182,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         model_configuration,
     );
 
-    let _session_service = SessionService::new(tool_box.clone(), symbol_manager);
+    let session_service = SessionService::new(tool_box.clone(), symbol_manager);
     println!("session_service::test_agent::tool_use_agentic_swe_bench");
     // generate tests to test out the code gen output
+    let _ = session_service
+        .tool_use_test_generation(
+            session_id,
+            storage_path,
+            repo_name,
+            input_parts.instance.problem_statement.to_owned(),
+            initial_exchange_id.to_string(),
+            vec![],
+            vec![],
+            "bash".to_owned(),
+            vec![],
+            RepoRef::local(&input_parts.git_drname).expect("to work"),
+            input_parts.git_drname.to_owned(),
+            tool_box,
+            llm_broker,
+            message_properties,
+        )
+        .await;
     Ok(())
 }

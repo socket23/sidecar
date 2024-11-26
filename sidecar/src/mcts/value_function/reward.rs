@@ -7,3 +7,9 @@ pub struct Reward {
     /// A single integer value between -100 and 100 based on your confidence in the correctness of the action and its likelihood of resolving the issue
     value: i32,
 }
+
+impl Reward {
+    pub fn value(&self) -> i32 {
+        self.value
+    }
+}

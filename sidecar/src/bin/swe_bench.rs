@@ -179,6 +179,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         model_configuration,
     );
 
+    let problem_with_test = format!(
+        "GitHub issue: {}\n\nTest to pass: {}",
+        input_parts.instance.problem_statement,
+        r#"    def test_html_escaped_trailing_punctuation(self):
+        """
+        Test that urlize correctly handles HTML escaped characters in URLs with trailing punctuation
+        """
+        # Test with HTML escaped characters and trailing punctuation
+        self.assertEqual(
+            urlize('Search for google.com/?q=1&lt! and see.'),
+            'Search for <a href="http://google.com/?q=1%3C" rel="nofollow">google.com/?q=1&lt</a>! and see.'
+        )
+        # Test with multiple HTML escaped characters and trailing punctuation
+        self.assertEqual(
+            urlize('Visit google.com/?q=1&lt&gt! now.'),
+            'Visit <a href="http://google.com/?q=1%3C%3E" rel="nofollow">google.com/?q=1&lt&gt</a>! now.'
+        )
+        # Test with HTML escaped characters but no trailing punctuation
+        self.assertEqual(
+            urlize('Check google.com/?q=1&lt&gt and more.'),
+            'Check <a href="http://google.com/?q=1%3C%3E" rel="nofollow">google.com/?q=1&lt&gt</a> and more.'
+        )
+
+"#
+    );
+
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);
     println!("session_service::tool_use_agentic_swe_bench");
     // generate tests to test out the code gen output
@@ -187,7 +213,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             session_id,
             storage_path,
             repo_name,
-            input_parts.instance.problem_statement.to_owned(),
+            problem_with_test,
             initial_exchange_id.to_string(),
             vec![],
             vec![],

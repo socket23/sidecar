@@ -545,7 +545,7 @@ impl SessionService {
                     ToolType::AttemptCompletion,
                     ToolType::RepoMapGeneration,
                     // ToolType::TerminalCommand,
-                    // ToolType::TestRunner,
+                    // ToolType::TestRunner, // even with this off, we are able to get passes on previous failures. Keeping off for now.
                 ],
             )
         };

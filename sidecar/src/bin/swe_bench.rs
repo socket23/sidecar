@@ -182,26 +182,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let problem_with_test = format!(
         "GitHub issue: {}\n\nTest to pass: {}",
         input_parts.instance.problem_statement,
-        r#"    def test_html_escaped_trailing_punctuation(self):
-        """
-        Test that urlize correctly handles HTML escaped characters in URLs with trailing punctuation
-        """
-        # Test with HTML escaped characters and trailing punctuation
-        self.assertEqual(
-            urlize('Search for google.com/?q=1&lt! and see.'),
-            'Search for <a href="http://google.com/?q=1%3C" rel="nofollow">google.com/?q=1&lt</a>! and see.'
+        r#" class FilterableFieldTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.metadata_type = ProductMetaDataType.objects.create(
+            label='brand',
+            filterable=True
         )
-        # Test with multiple HTML escaped characters and trailing punctuation
-        self.assertEqual(
-            urlize('Visit google.com/?q=1&lt&gt! now.'),
-            'Visit <a href="http://google.com/?q=1%3C%3E" rel="nofollow">google.com/?q=1&lt&gt</a>! now.'
-        )
-        # Test with HTML escaped characters but no trailing punctuation
-        self.assertEqual(
-            urlize('Check google.com/?q=1&lt&gt and more.'),
-            'Check <a href="http://google.com/?q=1%3C%3E" rel="nofollow">google.com/?q=1&lt&gt</a> and more.'
+        cls.metadata = ProductMetaData.objects.create(
+            value='Dark Vador',
+            metadata_type=cls.metadata_type
         )
 
+    def test_filterable_field_raises_error(self):
+        """
+        Test that filtering on a foreign key to a model with a field named 'filterable'
+        raises NotSupportedError.
+        """
+        from django.db.utils import NotSupportedError
+        msg = 'ProductMetaDataType is disallowed in the filter clause.'
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            # Filter both directly on metadata_type and through the relationship
+            list(ProductMetaData.objects.filter(
+                value='Dark Vador',
+                metadata_type=self.metadata_type,
+                metadata_type__filterable=True
+            ))
+
+    def test_filterable_field_renamed_works(self):
+        """
+        Test that filtering works when the field is renamed to something else.
+        """
+        # Temporarily rename the field for this test
+        old_field = ProductMetaDataType._meta.get_field('filterable')
+        try:
+            old_field.name = 'filterable_test'
+            # This should not raise NotSupportedError
+            qs = ProductMetaData.objects.filter(
+                value='Dark Vador',
+                metadata_type=self.metadata_type
+            )
+            self.assertEqual(len(qs), 1)
+            self.assertEqual(qs[0].value, 'Dark Vador')
+        finally:
+            # Restore the field name
+            old_field.name = 'filterable'
+
+    
+    def test_filterable_field_raises_error(self):
+        """
+        Test that filtering on a foreign key to a model with a field named 'filterable'
+        raises NotSupportedError.
+        """
+        from django.db.utils import NotSupportedError
+        msg = 'ProductMetaDataType is disallowed in the filter clause.'
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            # Filter both directly on metadata_type and through the relationship
+            list(ProductMetaData.objects.filter(
+                value='Dark Vador',
+                metadata_type=self.metadata_type,
+                metadata_type__filterable=True
+            ))
 "#
     );
 

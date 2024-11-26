@@ -759,17 +759,17 @@ impl SessionService {
                 .clone()
                 .get_tool_to_use(
                     tool_box.clone(),
-                    tool_exchange_id,
+                    tool_exchange_id.to_owned(),
                     exchange_id.to_owned(),
                     tool_agent.clone(),
                     message_properties.clone(),
                 )
-                .await?;
+                .await;
 
             println!("tool_use_output::{:?}", tool_use_output);
 
             match tool_use_output {
-                AgentToolUseOutput::Success((tool_input_partial, new_session)) => {
+                Ok(AgentToolUseOutput::Success((tool_input_partial, new_session))) => {
                     // update our session
                     session = new_session;
                     // store to disk
@@ -798,11 +798,11 @@ impl SessionService {
                         break;
                     }
                 }
-                AgentToolUseOutput::Cancelled => {
+                Ok(AgentToolUseOutput::Cancelled) => {
                     // if it is cancelled then we should break
                     break;
                 }
-                AgentToolUseOutput::Failed(failed_to_parse_output) => {
+                Ok(AgentToolUseOutput::Failed(failed_to_parse_output)) => {
                     let human_message = format!(
                         r#"Your output was incorrect, please give me the output in the correct format:
 {}"#,
@@ -816,6 +816,16 @@ impl SessionService {
                         vec![],
                         repo_ref.clone(),
                     );
+                }
+                Err(e) => {
+                    let _ = message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_not_found(
+                            session_id.to_owned(),
+                            tool_exchange_id.to_owned(),
+                            e.to_string(),
+                        ));
+                    Err(e)?
                 }
             }
         }

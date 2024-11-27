@@ -19,11 +19,25 @@ pub struct ActionNode {
     reward: Option<Reward>,
     visits: u32,
     value: f32,
-    _max_expansions: usize,
+    max_expansions: usize,
     observation: Option<ActionObservation>,
 }
 
 impl ActionNode {
+    pub fn new(index: usize, max_expansions: usize) -> Self {
+        Self {
+            index,
+            _action: None,
+            _feedback: None,
+            _is_duplicate: false,
+            reward: None,
+            visits: 0,
+            value: 0.0,
+            max_expansions,
+            observation: None,
+        }
+    }
+
     pub fn reward(&self) -> Option<&Reward> {
         self.reward.as_ref()
     }
@@ -40,28 +54,57 @@ impl ActionNode {
 
 pub struct SearchTree {
     pub index_to_node: HashMap<usize, ActionNode>,
-    _node_to_children: HashMap<usize, Vec<usize>>,
-    node_to_parent: HashMap<usize, Option<usize>>,
+    node_to_children: HashMap<usize, Vec<usize>>,
+    node_to_parent: HashMap<usize, usize>,
+    /// the maximum expansions allowed
+    max_expansions: usize,
 }
 
 impl SearchTree {
     fn parent(&self, node: &ActionNode) -> Option<&ActionNode> {
-        if let Some(Some(parent_index)) = self.node_to_parent.get(&node.index) {
+        if let Some(parent_index) = self.node_to_parent.get(&node.index) {
             self.index_to_node.get(parent_index)
         } else {
             None
         }
     }
 
+    fn add_node(&mut self, node_index: usize, node: ActionNode) {
+        self.index_to_node.insert(node_index, node);
+    }
+
+    fn add_node_to_parent(&mut self, parent_index: usize, child_index: usize) {
+        self.node_to_parent
+            .entry(child_index)
+            .or_insert_with(|| parent_index);
+    }
+
+    fn add_child(&mut self, parent_index: usize, child_index: usize) {
+        self.node_to_children
+            .entry(parent_index)
+            .or_insert_with(Vec::new)
+            .push(child_index);
+    }
+
+    fn get_new_node_index(&self) -> usize {
+        self.index_to_node.len()
+    }
+
+    pub fn get_node_mut(&mut self, node_index: usize) -> Option<&mut ActionNode> {
+        self.index_to_node.get_mut(&node_index)
+    }
+
     pub fn get_node(&self, node_index: usize) -> Option<&ActionNode> {
         self.index_to_node.get(&node_index)
     }
 
-    fn _children<'a>(
-        &'a self,
-        node: &ActionNode,
-    ) -> Option<impl Iterator<Item = &ActionNode> + 'a> {
-        self._node_to_children
+    fn children_indices(&self, node: &ActionNode) -> Option<Vec<usize>> {
+        self.children(node)
+            .map(|children| children.into_iter().map(|child| child.index).collect())
+    }
+
+    fn children<'a>(&'a self, node: &ActionNode) -> Option<impl Iterator<Item = &ActionNode> + 'a> {
+        self.node_to_children
             .get(&node.index)
             .map(move |child_indices| {
                 child_indices
@@ -76,16 +119,6 @@ impl SearchTree {
             current_node = parent_node;
         }
         current_node
-    }
-
-    fn add_child(&mut self, parent_index: usize, child: ActionNode) {
-        let child_index = child.index;
-        self.index_to_node.insert(child_index, child);
-        self._node_to_children
-            .entry(parent_index)
-            .or_insert_with(Vec::new)
-            .push(child_index);
-        self.node_to_parent.insert(child_index, Some(parent_index));
     }
 
     /// Creates the mean reward on the trajectory over here by traversing the tree
@@ -183,7 +216,7 @@ impl SearchTree {
             return 0.0;
         }
         let node = node.expect("if let None to hold");
-        let children = self._children(node);
+        let children = self.children(node);
         let children = children
             .map(|child_iterator| child_iterator.into_iter().collect::<Vec<_>>())
             .unwrap_or_default();
@@ -211,7 +244,7 @@ impl SearchTree {
         }
         let node = node.expect("if let None to hold");
         let exploration = self.calculate_exploration(node_index, exploration_weight);
-        let node_children = self._children(node);
+        let node_children = self.children(node);
         let node_children = node_children
             .map(|children| children.into_iter().collect::<Vec<_>>())
             .unwrap_or_default();
@@ -265,7 +298,7 @@ impl SearchTree {
             return 0.0;
         }
         let node = node.expect("if let None to hold");
-        let node_children = self._children(node);
+        let node_children = self.children(node);
         let node_children = node_children
             .map(|children| children.into_iter().collect::<Vec<_>>())
             .unwrap_or_default();
@@ -298,7 +331,7 @@ impl SearchTree {
             return 0.0;
         }
         let node = node.expect("if let None to hold");
-        let node_children = self._children(node);
+        let node_children = self.children(node);
         let node_children = node_children
             .map(|children| children.into_iter().collect::<Vec<_>>())
             .unwrap_or_default();
@@ -348,7 +381,7 @@ impl SearchTree {
         }
         let node = node.expect("if let None to hold");
         let children = self
-            ._children(node)
+            .children(node)
             .map(|children| children.into_iter().collect::<Vec<_>>())
             .unwrap_or_default();
         for child in children.into_iter() {
@@ -390,7 +423,7 @@ impl SearchTree {
                         .unwrap_or_default()
                 {
                     let children = self
-                        ._children(node)
+                        .children(node)
                         .map(|children| children.into_iter().collect::<Vec<_>>().len())
                         .unwrap_or_default();
                     let delay_factor = 1.0 / (1.0 + children.pow(2) as f32);
@@ -414,5 +447,55 @@ impl SearchTree {
     /// Iterates on the search tree until its finished completely
     pub fn run_search(&mut self, node: ActionNode) -> ActionNode {
         todo!("")
+    }
+
+    pub fn is_node_fully_expanded(&self, node_index: usize) -> bool {
+        let node = self.get_node(node_index);
+        // if node is not found, then we can't expand it
+        if let None = node {
+            return false;
+        }
+        let node = node.expect("if let None to hold");
+        let children = self.children(node);
+        let children_len = children
+            .map(|children| children.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default()
+            .len();
+        children_len < node.max_expansions
+    }
+
+    pub fn expand<'a>(&'a mut self, node_index: usize) -> Option<usize> {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return None;
+        }
+        let node = node.expect("if let None to hold");
+        let children_indices = self.children_indices(node).unwrap_or_default();
+        let children_len = children_indices.len();
+        for children_index in children_indices.into_iter() {
+            let child_node = self.get_node(children_index);
+            if let Some(child_node) = child_node {
+                // the child is not executed so we grab it
+                if child_node.observation.is_none() {
+                    return Some(child_node.index);
+                }
+            }
+        }
+
+        // we have already expanded beyond the limit
+        if children_len >= self.max_expansions {
+            return None;
+        }
+
+        let child_node_index = self.get_new_node_index();
+
+        let child_node = ActionNode::new(child_node_index, self.max_expansions);
+        // keep track of the child node
+        self.add_node(child_node_index, child_node);
+        // keep track of the edges
+        self.add_child(node_index, child_node_index);
+        // add the reverse edge
+        self.add_node_to_parent(node_index, child_node_index);
+        Some(child_node_index)
     }
 }

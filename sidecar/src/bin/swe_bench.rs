@@ -181,7 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let problem_with_test = format!(
         "GitHub issue: {}\n\nTest to pass: {}",
-        input_parts.instance.problem_statement, r#""#
+        input_parts.instance.problem_statement, r#"Always run the test before completion."#
     );
 
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);

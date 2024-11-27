@@ -343,7 +343,7 @@ RULES
 - ALWAYS start your tool use with the <thinking></thinking> section.
 - ONLY USE A SINGLE tool at a time, never use multiple tools in the same response.
 - Each xml tag should be on a new line. This is important because we are parsing the input line by line.
-- NEVER attempt to write new tests or scripts. The golden test for the test file has already been provided for you.
+- NEVER attempt to write new tests or scripts.
 
 ====
 
@@ -366,8 +366,9 @@ You are an expert in {repo_name} and know in detail everything about this reposi
 3. Remember, you have extensive capabilities with access to a wide range of tools that can be used in powerful and clever ways as necessary to accomplish each goal. Before calling a tool, do some analysis within <thinking></thinking> tags. First, analyze the file structure provided in environment_details to gain context and insights for proceeding effectively. Then, think about which of the provided tools is the most relevant tool to accomplish the user's task. Next, go through each of the required parameters of the relevant tool and determine if the user has directly provided or given enough information to infer a value. When deciding if the parameter can be inferred, carefully consider all the context to see if it supports a specific value. If all of the required parameters are present or can be reasonably inferred, close the thinking tag and proceed with the tool use. BUT, if one of the values for a required parameter is missing.
 4. Once you've completed the Github Issue, you must use the attempt_completion tool to present the result of solving the problem.
 5. You can ONLY USE 1 TOOL in each step and not multiple tools, using multiple tools is not allowed.
-6. DO NOT worry about tests, your goal is to just edit the codebase, another Q/A engineer will take care of running the tests and provide you feedback.
-7. ONLY ATTEMPT COMPLETION if you have finished with your round of edits."#
+6. You MUST ALWAYS run the test runner tool after you have finished with your round of edits.
+7. ONLY ATTEMPT COMPLETION if you have finished with your round of edits.
+"#
         )
     }
 

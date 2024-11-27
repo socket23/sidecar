@@ -55,8 +55,6 @@ impl Tool for TestRunner {
             .await
             .map_err(|e| ToolError::LLMClientError(e.into()))?;
 
-        println!("run_tests output: {:?}", output);
-
         Ok(ToolOutput::TestRunner(output))
     }
 

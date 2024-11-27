@@ -2177,24 +2177,27 @@ The Github Issue we are trying to solve is:
 
                 let test_runner_output = response.get_test_runner().unwrap();
 
+                println!("test_runner_output: {:?}", test_runner_output);
+
                 // Truncate and format the test output
                 let formatted_output = {
                     let raw_output = test_runner_output.test_output();
                     if raw_output.lines().count() > 50 {
                         // Take first 20 lines and last 30 lines
-                        let first_lines: Vec<_> = raw_output.lines().take(20).collect();
-                        let last_lines: Vec<_> = raw_output.lines().rev().take(30).collect();
+                        let first_lines: Vec<_> = raw_output.lines().take(10).collect();
+                        let last_lines: Vec<_> = raw_output.lines().rev().take(10).collect();
 
                         format!(
-                            "{}\n\n... [truncated {} lines] ...\n\n{}",
+                            "{}\n\n[...test execution...]\n\n{}",
                             first_lines.join("\n"),
-                            raw_output.lines().count() - 50,
                             last_lines.into_iter().rev().collect::<Vec<_>>().join("\n")
                         )
                     } else {
                         raw_output.to_owned()
                     }
                 };
+
+                println!("formatted_output: {:?}", formatted_output);
 
                 self = self.tool_output(
                     &exchange_id,

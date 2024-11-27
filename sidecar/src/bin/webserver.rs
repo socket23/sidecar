@@ -240,6 +240,10 @@ fn agentic_router() -> Router {
             post(sidecar::webserver::agentic::agent_tool_use),
         )
         .route(
+            "/verify_model_config",
+            post(sidecar::webserver::agentic::verify_model_config),
+        )
+        .route(
             "/cancel_running_event",
             post(sidecar::webserver::agentic::cancel_running_exchange),
         )

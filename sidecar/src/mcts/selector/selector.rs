@@ -1,10 +1,14 @@
 //! The selector is the module which selectes the best node to use in a given search
 //! tree
 
+use core::f32;
+
 use crate::{
     agentic::tool::r#type::ToolType,
     mcts::action_node::{ActionNode, SearchTree},
 };
+
+use super::uct_score::UCTScore;
 
 /// Parameters for configuring the behavior of the Selector in UCT score calculations.
 pub struct Selector {
@@ -130,13 +134,29 @@ impl Selector {
     ///
     /// In such cases, we encourage revisiting this node to try different actions,
     /// potentially leading to better outcomes.
-    pub fn calculate_high_value_leaf_bonus(&self, node_index: usize, graph: &SearchTree) -> f32 {
-        graph.calculate_high_value_leaf_bonus(
+    pub fn calculate_high_value_bad_children_bonus(
+        &self,
+        node_index: usize,
+        graph: &SearchTree,
+    ) -> f32 {
+        graph.calculate_high_value_bad_children_bonus(
             node_index,
             self.high_value_threshold,
             self.check_for_bad_child_actions.to_vec(),
             self.low_value_threshold,
             self.exploration_weight,
+        )
+    }
+
+    /// Calculate the bonus for not expanded nodes with high reward.
+    ///
+    /// Purpose: Encourages the exploration of promising leaf nodes, potentially
+    /// leading to valuable new paths in the search tree.
+    pub fn calculate_high_value_leaf_bonus(&self, node_index: usize, graph: &SearchTree) -> f32 {
+        graph.calculate_high_value_leaf_bonus(
+            node_index,
+            self.high_value_threshold,
+            self.high_value_leaf_bonus_constant,
         )
     }
 
@@ -185,5 +205,57 @@ impl Selector {
     /// correction paths.
     pub fn calculate_expect_correction_bonus(&self, node_index: usize, graph: &SearchTree) -> f32 {
         graph.calculate_expect_correction_bonus(node_index, self.expect_correction_bonus)
+    }
+
+    /// Compute the UCT score with additional bonuses and penalties based on node characteristics.
+    ///
+    /// This method combines various components to create a comprehensive score for node selection,
+    /// balancing exploration and exploitation while considering node-specific factors.
+    pub fn uct_score(&self, node_index: usize, graph: &SearchTree) -> UCTScore {
+        let node_visits = graph.node_visits(node_index);
+        if node_visits == 0.0 {
+            return UCTScore::final_score(f32::MAX);
+        }
+        let exploitation = self.calculate_exploitation(node_index, graph);
+        let exploration = self.calculate_exploration(node_index, graph);
+        let depth_bonus = self.calculate_depth_bonus(node_index, graph);
+        let depth_penalty = self.calculate_depth_penalty(node_index, graph);
+        let high_value_leaf_node = self.calculate_high_value_leaf_bonus(node_index, graph);
+        let high_value_bad_children_bonus =
+            self.calculate_high_value_bad_children_bonus(node_index, graph);
+        let high_value_child_penalty = self.calculate_high_value_child_penalty(node_index, graph);
+        let high_value_parent_bonus = self.calculate_high_value_parent_bonus(node_index, graph);
+        let finished_trajectory_penalty =
+            self.calculate_finished_trajectory_penalty(node_index, graph);
+        let expect_correction_bonus = self.calculate_expect_correction_bonus(node_index, graph);
+        let diversity_bonus = 0.0;
+        let duplicate_child_penalty = 0.0;
+        let duplicate_action_penalty = 0.0;
+        let final_score = exploitation + exploration + depth_bonus - depth_penalty
+            + high_value_leaf_node
+            + high_value_bad_children_bonus
+            - high_value_child_penalty
+            + high_value_parent_bonus
+            - finished_trajectory_penalty
+            + expect_correction_bonus
+            + diversity_bonus
+            - duplicate_child_penalty
+            - duplicate_action_penalty;
+        UCTScore::new(
+            final_score,
+            exploitation,
+            exploration,
+            depth_bonus,
+            depth_penalty,
+            high_value_leaf_node,
+            high_value_bad_children_bonus,
+            high_value_child_penalty,
+            high_value_parent_bonus,
+            finished_trajectory_penalty,
+            expect_correction_bonus,
+            diversity_bonus,
+            duplicate_child_penalty,
+            duplicate_action_penalty,
+        )
     }
 }

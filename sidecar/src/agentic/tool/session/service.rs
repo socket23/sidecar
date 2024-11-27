@@ -820,7 +820,7 @@ impl SessionService {
                     let human_message = format!(
                         r#"Your output was incorrect, please give me the output in the correct format:
 {}"#,
-                        failed_to_parse_output
+                        failed_to_parse_output.to_owned()
                     );
                     human_message_ticker = human_message_ticker + 1;
                     session = session.human_message(
@@ -830,6 +830,13 @@ impl SessionService {
                         vec![],
                         repo_ref.clone(),
                     );
+                    let _ = message_properties
+                        .ui_sender()
+                        .send(UIEventWithID::tool_not_found(
+                            session_id.to_owned(),
+                            tool_exchange_id.to_owned(),
+                            failed_to_parse_output,
+                        ));
                 }
                 Err(e) => {
                     let _ = message_properties

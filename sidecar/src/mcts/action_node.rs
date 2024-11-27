@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use crate::agentic::tool::input::ToolInputPartial;
+use crate::agentic::tool::{input::ToolInputPartial, r#type::ToolType};
 
 use super::value_function::reward::Reward;
 
 pub struct ActionObservation {
-    _message: String,
-    _summary: Option<String>,
-    _terminal: bool,
-    _expect_correction: bool,
+    message: String,
+    summary: Option<String>,
+    terminal: bool,
+    expect_correction: bool,
 }
 
 pub struct ActionNode {
@@ -20,11 +20,21 @@ pub struct ActionNode {
     visits: u32,
     value: f32,
     _max_expansions: usize,
+    observation: Option<ActionObservation>,
 }
 
 impl ActionNode {
     pub fn reward(&self) -> Option<&Reward> {
         self.reward.as_ref()
+    }
+
+    // TODO(skcd): Fix this and keep track of it properly
+    fn has_git_path(&self) -> bool {
+        false
+    }
+
+    fn is_finished(&self) -> bool {
+        false
     }
 }
 
@@ -155,5 +165,214 @@ impl SearchTree {
         } else {
             0.0
         }
+    }
+
+    pub fn calculate_depth_penalty(&self, node_index: usize, depth_weight: f32) -> f32 {
+        let depth = self.get_depth(node_index) as f32;
+        depth_weight * depth.sqrt() * 1.0
+    }
+
+    pub fn calculate_high_value_leaf_bonus(
+        &self,
+        node_index: usize,
+        high_value_threshold: f32,
+        bad_child_actions: Vec<ToolType>,
+        low_value_threshold: f32,
+        exploration_weight: f32,
+    ) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to hold");
+        let exploration = self.calculate_exploration(node_index, exploration_weight);
+        let node_children = self._children(node);
+        let node_children = node_children
+            .map(|children| children.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        // empty of no children
+        if !node_children.is_empty() && exploration >= high_value_threshold {
+            let child_rewards = node_children
+                .to_vec()
+                .into_iter()
+                .filter_map(|child| child.reward())
+                .map(|reward| reward.value())
+                .collect::<Vec<_>>();
+
+            // if there is a single child with a reward value then we also check
+            // if the action we took on this node was a one worth checking
+            if child_rewards.len() == 1
+                && node_children
+                    .to_vec()
+                    .into_iter()
+                    .filter_map(|child| child._action.clone())
+                    .map(|tool_parameters| tool_parameters.to_tool_type())
+                    .any(|tool_type| {
+                        bad_child_actions
+                            .to_vec()
+                            .into_iter()
+                            .any(|bad_child_tool| bad_child_tool == tool_type)
+                    })
+            {
+                let child_rewards_len = child_rewards.len();
+                let average_child_reward_value = (1.0
+                    * child_rewards.into_iter().sum::<i32>() as f32)
+                    / (1.0 * child_rewards_len as f32);
+
+                // this is an approximation to how much value we can give back
+                // the 5 here is sus but I presume it comes from the expansion factor
+                if average_child_reward_value <= low_value_threshold {
+                    return (exploration - average_child_reward_value) * 5.0;
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    pub fn calculate_high_value_child_penalty(
+        &self,
+        node_index: usize,
+        very_high_value_threshold: f32,
+        high_value_child_penalty_constant: f32,
+    ) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to hold");
+        let node_children = self._children(node);
+        let node_children = node_children
+            .map(|children| children.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        if !node_children.is_empty() {
+            let child_rewards = node_children
+                .into_iter()
+                .filter_map(|child| child.reward())
+                .map(|reward| reward.value())
+                .collect::<Vec<_>>();
+
+            let maximum_child_reward = child_rewards.into_iter().max();
+            if let Some(maximum_child_reward) = maximum_child_reward {
+                if maximum_child_reward as f32 >= very_high_value_threshold {
+                    return high_value_child_penalty_constant;
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    pub fn calculate_high_value_parent_bonus(
+        &self,
+        node_index: usize,
+        high_value_threshold: f32,
+        low_value_threshold: f32,
+        exploration_weight: f32,
+    ) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to hold");
+        let node_children = self._children(node);
+        let node_children = node_children
+            .map(|children| children.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let exploration = self.calculate_exploration(node_index, exploration_weight);
+        if !node_children.is_empty() {
+            let parent_node = self.parent(node);
+            if let Some(parent) = parent_node {
+                // if parent is not rewarded yet or if the reward is higher than the
+                // threshold we have
+                if parent
+                    .reward()
+                    .map(|reward| reward.value() as f32 >= high_value_threshold)
+                    .unwrap_or(true)
+                {
+                    if exploration <= low_value_threshold {
+                        return high_value_threshold - exploration;
+                    }
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    pub fn calculate_finished_trajectory_penalty(
+        &self,
+        node_index: usize,
+        finished_trajectory_penalty: f32,
+    ) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to hold");
+        if finished_trajectory_penalty != 0.0
+            && node.has_git_path()
+            && self.is_on_finished_trajectory(node_index, 100)
+        {
+            return finished_trajectory_penalty;
+        }
+        0.0
+    }
+
+    fn is_on_finished_trajectory(&self, node_index: usize, minimum_reward_threshold: i32) -> bool {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return false;
+        }
+        let node = node.expect("if let None to hold");
+        let children = self
+            ._children(node)
+            .map(|children| children.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        for child in children.into_iter() {
+            if child.is_finished()
+                && child
+                    .reward()
+                    .map(|reward| reward.value() >= minimum_reward_threshold)
+                    .unwrap_or(false)
+            {
+                return true;
+            }
+
+            if self.is_on_finished_trajectory(child.index, minimum_reward_threshold) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn calculate_expect_correction_bonus(
+        &self,
+        node_index: usize,
+        expect_correction_bonus: f32,
+    ) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to hold");
+        let node_observation = &node.observation;
+        if let Some(observation) = node_observation {
+            let parent_node = self.parent(node);
+            if let Some(parent_node) = parent_node {
+                if observation.expect_correction
+                    && parent_node
+                        .observation
+                        .as_ref()
+                        .map(|observation| observation.expect_correction)
+                        .unwrap_or_default()
+                {
+                    let children = self
+                        ._children(node)
+                        .map(|children| children.into_iter().collect::<Vec<_>>().len())
+                        .unwrap_or_default();
+                    let delay_factor = 1.0 / (1.0 + children.pow(2) as f32);
+                    return expect_correction_bonus * delay_factor;
+                }
+            }
+        }
+        return 0.0;
     }
 }

@@ -181,39 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let problem_with_test = format!(
         "GitHub issue: {}\n\nTest to pass: {}",
-        input_parts.instance.problem_statement,
-        r#"  def test_formset_nonform_errors_class(self):
-        """Non-form errors in formsets should have the nonform CSS class."""
-        data = {
-            'drinks-TOTAL_FORMS': '2',
-            'drinks-INITIAL_FORMS': '0',
-            'drinks-MIN_NUM_FORMS': '0',
-            'drinks-MAX_NUM_FORMS': '0',
-            'drinks-0-name': 'Gin and Tonic',
-            'drinks-1-name': 'Gin and Tonic',
-        }
-        formset = FavoriteDrinksFormSet(data, prefix='drinks')
-        self.assertFalse(formset.is_valid())
-        # The nonform errors should be rendered with the nonform class
-        self.assertHTMLEqual(
-            str(formset.non_form_errors()),
-            '<ul class="errorlist nonform"><li>You may only specify a drink once.</li></ul>'
-        )
-
-        # Test with multiple non-form errors
-        class MultiErrorFormSet(FavoriteDrinksFormSet):
-            def clean(self):
-                raise ValidationError([
-                    'Error 1',
-                    'Error 2',
-                ])
-
-        formset = MultiErrorFormSet(data, prefix='drinks')
-        self.assertFalse(formset.is_valid())
-        self.assertHTMLEqual(
-            str(formset.non_form_errors()),
-            '<ul class="errorlist nonform"><li>Error 1</li><li>Error 2</li></ul>'
-        )"#
+        input_parts.instance.problem_statement, r#"Always run the test before completion."#
     );
 
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);

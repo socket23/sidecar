@@ -2168,7 +2168,8 @@ The Github Issue we are trying to solve is:
         match tool_input_partial {
             ToolInputPartial::TestRunner(fs_file_paths) => {
                 let editor_url = message_properties.editor_url().to_owned();
-                let input = ToolInput::RunTests(TestRunnerRequest::new(fs_file_paths, editor_url));
+                let input =
+                    ToolInput::RunTests(TestRunnerRequest::new(fs_file_paths.clone(), editor_url));
                 let response = tool_box
                     .tools()
                     .invoke(input)
@@ -2177,10 +2178,36 @@ The Github Issue we are trying to solve is:
 
                 let test_runner_output = response.get_test_runner().unwrap();
 
+                println!("test_runner_output: {:?}", test_runner_output);
+
+                // Truncate and format the test output
+                let formatted_output = {
+                    let raw_output = test_runner_output.test_output();
+                    let test_files =
+                        format!("Running tests in files:\n{}\n", fs_file_paths.join("\n"));
+
+                    if raw_output.lines().count() > 50 {
+                        // Take the first 0 lines and last 100 lines
+                        let first_lines: Vec<_> = raw_output.lines().take(0).collect();
+                        let last_lines: Vec<_> = raw_output.lines().rev().take(100).collect();
+
+                        format!(
+                            "{}\n{}\n\n[...test execution...]\n\n{}",
+                            test_files,
+                            first_lines.join("\n"),
+                            last_lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+                        )
+                    } else {
+                        format!("{}\n{}", test_files, raw_output)
+                    }
+                };
+
+                println!("formatted_output: {:?}", formatted_output);
+
                 self = self.tool_output(
                     &exchange_id,
                     tool_type.clone(),
-                    test_runner_output.test_output().to_owned(),
+                    formatted_output, // truncated
                     UserContext::default(),
                 );
 

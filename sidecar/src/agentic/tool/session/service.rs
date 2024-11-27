@@ -543,9 +543,9 @@ impl SessionService {
                     // disable this since its polluting our flow
                     // ToolType::LSPDiagnostics,
                     ToolType::AttemptCompletion,
-                    ToolType::RepoMapGeneration,
+                    // ToolType::RepoMapGeneration,
                     // ToolType::TerminalCommand,
-                    // ToolType::TestRunner, // even with this off, we are able to get passes on previous failures. Keeping off for now.
+                    ToolType::TestRunner, // turning this on, but with truncation of output
                 ],
             )
         };
@@ -593,6 +593,7 @@ impl SessionService {
             self.track_exchange(&session_id, &tool_exchange_id, cancellation_token.clone())
                 .await;
 
+            // selects tool to use
             let tool_use_output = session
                 // the clone here is pretty bad but its the easiest and the sanest
                 // way to keep things on the happy path

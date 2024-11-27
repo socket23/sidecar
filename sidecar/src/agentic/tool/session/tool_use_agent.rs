@@ -105,6 +105,7 @@ impl ToolUseAgent {
         format!(
             r#"You are an expert software engineer who is an expert at {repo_name} and are going to help the user with a Github Issue which was opened on the repository.
 Your task is to add another test to the already present suite of tests so the github issue can be reproduced by just running the tests.
+The test generated MUST ALWAYS have enough print statements for the user to understand intermediate steps which are happening in the test, this always helps with debugging a failing test. 
 Since the user working on the Github Issue is new to the repository, they will rely on you to add the test to the right place in the repository.
 Make sure to also include extra test cases which cover the edge conditions properly for the issue which might not be present in the problem statement.
 ===
@@ -202,10 +203,11 @@ You are an expert in {repo_name} and know in detail everything about this reposi
 1. Analyze the Github Issue and set clear, and understand what kind of tests will help in effectively replicating the Github Issue.
 2. Remember, you have extensive capabilities with access to a wide range of tools that can be used in powerful and clever ways as necessary to accomplish each goal. Before calling a tool, do some analysis within <thinking></thinking> tags. First, analyze the file structure provided in environment_details to gain context and insights for proceeding effectively. Then, think about which of the provided tools is the most relevant tool to accomplish the user's task. Next, go through each of the required parameters of the relevant tool and determine if the user has directly provided or given enough information to infer a value. When deciding if the parameter can be inferred, carefully consider all the context to see if it supports a specific value. If all of the required parameters are present or can be reasonably inferred, close the thinking tag and proceed with the tool use. BUT, if one of the values for a required parameter is missing.
 3. Once you've written the tests, make sure to run them to confirm that you are able to replicate the behavior in the Github Issue.
-4. You can ONLY USE 1 TOOL in each step and not multiple tools, using multiple tools is not allowed.
-5. ONLY ATTEMPT COMPLETION if you have finished writing the tests which faitfully replicate the Github Issue.
-6. You have to present proof to the user that the tests faitfully replicate the Github Issue by presenting the failing tests and their output.
-7. Make sure that the test is FAILING so the user is able to replicate the issue easily on their end. Passing tests do not showcase the failing behavior of the Github Issue."#
+4. The test MUST ALWAYS have print statements and comments to help explain how the test replicates the issue. The print statements are important to see intermediate steps which are happening in the test (this is also how every developer debugs failing tests, by print statements).
+5. You can ONLY USE 1 TOOL in each step and not multiple tools, using multiple tools is not allowed.
+6. ONLY ATTEMPT COMPLETION if you have finished writing the tests which faitfully replicate the Github Issue.
+7. You have to present proof to the user that the tests faitfully replicate the Github Issue by presenting the failing tests and their output.
+8. Make sure that the test is FAILING so the user is able to replicate the issue easily on their end. Passing tests do not showcase the failing behavior of the Github Issue."#
         )
     }
 

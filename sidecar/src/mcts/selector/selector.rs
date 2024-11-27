@@ -1,9 +1,10 @@
 //! The selector is the module which selectes the best node to use in a given search
 //! tree
 
-use std::sync::Arc;
-
-use crate::mcts::action_node::{ActionNode, SearchTree};
+use crate::{
+    agentic::tool::r#type::ToolType,
+    mcts::action_node::{ActionNode, SearchTree},
+};
 
 /// Parameters for configuring the behavior of the Selector in UCT score calculations.
 pub struct Selector {
@@ -58,7 +59,7 @@ pub struct Selector {
     expect_correction_bonus: f32,
 
     /// List of action types to check for when calculating the high-value bad children bonus.
-    check_for_bad_child_actions: Vec<String>,
+    check_for_bad_child_actions: Vec<ToolType>,
 
     /// Weight factor for the diversity bonus.
     /// Higher values increase the bonus for nodes with low similarity to other explored nodes.
@@ -107,6 +108,82 @@ impl Selector {
         graph.calculate_depth_bonus(node_index, self.depth_bonus_factor, self.depth_weight)
     }
 
-    // TODO(skcd): Pick up the remaining similarity metric work over here and try to rawdog and finish
-    // it all up
+    /// Calculate the depth penalty for very deep nodes.
+    /// Purpose: Discourages excessive depth in the search tree, preventing the
+    /// algorithm from getting stuck in overly long paths.
+    pub fn calculate_depth_penalty(&self, node_index: usize, graph: &SearchTree) -> f32 {
+        graph.calculate_depth_penalty(node_index, self.depth_weight)
+    }
+
+    /// Calculate the bonus for nodes with high reward that expanded to low-reward nodes.
+    ///
+    /// Purpose: Acts as an "auto-correct" mechanism for promising nodes that led to poor
+    /// outcomes, likely due to invalid actions (e.g., syntax errors from incorrect code changes).
+    /// This bonus gives these nodes a second chance, allowing the algorithm to potentially
+    /// recover from or find alternatives to invalid actions.
+    ///
+    /// The bonus is applied when:
+    /// 1. The node has a high reward
+    /// 2. It has exactly one child (indicating a single action was taken)
+    /// 3. The child action is of a type we want to check (e.g., RequestCodeChange)
+    /// 4. The child node has a low reward
+    ///
+    /// In such cases, we encourage revisiting this node to try different actions,
+    /// potentially leading to better outcomes.
+    pub fn calculate_high_value_leaf_bonus(&self, node_index: usize, graph: &SearchTree) -> f32 {
+        graph.calculate_high_value_leaf_bonus(
+            node_index,
+            self.high_value_threshold,
+            self.check_for_bad_child_actions.to_vec(),
+            self.low_value_threshold,
+            self.exploration_weight,
+        )
+    }
+
+    /// Calculate the penalty for nodes with a child with very high reward.
+    ///
+    /// Purpose: Discourages over-exploitation of a single high-value path, promoting
+    /// exploration of alternative routes in the search tree.
+    pub fn calculate_high_value_child_penalty(&self, node_index: usize, graph: &SearchTree) -> f32 {
+        graph.calculate_high_value_child_penalty(
+            node_index,
+            self.very_high_value_threshold,
+            self.high_value_child_penalty_constant,
+        )
+    }
+
+    /// Calculate the bonus for nodes with low reward that haven't been expanded yet but have high reward parents or not rewarded parents.
+    ///
+    /// Purpose: Encourages exploration of nodes that might be undervalued due to their
+    /// current low reward, especially if they have promising ancestors.
+    pub fn calculate_high_value_parent_bonus(&self, node_index: usize, graph: &SearchTree) -> f32 {
+        graph.calculate_high_value_parent_bonus(
+            node_index,
+            self.high_value_threshold,
+            self.low_value_threshold,
+            self.exploration_weight,
+        )
+    }
+
+    /// Calculate the penalty for nodes where there are changes and a child node was already finished with high reward.
+    ///
+    /// Purpose: Discourages revisiting paths that have already led to successful outcomes,
+    /// promoting exploration of new areas in the search space.
+    pub fn calculate_finished_trajectory_penalty(
+        &self,
+        node_index: usize,
+        graph: &SearchTree,
+    ) -> f32 {
+        graph.calculate_finished_trajectory_penalty(node_index, self.finished_trajectory_penalty)
+    }
+
+    /// Calculate the bonus for nodes with a parent node that expect correction.
+    ///
+    /// Purpose: Prioritizes nodes that are marked as expecting correction (e.g., after
+    /// a failed test run or an invalid search request). This bonus decreases rapidly
+    /// as the parent node accumulates more children, encouraging exploration of less-visited
+    /// correction paths.
+    pub fn calculate_expect_correction_bonus(&self, node_index: usize, graph: &SearchTree) -> f32 {
+        graph.calculate_expect_correction_bonus(node_index, self.expect_correction_bonus)
+    }
 }

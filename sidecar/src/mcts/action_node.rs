@@ -375,4 +375,14 @@ impl SearchTree {
         }
         return 0.0;
     }
+
+    /// How many times was the node visited
+    pub fn node_visits(&self, node_index: usize) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to work");
+        node.visits as f32
+    }
 }

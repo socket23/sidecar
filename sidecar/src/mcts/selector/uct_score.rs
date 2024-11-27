@@ -20,6 +20,42 @@ pub struct UCTScore {
     duplicate_action_penalty: f32,
 }
 
+impl UCTScore {
+    pub fn new(
+        final_score: f32,
+        exploitation: f32,
+        exploration: f32,
+        depth_bonus: f32,
+        depth_penalty: f32,
+        high_value_leaf_bonus: f32,
+        high_value_bad_children_bonus: f32,
+        high_value_child_penalty: f32,
+        high_value_parent_bonus: f32,
+        finished_trajectory_penalty: f32,
+        expect_correction_bonus: f32,
+        diversity_bonus: f32,
+        duplicate_child_penalty: f32,
+        duplicate_action_penalty: f32,
+    ) -> Self {
+        Self {
+            final_score,
+            exploitation,
+            exploration,
+            depth_bonus,
+            depth_penalty,
+            high_value_leaf_bonus,
+            high_value_bad_children_bonus,
+            high_value_child_penalty,
+            high_value_parent_bonus,
+            finished_trajectory_penalty,
+            expect_correction_bonus,
+            diversity_bonus,
+            duplicate_child_penalty,
+            duplicate_action_penalty,
+        }
+    }
+}
+
 impl Debug for UCTScore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let components = vec![

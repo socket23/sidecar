@@ -185,7 +185,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session_service = SessionService::new(tool_box.clone(), symbol_manager);
     println!("session_service::test_agent::tool_use_agentic_swe_bench");
     // generate tests to test out the code gen output
-    let _ = session_service
+    let test_generation_completion = session_service
         .tool_use_test_generation(
             session_id,
             storage_path,

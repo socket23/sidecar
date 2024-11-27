@@ -34,6 +34,7 @@ pub struct CodeStoryClient {
 struct CodeStoryMessage {
     role: String,
     content: String,
+    cache_point: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -104,12 +105,14 @@ impl CodeStoryRequest {
                             Some(CodeStoryMessage {
                                 role: "system".to_owned(),
                                 content: message.content().to_owned(),
+                                cache_point: message.is_cache_point(),
                             })
                         }
                     }
                     LLMClientRole::User => Some(CodeStoryMessage {
                         role: "user".to_owned(),
                         content: message.content().to_owned(),
+                        cache_point: message.is_cache_point(),
                     }),
                     LLMClientRole::Function => {
                         if llm_type.is_anthropic() {
@@ -118,12 +121,14 @@ impl CodeStoryRequest {
                             Some(CodeStoryMessage {
                                 role: "function".to_owned(),
                                 content: message.content().to_owned(),
+                                cache_point: message.is_cache_point(),
                             })
                         }
                     }
                     LLMClientRole::Assistant => Some(CodeStoryMessage {
                         role: "assistant".to_owned(),
                         content: message.content().to_owned(),
+                        cache_point: message.is_cache_point(),
                     }),
                 })
                 .collect(),

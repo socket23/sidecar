@@ -536,10 +536,10 @@ impl SessionService {
                 repo_ref.clone(),
                 storage_path,
                 vec![
-                    ToolType::ListFiles,
-                    ToolType::SearchFileContentWithRegex,
-                    ToolType::OpenFile,
-                    ToolType::CodeEditing,
+                    // ToolType::ListFiles,
+                    // ToolType::SearchFileContentWithRegex,
+                    // ToolType::OpenFile,
+                    // ToolType::CodeEditing,
                     // disable this since its polluting our flow
                     // ToolType::LSPDiagnostics,
                     ToolType::AttemptCompletion,

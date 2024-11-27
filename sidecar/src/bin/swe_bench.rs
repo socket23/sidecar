@@ -224,6 +224,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_parts.instance.problem_statement, test_prompt
     );
 
+    println!("problem_with_test: {:?}", problem_with_test);
+
     // generate tests to test out the code gen output
     let _ = session_service
         .tool_use_agentic_swe_bench(

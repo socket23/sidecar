@@ -224,14 +224,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_parts.instance.problem_statement, test_prompt
     );
 
-    // TODO(skcd): Clean the context from the test agent while passing it to the
-    // swe-bench agent
+    let swe_bench_session_id = format!("swe_bench_session_id::{}", session_id);
+
+    // Creates the unique path for the session
+    let session_path = default_index_dir().join("session");
+    // check if the plan_storage_path_exists
+    if tokio::fs::metadata(&session_path).await.is_err() {
+        tokio::fs::create_dir(&session_path)
+            .await
+            .expect("directory creation to not fail");
+    }
+    let swe_bench_session_path = session_path.join(swe_bench_session_id.to_owned());
+    let swe_bench_session_path = swe_bench_session_path
+        .to_str()
+        .expect("path conversion to work on all platforms")
+        .to_owned();
 
     // generate tests to test out the code gen output
     let _ = session_service
         .tool_use_agentic_swe_bench(
-            session_id,
-            storage_path,
+            swe_bench_session_id,
+            swe_bench_session_path,
             repo_name,
             problem_with_test,
             initial_exchange_id.to_string(),

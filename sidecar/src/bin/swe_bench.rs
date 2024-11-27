@@ -17,7 +17,7 @@ use sidecar::{
         tool::{
             broker::{ToolBroker, ToolBrokerConfiguration},
             code_edit::models::broker::CodeEditBroker,
-            session::service::SessionService,
+            session::service::{SessionService, TestGenerateCompletion},
         },
     },
     chunking::{editor_parsing::EditorParsing, languages::TSLanguageParsing},
@@ -179,13 +179,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         model_configuration,
     );
 
+    let test_session_service = SessionService::new(tool_box.clone(), symbol_manager.clone());
+    let session_service = SessionService::new(tool_box.clone(), symbol_manager.clone());
+    println!("session_service::tool_use_agentic_swe_bench");
+
+    // use test runner first.
+    let test_generation_completion = test_session_service
+        .tool_use_test_generation(
+            session_id.clone(),
+            storage_path.clone(),
+            repo_name.clone(),
+            input_parts.instance.problem_statement.to_owned(),
+            initial_exchange_id.to_string(),
+            vec![],
+            vec![],
+            "bash".to_owned(),
+            vec![],
+            RepoRef::local(&input_parts.git_drname).expect("to work"),
+            input_parts.git_drname.to_owned(),
+            tool_box.clone(),
+            llm_broker.clone(),
+            message_properties.clone(),
+        )
+        .await
+        .expect("test generation to work");
+
+    // test prompt
+    let test_prompt = match test_generation_completion {
+        // high confidence
+        TestGenerateCompletion::LLMChoseToFinish(test) => {
+            format!("The test you need to pass: \n{}", test)
+        }
+        // low confidence
+        TestGenerateCompletion::HitIterationLimit(test) => {
+            format!(
+                "An idea of the kind of test you need to pass. Note: This is not the actual test, so do not run it.\n{}",
+                test
+            )
+        }
+    };
+
     let problem_with_test = format!(
-        "GitHub issue: {}\n\nTest to pass: {}",
-        input_parts.instance.problem_statement, r#"Always run the test before completion."#
+        "GitHub issue: {}\n\n{}",
+        input_parts.instance.problem_statement, test_prompt
     );
 
-    let session_service = SessionService::new(tool_box.clone(), symbol_manager);
-    println!("session_service::tool_use_agentic_swe_bench");
     // generate tests to test out the code gen output
     let _ = session_service
         .tool_use_agentic_swe_bench(

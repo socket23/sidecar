@@ -14,9 +14,11 @@ use crate::{
             ui_event::UIEventWithID,
         },
         tool::{
+            input::ToolInput,
             plan::service::PlanService,
-            r#type::ToolType,
+            r#type::{Tool, ToolType},
             session::{session::AgentToolUseOutput, tool_use_agent::ToolUseAgent},
+            terminal::terminal::TerminalInput,
         },
     },
     chunking::text_document::Range,
@@ -362,7 +364,7 @@ impl SessionService {
         tool_box: Arc<ToolBox>,
         llm_broker: Arc<LLMBroker>,
         mut message_properties: SymbolEventMessageProperties,
-    ) -> Result<(), SymbolError> {
+    ) -> Result<TestGenerateCompletion, SymbolError> {
         println!("session_service::test::tool_use_agentic_swe_bench::start");
         let mut session = if let Ok(session) = self.load_from_storage(storage_path.to_owned()).await
         {
@@ -412,9 +414,14 @@ impl SessionService {
         let _ = self.save_to_storage(&session).await;
 
         session = session.accept_open_exchanges_if_any(message_properties.clone());
+
         let mut human_message_ticker = 0;
         // now that we have saved it we can start the loop over here and look out for the cancellation
         // token which will imply that we should end the current loop
+
+        let mut iteration_count = 0;
+        const MAX_ITERATIONS: usize = 10; // Prevent infinite loops
+
         loop {
             let _ = self.save_to_storage(&session).await;
             let tool_exchange_id = self
@@ -447,9 +454,7 @@ impl SessionService {
 
             match tool_use_output {
                 AgentToolUseOutput::Success((tool_input_partial, new_session)) => {
-                    // update our session
                     session = new_session;
-                    // store to disk
                     let _ = self.save_to_storage(&session).await;
                     let tool_type = tool_input_partial.to_tool_type();
                     let session_output = session
@@ -464,7 +469,6 @@ impl SessionService {
                             message_properties.clone(),
                         )
                         .await;
-
                     // return here if the test case is passing
                     if matches!(session_output, Err(SymbolError::TestCaseIsPassing)) {
                         println!("session_service::tool_type::test_case_passing");
@@ -481,6 +485,13 @@ impl SessionService {
                         // require the user to intervene
                         println!("session_service::tool_use_agentic::reached_terminating_tool");
                         break;
+                    }
+
+                    iteration_count += 1;
+                    if iteration_count >= MAX_ITERATIONS {
+                        println!("session_service::tool_use_agentic::hit_iteration_limit");
+                        let git_diff = self.get_git_diff(message_properties.editor_url()).await?;
+                        return Ok(TestGenerateCompletion::HitIterationLimit(git_diff));
                     }
                 }
                 AgentToolUseOutput::Cancelled => {}
@@ -501,7 +512,9 @@ impl SessionService {
                 }
             }
         }
-        Ok(())
+
+        let git_diff = self.get_git_diff(message_properties.editor_url()).await?;
+        Ok(TestGenerateCompletion::LLMChoseToFinish(git_diff))
     }
 
     pub async fn tool_use_agentic_swe_bench(
@@ -1126,4 +1139,27 @@ impl SessionService {
             .map_err(|e| SymbolError::IOError(e))?;
         Ok(())
     }
+
+    async fn get_git_diff(&self, editor_url: String) -> Result<String, SymbolError> {
+        let tool_input =
+            ToolInput::TerminalCommand(TerminalInput::new("git diff".to_owned(), editor_url));
+        let tool_output = self
+            .tool_box
+            .tools()
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .terminal_command()
+            .ok_or(SymbolError::WrongToolOutput)?;
+
+        Ok(tool_output.output().to_owned())
+    }
+}
+
+#[derive(Debug)]
+pub enum TestGenerateCompletion {
+    /// The LLM chose to finish (higher confidence)
+    LLMChoseToFinish(String),
+    /// Hit the maximum iteration limit (lower confidence)
+    HitIterationLimit(String),
 }

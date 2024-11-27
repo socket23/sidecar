@@ -176,6 +176,31 @@ impl SearchTree {
         &self,
         node_index: usize,
         high_value_threshold: f32,
+        high_value_leaf_bonus_constant: f32,
+    ) -> f32 {
+        let node = self.get_node(node_index);
+        if let None = node {
+            return 0.0;
+        }
+        let node = node.expect("if let None to hold");
+        let children = self._children(node);
+        let children = children
+            .map(|child_iterator| child_iterator.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        if !children.is_empty() {
+            if let Some(reward) = node.reward() {
+                if reward.value() as f32 >= high_value_threshold {
+                    return high_value_leaf_bonus_constant;
+                }
+            }
+        }
+        0.0
+    }
+
+    pub fn calculate_high_value_bad_children_bonus(
+        &self,
+        node_index: usize,
+        high_value_threshold: f32,
         bad_child_actions: Vec<ToolType>,
         low_value_threshold: f32,
         exploration_weight: f32,

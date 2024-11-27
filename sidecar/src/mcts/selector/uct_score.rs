@@ -54,6 +54,25 @@ impl UCTScore {
             duplicate_action_penalty,
         }
     }
+
+    pub fn final_score(final_score: f32) -> Self {
+        Self {
+            final_score,
+            exploitation: 0.0,
+            exploration: 0.0,
+            depth_bonus: 0.0,
+            depth_penalty: 0.0,
+            high_value_leaf_bonus: 0.0,
+            high_value_bad_children_bonus: 0.0,
+            high_value_child_penalty: 0.0,
+            high_value_parent_bonus: 0.0,
+            finished_trajectory_penalty: 0.0,
+            expect_correction_bonus: 0.0,
+            diversity_bonus: 0.0,
+            duplicate_child_penalty: 0.0,
+            duplicate_action_penalty: 0.0,
+        }
+    }
 }
 
 impl Debug for UCTScore {

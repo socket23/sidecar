@@ -224,6 +224,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_parts.instance.problem_statement, test_prompt
     );
 
+    // TODO(skcd): Clean the context from the test agent while passing it to the
+    // swe-bench agent
+
     // generate tests to test out the code gen output
     let _ = session_service
         .tool_use_agentic_swe_bench(

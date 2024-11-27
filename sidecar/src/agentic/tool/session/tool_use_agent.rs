@@ -299,7 +299,7 @@ bin/main.rs
 
 Always adhere to this format for the tool use to ensure proper parsing and execution from the tool use.
 
-# Tools
+# Tools - do not use tools which are not listed here
 
 {tool_descriptions}
 

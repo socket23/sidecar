@@ -2187,9 +2187,9 @@ The Github Issue we are trying to solve is:
                         format!("Running tests in files:\n{}\n", fs_file_paths.join("\n"));
 
                     if raw_output.lines().count() > 50 {
-                        // Take first 20 lines and last 30 lines
-                        let first_lines: Vec<_> = raw_output.lines().take(10).collect();
-                        let last_lines: Vec<_> = raw_output.lines().rev().take(10).collect();
+                        // Take the first 0 lines and last 100 lines
+                        let first_lines: Vec<_> = raw_output.lines().take(0).collect();
+                        let last_lines: Vec<_> = raw_output.lines().rev().take(100).collect();
 
                         format!(
                             "{}\n{}\n\n[...test execution...]\n\n{}",

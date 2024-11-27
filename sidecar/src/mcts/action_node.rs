@@ -410,4 +410,9 @@ impl SearchTree {
         let node = node.expect("if let None to work");
         node.visits as f32
     }
+
+    /// Iterates on the search tree until its finished completely
+    pub fn run_search(&mut self, node: ActionNode) -> ActionNode {
+        todo!("")
+    }
 }

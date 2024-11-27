@@ -14,9 +14,11 @@ use crate::{
             ui_event::UIEventWithID,
         },
         tool::{
+            input::ToolInput,
             plan::service::PlanService,
-            r#type::ToolType,
+            r#type::{Tool, ToolType},
             session::{session::AgentToolUseOutput, tool_use_agent::ToolUseAgent},
+            terminal::terminal::TerminalInput,
         },
     },
     chunking::text_document::Range,
@@ -417,7 +419,6 @@ impl SessionService {
         // now that we have saved it we can start the loop over here and look out for the cancellation
         // token which will imply that we should end the current loop
 
-        let mut test_content = String::new(); // Track the generated test content
         let mut iteration_count = 0;
         const MAX_ITERATIONS: usize = 10; // Prevent infinite loops
 
@@ -488,7 +489,9 @@ impl SessionService {
 
                     iteration_count += 1;
                     if iteration_count >= MAX_ITERATIONS {
-                        return Ok(TestGenerateCompletion::HitIterationLimit(test_content));
+                        println!("session_service::tool_use_agentic::hit_iteration_limit");
+                        let git_diff = self.get_git_diff(message_properties.editor_url()).await?;
+                        return Ok(TestGenerateCompletion::HitIterationLimit(git_diff));
                     }
                 }
                 AgentToolUseOutput::Cancelled => {}
@@ -509,7 +512,9 @@ impl SessionService {
                 }
             }
         }
-        Ok(TestGenerateCompletion::HitIterationLimit(test_content))
+
+        let git_diff = self.get_git_diff(message_properties.editor_url()).await?;
+        Ok(TestGenerateCompletion::LLMChoseToFinish(git_diff))
     }
 
     pub async fn tool_use_agentic_swe_bench(
@@ -1126,6 +1131,21 @@ impl SessionService {
             .await
             .map_err(|e| SymbolError::IOError(e))?;
         Ok(())
+    }
+
+    async fn get_git_diff(&self, editor_url: String) -> Result<String, SymbolError> {
+        let tool_input =
+            ToolInput::TerminalCommand(TerminalInput::new("git diff".to_owned(), editor_url));
+        let tool_output = self
+            .tool_box
+            .tools()
+            .invoke(tool_input)
+            .await
+            .map_err(|e| SymbolError::ToolError(e))?
+            .terminal_command()
+            .ok_or(SymbolError::WrongToolOutput)?;
+
+        Ok(tool_output.output().to_owned())
     }
 }
 

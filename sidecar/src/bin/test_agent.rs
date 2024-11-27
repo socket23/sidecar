@@ -203,5 +203,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             message_properties,
         )
         .await;
+
+    dbg!(&test_generation_completion);
+
     Ok(())
 }

@@ -2178,8 +2178,6 @@ The Github Issue we are trying to solve is:
 
                 let test_runner_output = response.get_test_runner().unwrap();
 
-                println!("test_runner_output: {:?}", test_runner_output);
-
                 // Truncate and format the test output
                 let formatted_output = {
                     let raw_output = test_runner_output.test_output();
@@ -2202,7 +2200,10 @@ The Github Issue we are trying to solve is:
                     }
                 };
 
-                println!("formatted_output: {:?}", formatted_output);
+                println!(
+                    "session::invoke_tool::formatted_output: {:?}",
+                    formatted_output
+                );
 
                 self = self.tool_output(
                     &exchange_id,

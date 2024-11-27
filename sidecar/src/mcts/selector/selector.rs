@@ -3,10 +3,7 @@
 
 use core::f32;
 
-use crate::{
-    agentic::tool::r#type::ToolType,
-    mcts::action_node::{ActionNode, SearchTree},
-};
+use crate::{agentic::tool::r#type::ToolType, mcts::action_node::SearchTree};
 
 use super::uct_score::UCTScore;
 

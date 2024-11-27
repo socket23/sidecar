@@ -55,6 +55,10 @@ impl UCTScore {
         }
     }
 
+    pub fn get_final_score(&self) -> f32 {
+        self.final_score
+    }
+
     pub fn final_score(final_score: f32) -> Self {
         Self {
             final_score,

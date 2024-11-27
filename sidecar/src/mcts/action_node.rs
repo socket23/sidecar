@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use color_eyre::owo_colors::OwoColorize;
+
 use crate::agentic::tool::{input::ToolInputPartial, r#type::ToolType};
 
-use super::value_function::reward::Reward;
+use super::{selector::selector::Selector, value_function::reward::Reward};
 
 pub struct ActionObservation {
     message: String,
@@ -50,6 +52,14 @@ impl ActionNode {
     fn is_finished(&self) -> bool {
         false
     }
+
+    fn is_terminal_observation(&self) -> bool {
+        // do we have a terminal observation
+        self.observation
+            .as_ref()
+            .map(|observation| observation.terminal)
+            .unwrap_or_default()
+    }
 }
 
 pub struct SearchTree {
@@ -58,6 +68,11 @@ pub struct SearchTree {
     node_to_parent: HashMap<usize, usize>,
     /// the maximum expansions allowed
     max_expansions: usize,
+    /// root index of the node which we are interested in
+    root_node_index: usize,
+    /// maximum depth the nodes can go to
+    max_depth: u32,
+    selector: Selector,
 }
 
 impl SearchTree {
@@ -462,6 +477,87 @@ impl SearchTree {
             .unwrap_or_default()
             .len();
         children_len < node.max_expansions
+    }
+
+    fn is_node_duplicate(&self, node_index: usize) -> bool {
+        let node = self.get_node(node_index);
+        // we return the worst case answer always, in case of checking for duplicates
+        // that is true
+        if let None = node {
+            return true;
+        }
+        let node = node.expect("if let None to hold");
+        node._is_duplicate
+    }
+
+    /// Recursively grabs all the expandable node starting from the root
+    fn expandable_node(&self, node_index: usize) -> Vec<usize> {
+        let mut expandable_node_indices = vec![];
+        let node = self.get_node(node_index);
+        if let None = node {
+            return vec![];
+        }
+        let node = node.expect("if let None to hold");
+
+        // we can expand on the current node
+        if !node.is_terminal_observation()
+            && !self.is_node_fully_expanded(node_index)
+            && !self.is_node_duplicate(node_index)
+        {
+            expandable_node_indices.push(node_index);
+        }
+
+        // now check for all the children
+        let children = self.children_indices(node).unwrap_or_default();
+        for child_index in children.into_iter() {
+            expandable_node_indices.extend(self.expandable_node(child_index));
+        }
+
+        expandable_node_indices
+    }
+
+    /// Select the expandable nodes which are present in our search tree
+    ///
+    /// This only allows nodes to be selected within the max_depth limit
+    /// and sorts the nodes by the UTC score
+    pub fn select(&mut self) -> Option<usize> {
+        let expandable_nodes = self.expandable_node(self.root_node_index);
+        let mut filtered_nodes = vec![];
+        for expandable_node_index in expandable_nodes.into_iter() {
+            let node = self.get_node(expandable_node_index);
+            if let None = node {
+                continue;
+            }
+            let node = node.expect("if let None to hold");
+            let depth = self.get_depth(node.index);
+            if depth < self.max_depth {
+                filtered_nodes.push(node.index);
+            }
+        }
+
+        if filtered_nodes.is_empty() {
+            return None;
+        } else {
+            // find the selector
+            let mut filtered_node_to_score = filtered_nodes
+                .into_iter()
+                .map(|filtered_node_index| {
+                    (
+                        filtered_node_index,
+                        self.selector.uct_score(filtered_node_index, &self),
+                    )
+                })
+                .collect::<Vec<_>>();
+            filtered_node_to_score.sort_by(|first_node, second_node| {
+                first_node
+                    .1
+                    .get_final_score()
+                    .total_cmp(&second_node.1.get_final_score())
+            });
+            filtered_node_to_score.reverse();
+            // this will never panic because the array is not empty
+            Some(filtered_node_to_score[0].0)
+        }
     }
 
     pub fn expand<'a>(&'a mut self, node_index: usize) -> Option<usize> {

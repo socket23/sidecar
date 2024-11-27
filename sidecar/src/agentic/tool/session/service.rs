@@ -1120,3 +1120,11 @@ impl SessionService {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub enum TestGenerateCompletion {
+    /// The LLM chose to finish (higher confidence)
+    LLMChoseToFinish(String),
+    /// Hit the maximum iteration limit (lower confidence)
+    HitIterationLimit(String),
+}

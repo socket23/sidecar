@@ -179,6 +179,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         model_configuration,
     );
 
+    // use test runner first.
+
     let problem_with_test = format!(
         "GitHub issue: {}\n\nTest to pass: {}",
         input_parts.instance.problem_statement, r#"Always run the test before completion."#

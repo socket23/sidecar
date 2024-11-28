@@ -2871,6 +2871,7 @@ dependencies = [
  "async-openai 0.21.0",
  "async-trait",
  "chrono",
+ "clap",
  "either",
  "eventsource-stream",
  "futures",

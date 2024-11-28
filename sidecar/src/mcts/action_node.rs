@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::owo_colors::OwoColorize;
+
 
 use crate::agentic::tool::{input::ToolInputPartial, r#type::ToolType};
 
@@ -460,7 +460,7 @@ impl SearchTree {
     }
 
     /// Iterates on the search tree until its finished completely
-    pub fn run_search(&mut self, node: ActionNode) -> ActionNode {
+    pub fn run_search(&mut self, _node: ActionNode) -> ActionNode {
         todo!("")
     }
 
